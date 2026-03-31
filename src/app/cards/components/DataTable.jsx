@@ -732,18 +732,22 @@ export const DataTable = ({
     if (key === "all") {
       const cleared = {};
       filters.forEach((f) => { cleared[f.name] = getEmptyFilterValue(f); });
-      setFilterValues(cleared);
+      setInternalFilterValues(cleared);
       if (serverSide && onFilterChange) onFilterChange(cleared);
+      resetPage();
+      fireParamsChange({ filters: cleared, page: resetPageOnChange ? 1 : undefined });
     } else {
       const filter = filters.find((f) => f.name === key);
       const emptyVal = filter ? getEmptyFilterValue(filter) : "";
-      setFilterValues((prev) => {
+      setInternalFilterValues((prev) => {
         const next = { ...prev, [key]: emptyVal };
         if (serverSide && onFilterChange) onFilterChange(next);
+        resetPage();
+        fireParamsChange({ filters: next, page: resetPageOnChange ? 1 : undefined });
         return next;
       });
     }
-  }, [filters, serverSide, onFilterChange]);
+  }, [filters, serverSide, onFilterChange, resetPage, fireParamsChange, resetPageOnChange]);
 
   // Record count
   const displayCount = serverSide ? (totalCount || data.length) : filteredData.length;
@@ -1012,7 +1016,7 @@ export const DataTable = ({
     if (type === "dateRange") {
       const rangeVal = filterValues[filter.name] || { from: null, to: null };
       return (
-        <Flex key={filter.name} direction="row" align="end" gap="xs">
+        <Flex key={filter.name} direction="row" align="center" gap="xs">
           <DateInput
             name={`filter-${filter.name}-from`}
             label=""
@@ -1023,8 +1027,9 @@ export const DataTable = ({
               handleFilterChange(filter.name, { ...rangeVal, from: val })
             }
           />
-          <Text variant="microcopy">to</Text>
+          <Icon name="dataSync" size="sm"></Icon>
           <DateInput
+            size="sm"
             name={`filter-${filter.name}-to`}
             label=""
             placeholder="To"
@@ -1061,69 +1066,66 @@ export const DataTable = ({
   return (
     <Flex direction="column" gap="xs">
       {/* Toolbar */}
-      <Flex direction="column" gap="sm">
-        {/* Row 1: Search + first 2 filters + Filters toggle */}
-        <Flex direction="row" align="center" gap="sm" wrap="wrap">
-          {searchFields.length > 0 && (
-            <SearchInput
-              name="datatable-search"
-              placeholder={searchPlaceholder}
-              value={searchTerm}
-              onChange={handleSearchChange}
-            />
-          )}
-          {filters.slice(0, 2).map(renderFilterControl)}
-          {filters.length > 2 && (
-            <Button
-              variant="transparent"
-              size="small"
-              onClick={() => setShowMoreFilters((prev) => !prev)}
-            >
-              <Icon name="filter" size="sm" /> Filters
-            </Button>
-          )}
-          {/* Record count — always on row 1 when no chips */}
-          {showRowCount && activeChips.length === 0 && displayCount > 0 && (
-            <Box flex={1}>
-              <Flex direction="row" justify="end">
-                <Flex direction="column" align="end">
-                  <Text variant="microcopy" format={rowCountBold ? { fontWeight: "bold" } : undefined}>{recordCountLabel}</Text>
-                </Flex>
+      <Flex direction="row" gap="sm">
+        {/* Left: Search, filters, chips (up to 75%) */}
+        <Box flex={3}>
+          <Flex direction="column" gap="sm">
+            {/* Row 1: Search + first 2 filters + Filters toggle */}
+            <Flex direction="row" align="center" gap="sm" wrap="wrap">
+              {searchFields.length > 0 && (
+                <SearchInput
+                  name="datatable-search"
+                  placeholder={searchPlaceholder}
+                  value={searchTerm}
+                  onChange={handleSearchChange}
+                />
+              )}
+              {filters.slice(0, 2).map(renderFilterControl)}
+              {filters.length > 2 && (
+                <Button
+                  variant="transparent"
+                  size="small"
+                  onClick={() => setShowMoreFilters((prev) => !prev)}
+                >
+                  <Icon name="filter" size="sm" /> Filters
+                </Button>
+              )}
+            </Flex>
+
+            {/* Row 2: Additional filters (toggled) */}
+            {showMoreFilters && filters.length > 2 && (
+              <Flex direction="row" align="end" gap="sm" wrap="wrap">
+                {filters.slice(2).map(renderFilterControl)}
               </Flex>
-            </Box>
-          )}
-        </Flex>
+            )}
 
-        {/* Row 2: Additional filters (toggled) */}
-        {showMoreFilters && filters.length > 2 && (
-          <Flex direction="row" align="end" gap="sm" wrap="wrap">
-            {filters.slice(2).map(renderFilterControl)}
-          </Flex>
-        )}
-
-        {/* Active filter chips */}
-        {activeChips.length > 0 && (
-          <Flex direction="row" align="center" gap="sm" wrap="wrap">
-            {activeChips.map((chip) => (
-              <Tag key={chip.key} variant="default" onDelete={() => handleFilterRemove(chip.key)}>
-                {chip.label}
-              </Tag>
-            ))}
-            <Button
-              variant="transparent"
-              size="extra-small"
-              onClick={() => handleFilterRemove("all")}
-            >
-              Clear all
-            </Button>
-            {showRowCount && displayCount > 0 && (
-              <Box flex={1}>
-                <Flex direction="row" justify="end">
-                  <Text variant="microcopy" format={rowCountBold ? { fontWeight: "bold" } : undefined}>{recordCountLabel}</Text>
-                </Flex>
-              </Box>
+            {/* Active filter chips */}
+            {activeChips.length > 0 && (
+              <Flex direction="row" align="center" gap="sm" wrap="wrap">
+                {activeChips.map((chip) => (
+                  <Tag key={chip.key} variant="default" onDelete={() => handleFilterRemove(chip.key)}>
+                    {chip.label}
+                  </Tag>
+                ))}
+                <Button
+                  variant="transparent"
+                  size="extra-small"
+                  onClick={() => handleFilterRemove("all")}
+                >
+                  Clear all
+                </Button>
+              </Flex>
             )}
           </Flex>
+        </Box>
+
+        {/* Right: Record count (up to 25%) */}
+        {showRowCount && displayCount > 0 && (
+          <Box flex={1} alignSelf="end">
+            <Flex direction="row" justify="end">
+              <Text variant="microcopy" format={rowCountBold ? { fontWeight: "bold" } : undefined}>{recordCountLabel}</Text>
+            </Flex>
+          </Box>
         )}
       </Flex>
 
