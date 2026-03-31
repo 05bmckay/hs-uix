@@ -63,6 +63,13 @@
  *     field: "supplier",
  *     label: (value, rows) => `${value} (${rows.length})`,
  *     sort: "asc",
+ *     defaultExpanded: true,           // groups start expanded (default)
+ *     aggregations: {                  // per-column aggregation functions
+ *       amount: (rows) => `$${rows.reduce((s, r) => s + r.amount, 0).toLocaleString()}`,
+ *     },
+ *     groupValues: {                   // OR static values per group per column
+ *       enterprise: { amount: "$1.3M" },
+ *     },
  *   }}
  *
  * ═══════════════════════════════════════════════════════════════════════════
@@ -98,6 +105,34 @@
  *
  *   NOTE: selectable or editable columns require renderCell(value, row)
  *   on each column. renderRow is used only when neither feature is active.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * COLUMN WIDTH:
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ *   Each column accepts `width` (header + cells) and `cellWidth` (cells only):
+ *     "min"  — shrink to fit content (may overflow with scrollbar)
+ *     "max"  — expand to fill available space
+ *     "auto" — adjust based on available space (default)
+ *     number — fixed width in pixels (e.g. 200)
+ *
+ *   Example: { field: "name", label: "Name", width: "min", cellWidth: "max" }
+ *   Header stays tight around "Name", cells expand to show full values.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AUTO-WIDTH:
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ *   By default, columns without explicit width/cellWidth get auto-computed
+ *   widths based on content analysis (data types, string lengths, edit types).
+ *   Disable with `autoWidth={false}`.
+ *
+ *   Heuristics:
+ *     - Booleans, numbers → "min"
+ *     - Dates → header "min", cells "auto" (rendered dates are longer than raw)
+ *     - Small enums (≤5 unique, short strings) → header "min", cells "auto"
+ *     - Text → "auto" (browser distributes space evenly)
+ *     - Edit type hints: checkbox/toggle → "min", number/currency/select → "auto"
  */
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
@@ -109,7 +144,9 @@ import {
   DateInput,
   EmptyState,
   Flex,
+  Icon,
   Input,
+  Link,
   MultiSelect,
   NumberInput,
   SearchInput,
@@ -143,6 +180,85 @@ const formatDateChip = (dateObj) => {
 const dateToTimestamp = (dateObj) => {
   if (!dateObj) return null;
   return new Date(dateObj.year, dateObj.month, dateObj.date).getTime();
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Intelligent auto-width
+// ═══════════════════════════════════════════════════════════════════════════
+
+const NARROW_EDIT_TYPES = new Set(["checkbox", "toggle"]);
+
+const DATE_PATTERN = /^\d{4}[-/]\d{2}[-/]\d{2}/;
+const BOOL_VALUES = new Set(["true", "false", "yes", "no", "0", "1"]);
+
+const computeAutoWidths = (columns, data) => {
+  if (!data || data.length === 0) return {};
+
+  const sample = data.slice(0, 50); // analyze up to 50 rows
+  const results = {};
+
+  columns.forEach((col) => {
+    // Skip columns with both explicit widths set
+    if (col.width && col.cellWidth) return;
+
+    const values = sample.map((row) => row[col.field]).filter((v) => v != null);
+    const strings = values.map((v) => String(v));
+
+    let widthHint = null; // "min" | "auto"
+    let cellWidthHint = null;
+
+    // 1. Edit type hints
+    if (col.editable && col.editType && NARROW_EDIT_TYPES.has(col.editType)) {
+      cellWidthHint = "min";
+    }
+
+    // 2. Content analysis
+    if (strings.length > 0) {
+      const lengths = strings.map((s) => s.length);
+      const maxLen = Math.max(...lengths);
+      const uniqueCount = new Set(strings).size;
+
+      // Boolean-like values → min
+      if (values.every((v) => typeof v === "boolean") ||
+          strings.every((s) => BOOL_VALUES.has(s.toLowerCase()))) {
+        widthHint = widthHint || "min";
+        cellWidthHint = cellWidthHint || "min";
+      }
+      // Date-like values → auto (rendered dates are often longer than raw ISO)
+      else if (strings.every((s) => DATE_PATTERN.test(s))) {
+        widthHint = widthHint || "min";
+        cellWidthHint = cellWidthHint || "auto";
+      }
+      // Pure numbers → auto (header "min" constrains the whole column too much for inputs)
+      else if (values.every((v) => typeof v === "number")) {
+        widthHint = widthHint || "auto";
+        cellWidthHint = cellWidthHint || "auto";
+      }
+      // Small enum-like (few unique values, short strings) → min
+      else if (uniqueCount <= 5 && maxLen <= 15) {
+        widthHint = widthHint || "min";
+        cellWidthHint = cellWidthHint || "auto";
+      }
+      // Everything else (text) → auto, let the browser distribute evenly
+      else {
+        widthHint = widthHint || "auto";
+        cellWidthHint = cellWidthHint || "auto";
+      }
+    }
+
+    // Editable columns (except checkbox/toggle) need room for input components —
+    // never constrain the header to "min" or the input will get squeezed
+    if (col.editable && !NARROW_EDIT_TYPES.has(col.editType) && widthHint === "min") {
+      widthHint = "auto";
+    }
+
+    results[col.field] = {
+      width: widthHint || "auto",
+      cellWidth: cellWidthHint || "auto",
+    };
+  });
+
+  return results;
 };
 
 const getEmptyFilterValue = (filter) => {
@@ -213,7 +329,13 @@ export const DataTable = ({
   // -----------------------------------------------------------------------
   // Inline editing
   // -----------------------------------------------------------------------
+  editMode,              // "discrete" (click-to-edit) | "inline" (always show inputs)
   onRowEdit,             // (row, field, newValue) => void
+
+  // -----------------------------------------------------------------------
+  // Auto-width
+  // -----------------------------------------------------------------------
+  autoWidth = true,      // auto-compute column widths from content analysis
 }) => {
   // Build initial sort state
   const initialSortState = useMemo(() => {
@@ -237,6 +359,7 @@ export const DataTable = ({
   });
   const [sortState, setSortState] = useState(initialSortState);
   const [currentPage, setCurrentPage] = useState(1);
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
 
   // In server-side mode, use external page if provided
   const activePage = serverSide && externalPage != null ? externalPage : currentPage;
@@ -382,6 +505,38 @@ export const DataTable = ({
     }));
   }, [sortedData, data, groupBy, serverSide]);
 
+  // Group expand/collapse state
+  const [expandedGroups, setExpandedGroups] = useState(() => {
+    if (!groupBy) return new Set();
+    const defaultExpanded = groupBy.defaultExpanded !== false; // default true
+    if (defaultExpanded && groupedData) {
+      return new Set(groupedData.map((g) => g.key));
+    }
+    return new Set();
+  });
+
+  // Sync expanded groups when grouped data changes (new groups appear)
+  useEffect(() => {
+    if (!groupedData) return;
+    const defaultExpanded = groupBy?.defaultExpanded !== false;
+    if (defaultExpanded) {
+      setExpandedGroups((prev) => {
+        const next = new Set(prev);
+        groupedData.forEach((g) => next.add(g.key));
+        return next;
+      });
+    }
+  }, [groupedData, groupBy]);
+
+  const toggleGroup = useCallback((key) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
   // Flatten for pagination
   const flatRows = useMemo(() => {
     if (!groupedData) return (serverSide ? data : sortedData).map((row) => ({ type: "data", row }));
@@ -389,10 +544,12 @@ export const DataTable = ({
     const flat = [];
     groupedData.forEach((group) => {
       flat.push({ type: "group-header", group });
-      group.rows.forEach((row) => flat.push({ type: "data", row }));
+      if (expandedGroups.has(group.key)) {
+        group.rows.forEach((row) => flat.push({ type: "data", row }));
+      }
     });
     return flat;
-  }, [groupedData, sortedData, data, serverSide]);
+  }, [groupedData, sortedData, data, serverSide, expandedGroups]);
 
   // ---------------------------------------------------------------------------
   // Paginate
@@ -517,90 +674,172 @@ export const DataTable = ({
   // ---------------------------------------------------------------------------
   const [editingCell, setEditingCell] = useState(null);
   const [editValue, setEditValue] = useState(null);
+  const [editError, setEditError] = useState(null);
 
   const startEditing = useCallback((rowId, field, currentValue) => {
     setEditingCell({ rowId, field });
     setEditValue(currentValue);
+    setEditError(null);
   }, []);
 
   const cancelEdit = useCallback(() => {
     setEditingCell(null);
     setEditValue(null);
+    setEditError(null);
   }, []);
 
   const commitEdit = useCallback((row, field, value) => {
+    const col = columns.find((c) => c.field === field);
+    if (col?.editValidate) {
+      const result = col.editValidate(value, row);
+      if (result !== true && result !== undefined && result !== null) {
+        setEditError(typeof result === "string" ? result : "Invalid value");
+        return;
+      }
+    }
     if (onRowEdit) onRowEdit(row, field, value);
     setEditingCell(null);
     setEditValue(null);
-  }, [onRowEdit]);
-
-  const INSTANT_COMMIT = useMemo(
-    () => new Set(["select", "multiselect", "date", "toggle", "checkbox"]),
-    []
-  );
+    setEditError(null);
+  }, [onRowEdit, columns]);
 
   const renderEditControl = (col, row) => {
     const type = col.editType || "text";
     const rowId = row[rowIdField];
     const fieldName = `edit-${rowId}-${col.field}`;
     const commit = (val) => commitEdit(row, col.field, val);
+    const update = (val) => {
+      setEditValue(val);
+      if (onRowEdit) onRowEdit(row, col.field, val);
+    };
+    const exitEdit = () => {
+      if (editError) return;
+      setEditingCell(null);
+      setEditValue(null);
+    };
     const extra = col.editProps || {};
 
-    let control;
+    // Validation props for text-type inputs (discrete mode)
+    const validate = col.editValidate;
+    const validationProps = validate && editError ? { error: true, validationMessage: editError } : {};
+    const onInputValidate = validate
+      ? (val) => {
+          const result = validate(val, row);
+          if (result !== true && result !== undefined && result !== null) {
+            setEditError(typeof result === "string" ? result : "Invalid value");
+          } else {
+            setEditError(null);
+          }
+        }
+      : undefined;
+
     switch (type) {
       case "textarea":
-        control = <TextArea {...extra} name={fieldName} label="" value={editValue ?? ""} onChange={setEditValue} />;
-        break;
+        return <TextArea {...extra} name={fieldName} label="" value={editValue ?? ""} onChange={update} onBlur={exitEdit} {...validationProps} onInput={onInputValidate} />;
       case "number":
-        control = <NumberInput {...extra} name={fieldName} label="" value={editValue} onChange={setEditValue} />;
-        break;
+        return <NumberInput {...extra} name={fieldName} label="" value={editValue} onChange={update} onBlur={exitEdit} {...validationProps} onInput={onInputValidate} />;
       case "currency":
-        control = <CurrencyInput currencyCode="USD" {...extra} name={fieldName} label="" value={editValue} onChange={setEditValue} />;
-        break;
+        return <CurrencyInput currencyCode="USD" {...extra} name={fieldName} label="" value={editValue} onChange={update} onBlur={exitEdit} {...validationProps} onInput={onInputValidate} />;
       case "stepper":
-        control = <StepperInput {...extra} name={fieldName} label="" value={editValue} onChange={setEditValue} />;
-        break;
+        return <StepperInput {...extra} name={fieldName} label="" value={editValue} onChange={update} onBlur={exitEdit} {...validationProps} onInput={onInputValidate} />;
       case "select":
-        control = <Select variant="transparent" {...extra} name={fieldName} label="" value={editValue} onChange={commit} options={col.editOptions || []} />;
-        break;
+        return <Select variant="transparent" {...extra} name={fieldName} label="" value={editValue} onChange={commit} options={col.editOptions || []} />;
       case "multiselect":
-        control = <MultiSelect {...extra} name={fieldName} label="" value={editValue || []} onChange={commit} options={col.editOptions || []} />;
-        break;
+        return <MultiSelect {...extra} name={fieldName} label="" value={editValue || []} onChange={commit} options={col.editOptions || []} />;
       case "date":
-        control = <DateInput {...extra} name={fieldName} label="" value={editValue} onChange={commit} />;
-        break;
+        return <DateInput {...extra} name={fieldName} label="" value={editValue} onChange={commit} />;
       case "toggle":
-        control = <Toggle {...extra} name={fieldName} label="" checked={!!editValue} onChange={commit} />;
-        break;
+        return <Toggle {...extra} name={fieldName} label="" checked={!!editValue} onChange={commit} />;
       case "checkbox":
-        control = <Checkbox {...extra} name={fieldName} checked={!!editValue} onChange={commit} />;
-        break;
+        return <Checkbox {...extra} name={fieldName} checked={!!editValue} onChange={commit} />;
       default:
-        control = <Input {...extra} name={fieldName} label="" value={editValue ?? ""} onChange={setEditValue} />;
+        return <Input {...extra} name={fieldName} label="" value={editValue ?? ""} onChange={update} onBlur={exitEdit} {...validationProps} onInput={onInputValidate} />;
     }
-
-    if (INSTANT_COMMIT.has(type)) {
-      return (
-        <Flex direction="row" align="center" gap="xs">
-          <Box flex={1}>{control}</Box>
-          <Button variant="transparent" size="extra-small" onClick={cancelEdit}>Cancel</Button>
-        </Flex>
-      );
-    }
-
-    return (
-      <Flex direction="row" align="center" gap="xs">
-        <Box flex={1}>{control}</Box>
-        <Button variant="primary" size="extra-small" onClick={() => commit(editValue)}>Save</Button>
-        <Button variant="transparent" size="extra-small" onClick={cancelEdit}>Cancel</Button>
-      </Flex>
-    );
   };
 
-  const useColumnRendering = selectable || columns.some((col) => col.editable);
+  const resolvedEditMode = editMode || (columns.some((col) => col.editable) ? "discrete" : null);
+  const useColumnRendering = selectable || !!resolvedEditMode || !renderRow;
+
+  // ---------------------------------------------------------------------------
+  // Auto-width computation
+  // ---------------------------------------------------------------------------
+  const autoWidths = useMemo(
+    () => autoWidth ? computeAutoWidths(columns, data) : {},
+    [columns, data, autoWidth]
+  );
+
+  const getHeaderWidth = (col) => col.width || autoWidths[col.field]?.width || "auto";
+  const getCellWidth = (col) => col.cellWidth || col.width || autoWidths[col.field]?.cellWidth || "auto";
+
+  // Per-cell error tracking for inline mode (multiple cells editable at once)
+  const [inlineErrors, setInlineErrors] = useState({});
+
+  const renderInlineControl = (col, row) => {
+    const type = col.editType || "text";
+    const rowId = row[rowIdField];
+    const fieldName = `inline-${rowId}-${col.field}`;
+    const cellKey = `${rowId}-${col.field}`;
+    const value = row[col.field];
+    const validate = col.editValidate;
+
+    const fire = (val) => {
+      if (validate) {
+        const result = validate(val, row);
+        if (result !== true && result !== undefined && result !== null) {
+          setInlineErrors((prev) => ({ ...prev, [cellKey]: typeof result === "string" ? result : "Invalid value" }));
+          return; // Block the edit
+        }
+        setInlineErrors((prev) => { const next = { ...prev }; delete next[cellKey]; return next; });
+      }
+      if (onRowEdit) onRowEdit(row, col.field, val);
+    };
+    const extra = col.editProps || {};
+    const cellError = inlineErrors[cellKey];
+    const validationProps = cellError ? { error: true, validationMessage: cellError } : {};
+    const onInputValidate = validate
+      ? (val) => {
+          const result = validate(val, row);
+          if (result !== true && result !== undefined && result !== null) {
+            setInlineErrors((prev) => ({ ...prev, [cellKey]: typeof result === "string" ? result : "Invalid value" }));
+          } else {
+            setInlineErrors((prev) => { const next = { ...prev }; delete next[cellKey]; return next; });
+          }
+        }
+      : undefined;
+
+    switch (type) {
+      case "textarea":
+        return <TextArea {...extra} name={fieldName} label="" value={value ?? ""} onChange={fire} {...validationProps} onInput={onInputValidate} />;
+      case "number":
+        return <NumberInput {...extra} name={fieldName} label="" value={value} onChange={fire} {...validationProps} onInput={onInputValidate} />;
+      case "currency":
+        return <CurrencyInput currencyCode="USD" {...extra} name={fieldName} label="" value={value} onChange={fire} {...validationProps} onInput={onInputValidate} />;
+      case "stepper":
+        return <StepperInput {...extra} name={fieldName} label="" value={value} onChange={fire} {...validationProps} onInput={onInputValidate} />;
+      case "select":
+        return <Select variant="transparent" {...extra} name={fieldName} label="" value={value} onChange={fire} options={col.editOptions || []} />;
+      case "multiselect":
+        return <MultiSelect {...extra} name={fieldName} label="" value={value || []} onChange={fire} options={col.editOptions || []} />;
+      case "date":
+        return <DateInput {...extra} name={fieldName} label="" value={value} onChange={fire} />;
+      case "toggle":
+        return <Toggle {...extra} name={fieldName} label="" checked={!!value} onChange={fire} />;
+      case "checkbox":
+        return <Checkbox {...extra} name={fieldName} checked={!!value} onChange={fire} />;
+      default:
+        return <Input {...extra} name={fieldName} label="" value={value ?? ""} onChange={fire} {...validationProps} onInput={onInputValidate} />;
+    }
+  };
 
   const renderCellContent = (row, col) => {
     const rowId = row[rowIdField];
+
+    // Inline mode: editable cells always show their input
+    if (resolvedEditMode === "inline" && col.editable) {
+      return renderInlineControl(col, row);
+    }
+
+    // Discrete mode: click-to-edit
     const isEditing =
       editingCell?.rowId === rowId && editingCell?.field === col.field;
 
@@ -612,13 +851,12 @@ export const DataTable = ({
 
     if (col.editable) {
       return (
-        <Button
-          variant="transparent"
-          size="extra-small"
+        <Link
+          variant="dark"
           onClick={() => startEditing(rowId, col.field, row[col.field])}
         >
           {content || "\u2014"}
-        </Button>
+        </Link>
       );
     }
 
@@ -695,9 +933,10 @@ export const DataTable = ({
   // Render
   // ---------------------------------------------------------------------------
   return (
-    <Flex direction="column" gap="sm">
-      {/* Filter bar */}
+    <Flex direction="column" gap="xs">
+      {/* Toolbar */}
       <Flex direction="column" gap="sm">
+        {/* Row 1: Search + first 2 filters + Filters toggle */}
         <Flex direction="row" align="end" gap="sm" wrap="wrap">
           {searchFields.length > 0 && (
             <SearchInput
@@ -707,9 +946,17 @@ export const DataTable = ({
               onChange={handleSearchChange}
             />
           )}
-          {filters.map(renderFilterControl)}
-
-          {/* Record count — right-aligned when no chips */}
+          {filters.slice(0, 2).map(renderFilterControl)}
+          {filters.length > 2 && (
+            <Button
+              variant="transparent"
+              size="small"
+              onClick={() => setShowMoreFilters((prev) => !prev)}
+            >
+              <Icon name="filter" /> Filters
+            </Button>
+          )}
+          {/* Record count — always on row 1 when no chips */}
           {activeChips.length === 0 && displayCount > 0 && (
             <Box flex={1}>
               <Flex direction="row" justify="end">
@@ -719,7 +966,14 @@ export const DataTable = ({
           )}
         </Flex>
 
-        {/* Filter chips + record count */}
+        {/* Row 2: Additional filters (toggled) */}
+        {showMoreFilters && filters.length > 2 && (
+          <Flex direction="row" align="end" gap="sm" wrap="wrap">
+            {filters.slice(2).map(renderFilterControl)}
+          </Flex>
+        )}
+
+        {/* Active filter chips */}
         {activeChips.length > 0 && (
           <Flex direction="row" align="center" gap="sm" wrap="wrap">
             {activeChips.map((chip) => (
@@ -766,35 +1020,54 @@ export const DataTable = ({
                 <TableHeader width="min">
                   <Checkbox
                     name="datatable-select-all"
-                    variant="small"
                     aria-label="Select all rows"
                     checked={allVisibleSelected}
                     onChange={handleSelectAll}
                   />
                 </TableHeader>
               )}
-              {columns.map((col) => (
+              {columns.map((col) => {
+                const headerAlign = (resolvedEditMode === "inline" && col.editable) ? undefined : col.align;
+                return (
                 <TableHeader
                   key={col.field}
-                  width={col.width || "min"}
-                  align={col.align}
+                  width={getHeaderWidth(col)}
+                  align={headerAlign}
                   sortDirection={col.sortable ? (sortState[col.field] || "none") : "never"}
                   onSortChange={col.sortable ? () => handleSortChange(col.field) : undefined}
                 >
                   {col.label}
                 </TableHeader>
-              ))}
+                );
+              })}
             </TableRow>
           </TableHead>
           <TableBody>
             {displayRows.map((item, idx) =>
               item.type === "group-header" ? (
                 <TableRow key={`group-${item.group.key}`}>
-                  <TableCell colSpan={columns.length + (selectable ? 1 : 0)} width="auto">
-                    <Text format={{ fontWeight: "demibold" }}>
-                      {item.group.label}
-                    </Text>
-                  </TableCell>
+                  {selectable && <TableCell width="min" />}
+                  {columns.map((col, colIdx) => (
+                    <TableCell key={col.field} width={getCellWidth(col)} align={colIdx === 0 ? undefined : col.align}>
+                      {colIdx === 0 ? (
+                        <Link
+                          variant="dark"
+                          onClick={() => toggleGroup(item.group.key)}
+                        >
+                          <Flex direction="row" align="center" gap="xs" wrap="nowrap">
+                            <Icon name={expandedGroups.has(item.group.key) ? "downCarat" : "right"} />
+                            <Text format={{ fontWeight: "demibold" }}>
+                              {item.group.label}
+                            </Text>
+                          </Flex>
+                        </Link>
+                      ) : (
+                        groupBy.aggregations?.[col.field]
+                          ? groupBy.aggregations[col.field](item.group.rows, item.group.key)
+                          : groupBy.groupValues?.[item.group.key]?.[col.field] ?? ""
+                      )}
+                    </TableCell>
+                  ))}
                 </TableRow>
               ) : useColumnRendering ? (
                 <TableRow key={item.row[rowIdField] ?? idx}>
@@ -802,18 +1075,24 @@ export const DataTable = ({
                     <TableCell width="min">
                       <Checkbox
                         name={`select-${item.row[rowIdField]}`}
-                        variant="small"
                         aria-label="Select row"
                         checked={selectedIds.has(item.row[rowIdField])}
                         onChange={(checked) => handleSelectRow(item.row[rowIdField], checked)}
                       />
                     </TableCell>
                   )}
-                  {columns.map((col) => (
-                    <TableCell key={col.field} width={col.width || "min"} align={col.align}>
-                      {renderCellContent(item.row, col)}
-                    </TableCell>
-                  ))}
+                  {columns.map((col) => {
+                    const rowId = item.row[rowIdField];
+                    const isDiscreteEditing = resolvedEditMode === "discrete" && editingCell?.rowId === rowId && editingCell?.field === col.field;
+                    const isShowingInput = isDiscreteEditing || (resolvedEditMode === "inline" && col.editable);
+                    // Input components don't respect cell text-align — skip align when showing inputs
+                    const cellAlign = isShowingInput ? undefined : col.align;
+                    return (
+                      <TableCell key={col.field} width={isDiscreteEditing ? "auto" : getCellWidth(col)} align={cellAlign}>
+                        {renderCellContent(item.row, col)}
+                      </TableCell>
+                    );
+                  })}
                 </TableRow>
               ) : (
                 renderRow(item.row)

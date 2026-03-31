@@ -18,18 +18,18 @@ import { DataTable } from "./components/DataTable.jsx";
 // ═══════════════════════════════════════════════════════════════════════════
 
 const SAMPLE_DATA = [
-  { id: 1, name: "Acme Corp",        contact: "Jane Smith",     status: "active",   category: "enterprise", amount: 125000, date: "2026-01-15", priority: true },
-  { id: 2, name: "Globex Inc",       contact: "Bob Johnson",    status: "active",   category: "mid-market", amount: 67000,  date: "2026-02-03", priority: false },
-  { id: 3, name: "Initech",          contact: "Michael Bolton", status: "churned",  category: "smb",        amount: 12000,  date: "2025-11-20", priority: false },
-  { id: 4, name: "Umbrella Corp",    contact: "Alice Wesker",   status: "at-risk",  category: "enterprise", amount: 230000, date: "2026-03-01", priority: true },
-  { id: 5, name: "Stark Industries", contact: "Pepper Potts",   status: "active",   category: "enterprise", amount: 450000, date: "2026-01-28", priority: false },
-  { id: 6, name: "Wayne Enterprises",contact: "Lucius Fox",     status: "active",   category: "enterprise", amount: 380000, date: "2025-12-15", priority: true },
-  { id: 7, name: "Wonka Industries", contact: "Charlie Bucket", status: "at-risk",  category: "mid-market", amount: 42000,  date: "2026-02-14", priority: false },
-  { id: 8, name: "Cyberdyne Systems",contact: "Miles Dyson",    status: "churned",  category: "mid-market", amount: 89000,  date: "2025-10-05", priority: false },
-  { id: 9, name: "Soylent Corp",     contact: "Sol Roth",       status: "active",   category: "smb",        amount: 18000,  date: "2026-03-10", priority: false },
-  { id: 10, name: "Tyrell Corp",     contact: "Eldon Tyrell",   status: "active",   category: "enterprise", amount: 520000, date: "2026-01-05", priority: true },
-  { id: 11, name: "Pied Piper",      contact: "Richard Hendricks", status: "active", category: "smb",      amount: 28000,  date: "2026-02-22", priority: false },
-  { id: 12, name: "Hooli",           contact: "Gavin Belson",   status: "at-risk",  category: "enterprise", amount: 175000, date: "2025-12-30", priority: true },
+  { id: 1, name: "Acme Corp", contact: "Jane Smith", status: "active", category: "enterprise", amount: 125000, date: "2026-01-15", priority: true },
+  { id: 2, name: "Globex Inc", contact: "Bob Johnson", status: "active", category: "mid-market", amount: 67000, date: "2026-02-03", priority: false },
+  { id: 3, name: "Initech", contact: "Michael Bolton", status: "churned", category: "smb", amount: 12000, date: "2025-11-20", priority: false },
+  { id: 4, name: "Umbrella Corp", contact: "Alice Wesker", status: "at-risk", category: "enterprise", amount: 230000, date: "2026-03-01", priority: true },
+  { id: 5, name: "Stark Industries", contact: "Pepper Potts", status: "active", category: "enterprise", amount: 450000, date: "2026-01-28", priority: false },
+  { id: 6, name: "Wayne Enterprises", contact: "Lucius Fox", status: "active", category: "enterprise", amount: 380000, date: "2025-12-15", priority: true },
+  { id: 7, name: "Wonka Industries", contact: "Charlie Bucket", status: "at-risk", category: "mid-market", amount: 42000, date: "2026-02-14", priority: false },
+  { id: 8, name: "Cyberdyne Systems", contact: "Miles Dyson", status: "churned", category: "mid-market", amount: 89000, date: "2025-10-05", priority: false },
+  { id: 9, name: "Soylent Corp", contact: "Sol Roth", status: "active", category: "smb", amount: 18000, date: "2026-03-10", priority: false },
+  { id: 10, name: "Tyrell Corp", contact: "Eldon Tyrell", status: "active", category: "enterprise", amount: 520000, date: "2026-01-05", priority: true },
+  { id: 11, name: "Pied Piper", contact: "Richard Hendricks", status: "active", category: "smb", amount: 28000, date: "2026-02-22", priority: false },
+  { id: 12, name: "Hooli", contact: "Gavin Belson", status: "at-risk", category: "enterprise", amount: 175000, date: "2025-12-30", priority: true },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -56,18 +56,30 @@ const formatCurrency = (val) =>
 // ═══════════════════════════════════════════════════════════════════════════
 
 const FULL_COLUMNS = [
-  { field: "name",     label: "Company",  sortable: true, width: "max",
-    renderCell: (val) => <Text format={{ fontWeight: "demibold" }}>{val}</Text> },
-  { field: "contact",  label: "Contact",  sortable: true,
-    renderCell: (val) => val },
-  { field: "status",   label: "Status",   sortable: true,
-    renderCell: (val) => <StatusTag variant={STATUS_COLORS[val]}>{STATUS_LABELS[val]}</StatusTag> },
-  { field: "category", label: "Segment",  sortable: true,
-    renderCell: (val) => <Tag variant="default">{val}</Tag> },
-  { field: "amount",   label: "Amount",   sortable: true, align: "right",
-    renderCell: (val) => formatCurrency(val) },
-  { field: "date",     label: "Close Date", sortable: true,
-    renderCell: (val) => new Date(val).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) },
+  {
+    field: "name", label: "Company", sortable: true,
+    renderCell: (val) => <Text format={{ fontWeight: "demibold" }}>{val}</Text>
+  },
+  {
+    field: "contact", label: "Contact", sortable: true,
+    renderCell: (val) => val
+  },
+  {
+    field: "status", label: "Status", sortable: true,
+    renderCell: (val) => <StatusTag variant={STATUS_COLORS[val]}>{STATUS_LABELS[val]}</StatusTag>
+  },
+  {
+    field: "category", label: "Segment", sortable: true,
+    renderCell: (val) => <Tag variant="default">{val}</Tag>
+  },
+  {
+    field: "amount", label: "Amount", sortable: true, align: "right",
+    renderCell: (val) => formatCurrency(val)
+  },
+  {
+    field: "date", label: "Close Date", sortable: true,
+    renderCell: (val) => new Date(val).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+  },
 ];
 
 const FULL_FILTERS = [
@@ -83,7 +95,7 @@ const FULL_FILTERS = [
   },
   {
     name: "category",
-    type: "multiselect",
+    type: "select",
     placeholder: "All segments",
     options: [
       { label: "Enterprise", value: "enterprise" },
@@ -102,14 +114,14 @@ const FullFeaturedDemo = () => (
   <Flex direction="column" gap="sm">
     <Heading>Full-Featured DataTable</Heading>
     <Text variant="microcopy">
-      Search, filter (select, multiselect, date range), sort, paginate, and footer summary.
+      Search, filter, sort, paginate, footer summary. No explicit widths — auto-width sizes columns from content.
     </Text>
     <DataTable
       data={SAMPLE_DATA}
       columns={FULL_COLUMNS}
       renderRow={(row) => (
         <TableRow key={row.id}>
-          <TableCell width="max"><Text format={{ fontWeight: "demibold" }}>{row.name}</Text></TableCell>
+          <TableCell><Text format={{ fontWeight: "demibold" }}>{row.name}</Text></TableCell>
           <TableCell>{row.contact}</TableCell>
           <TableCell><StatusTag variant={STATUS_COLORS[row.status]}>{STATUS_LABELS[row.status]}</StatusTag></TableCell>
           <TableCell><Tag variant="default">{row.category}</Tag></TableCell>
@@ -143,14 +155,22 @@ const FullFeaturedDemo = () => (
 // ═══════════════════════════════════════════════════════════════════════════
 
 const SELECT_COLUMNS = [
-  { field: "name",    label: "Company", sortable: true, width: "max",
-    renderCell: (val) => <Text format={{ fontWeight: "demibold" }}>{val}</Text> },
-  { field: "contact", label: "Contact",
-    renderCell: (val) => val },
-  { field: "status",  label: "Status",
-    renderCell: (val) => <StatusTag variant={STATUS_COLORS[val]}>{STATUS_LABELS[val]}</StatusTag> },
-  { field: "amount",  label: "Amount", sortable: true, align: "right",
-    renderCell: (val) => formatCurrency(val) },
+  {
+    field: "name", label: "Company", sortable: true,
+    renderCell: (val) => <Text format={{ fontWeight: "demibold" }}>{val}</Text>
+  },
+  {
+    field: "contact", label: "Contact",
+    renderCell: (val) => val
+  },
+  {
+    field: "status", label: "Status",
+    renderCell: (val) => <StatusTag variant={STATUS_COLORS[val]}>{STATUS_LABELS[val]}</StatusTag>
+  },
+  {
+    field: "amount", label: "Amount", sortable: true, align: "right",
+    renderCell: (val) => formatCurrency(val)
+  },
 ];
 
 const SelectableDemo = () => {
@@ -190,26 +210,47 @@ const EditableDemo = () => {
   }, []);
 
   const editColumns = [
-    { field: "name", label: "Company", sortable: true, width: "max",
+    {
+      field: "name", label: "Company", sortable: true,
       editable: true, editType: "text",
-      renderCell: (val) => <Text format={{ fontWeight: "demibold" }}>{val}</Text> },
-    { field: "contact", label: "Contact",
+      editValidate: (val) => {
+        if (!val || val.trim() === "") return "Company name is required";
+        if (val.length < 2) return "Must be at least 2 characters";
+        return true;
+      },
+      renderCell: (val) => <Text format={{ fontWeight: "demibold" }}>{val}</Text>
+    },
+    {
+      field: "contact", label: "Contact",
       editable: true, editType: "text",
-      renderCell: (val) => val },
-    { field: "status", label: "Status",
+      renderCell: (val) => val
+    },
+    {
+      field: "status", label: "Status",
       editable: true, editType: "select",
       editOptions: [
         { label: "Active", value: "active" },
         { label: "At Risk", value: "at-risk" },
         { label: "Churned", value: "churned" },
       ],
-      renderCell: (val) => <StatusTag variant={STATUS_COLORS[val]}>{STATUS_LABELS[val]}</StatusTag> },
-    { field: "amount", label: "Amount", sortable: true, align: "right",
-      editable: true, editType: "number",
-      renderCell: (val) => formatCurrency(val) },
-    { field: "priority", label: "Priority",
-      editable: true, editType: "toggle",
-      renderCell: (val) => val ? <Tag variant="default">Yes</Tag> : <Text variant="microcopy">No</Text> },
+      renderCell: (val) => <StatusTag variant={STATUS_COLORS[val]}>{STATUS_LABELS[val]}</StatusTag>
+    },
+    {
+      field: "amount", label: "Amount", sortable: true, align: "right",
+      editable: true, editType: "currency",
+      editValidate: (val) => {
+        if (val === null || val === undefined || val === "") return "Amount is required";
+        if (Number(val) < 0) return "Amount cannot be negative";
+        if (Number(val) > 1000000) return "Amount cannot exceed $1,000,000";
+        return true;
+      },
+      renderCell: (val) => formatCurrency(val)
+    },
+    {
+      field: "priority", label: "Priority",
+      editable: true, editType: "checkbox",
+      renderCell: (val) => val ? <Tag variant="default">Yes</Tag> : <Text variant="microcopy">No</Text>
+    },
   ];
 
   return (
@@ -231,39 +272,111 @@ const EditableDemo = () => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Demo 3b: Inline editing (always-visible inputs)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const InlineEditDemo = () => {
+  const [data, setData] = useState(SAMPLE_DATA);
+
+  const handleEdit = useCallback((row, field, newValue) => {
+    setData((prev) =>
+      prev.map((r) => (r.id === row.id ? { ...r, [field]: newValue } : r))
+    );
+  }, []);
+
+  const inlineColumns = [
+    {
+      field: "name", label: "Company",
+      editable: true, editType: "text",
+      renderCell: (val) => val
+    },
+    {
+      field: "contact", label: "Contact",
+      editable: true, editType: "text",
+      renderCell: (val) => val
+    },
+    {
+      field: "status", label: "Status",
+      editable: true, editType: "select",
+      editOptions: [
+        { label: "Active", value: "active" },
+        { label: "At Risk", value: "at-risk" },
+        { label: "Churned", value: "churned" },
+      ],
+      renderCell: (val) => val
+    },
+    {
+      field: "amount", label: "Amount", align: "right",
+      editable: true, editType: "currency",
+      renderCell: (val) => formatCurrency(val)
+    },
+    {
+      field: "priority", label: "Priority",
+      editable: true, editType: "checkbox",
+      renderCell: (val) => val ? "Yes" : "No"
+    },
+  ];
+
+  return (
+    <Flex direction="column" gap="sm">
+      <Heading>Inline Edit Mode</Heading>
+      <Text variant="microcopy">
+        All editable cells always show their input controls. Changes fire immediately.
+      </Text>
+      <DataTable
+        data={data}
+        columns={inlineColumns}
+        rowIdField="id"
+        editMode="inline"
+        onRowEdit={handleEdit}
+        pageSize={5}
+      />
+    </Flex>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Demo 4: Grouped rows
 // ═══════════════════════════════════════════════════════════════════════════
 
 const GROUP_COLUMNS = [
-  { field: "name",    label: "Company", width: "max" },
-  { field: "contact", label: "Contact" },
-  { field: "status",  label: "Status" },
-  { field: "amount",  label: "Amount", align: "right" },
+  {
+    field: "name", label: "Company",
+    renderCell: (val) => val
+  },
+  { field: "contact", label: "Contact", renderCell: (val) => val },
+  {
+    field: "status", label: "Status",
+    renderCell: (val) => <StatusTag variant={STATUS_COLORS[val]}>{STATUS_LABELS[val]}</StatusTag>
+  },
+  {
+    field: "amount", label: "Amount", align: "right",
+    renderCell: (val) => formatCurrency(val)
+  },
 ];
 
 const GroupedDemo = () => (
   <Flex direction="column" gap="sm">
     <Heading>Row Grouping</Heading>
     <Text variant="microcopy">
-      Rows grouped by segment with sorted group headers.
+      Collapsible groups with aggregated totals. Click a group to expand/collapse.
     </Text>
     <DataTable
       data={SAMPLE_DATA}
       columns={GROUP_COLUMNS}
-      renderRow={(row) => (
-        <TableRow key={row.id}>
-          <TableCell width="max">{row.name}</TableCell>
-          <TableCell>{row.contact}</TableCell>
-          <TableCell><StatusTag variant={STATUS_COLORS[row.status]}>{STATUS_LABELS[row.status]}</StatusTag></TableCell>
-          <TableCell align="right">{formatCurrency(row.amount)}</TableCell>
-        </TableRow>
-      )}
       groupBy={{
         field: "category",
         label: (value, rows) => `${value.charAt(0).toUpperCase() + value.slice(1)} (${rows.length})`,
         sort: "asc",
+        aggregations: {
+          amount: (rows) => formatCurrency(rows.reduce((sum, r) => sum + r.amount, 0)),
+          status: (rows) => {
+            const active = rows.filter((r) => r.status === "active").length;
+            return <Text variant="microcopy">{active} of {rows.length} active</Text>;
+          },
+        },
       }}
-      pageSize={20}
+      pageSize={30}
     />
   </Flex>
 );
@@ -281,6 +394,8 @@ const DataTableDemoCard = () => (
     <SelectableDemo />
     <Divider />
     <EditableDemo />
+    <Divider />
+    <InlineEditDemo />
     <Divider />
     <GroupedDemo />
   </Flex>
