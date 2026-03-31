@@ -32,6 +32,8 @@ That's a searchable, sortable, paginated table with auto-sized columns in 5 line
 - Row selection via checkboxes with a select-all header toggle
 - Two inline edit modes (discrete click-to-edit and always-visible) supporting 10 input types, with per-column validation and automatic boolean-to-select conversion
 - Auto-width column sizing based on data analysis, with manual overrides when you need them
+- Configurable row count display with custom text formatting and bold option
+- Configurable table appearance (bordered, flush)
 - Footer rows computed from filtered data
 - Server-side mode with callbacks for search, filter, sort, and page changes
 - Built-in empty state when no results match
@@ -599,6 +601,7 @@ function ServerSideTable({ runServerlessFunction }) {
 | `showButtonLabels` | boolean | `true` | Show First/Prev/Next/Last text labels |
 | `showFirstLastButtons` | boolean | auto | Show First/Last page buttons (auto-enabled when > 5 pages) |
 | `showRowCount` | boolean | `true` | Show "X records" / "X of Y records" text |
+| `rowCountBold` | boolean | `false` | Bold the row count text |
 | `rowCountText` | `(displayCount, totalCount) => string` | — | Custom row count formatter |
 | `bordered` | boolean | `true` | Show table borders |
 | `flush` | boolean | `true` | Remove bottom margin |

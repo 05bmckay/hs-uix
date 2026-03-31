@@ -248,8 +248,8 @@ const EditableDemo = () => {
     },
     {
       field: "priority", label: "Priority",
-      editable: true, editType: "checkbox",
-      renderCell: (val) => val ? <Tag variant="default">Yes</Tag> : <Text variant="microcopy">No</Text>
+      editable: true, editType: "select",
+      renderCell: (val) => val ? <Tag variant="success">Yes</Tag> : <Tag variant="danger">No</Tag>
     },
   ];
 

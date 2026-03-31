@@ -148,6 +148,7 @@
  * ═══════════════════════════════════════════════════════════════════════════
  *
  *   showRowCount={true}                     // show row count (default true)
+ *   rowCountBold={false}                    // bold row count text (default false)
  *   rowCountText={(shown, total) =>         // custom row count text
  *     `Showing ${shown} of ${total} items`
  *   }
@@ -331,6 +332,7 @@ export const DataTable = ({
 
   // Row count
   showRowCount = true,          // show "X records" / "X of Y records" text
+  rowCountBold = false,         // bold the row count text
   rowCountText,                 // custom formatter: (displayCount, totalCount) => string
 
   // Table appearance
@@ -1003,7 +1005,7 @@ export const DataTable = ({
           {showRowCount && activeChips.length === 0 && displayCount > 0 && (
             <Box flex={1}>
               <Flex direction="row" justify="end">
-                <Text variant="microcopy">{recordCountLabel}</Text>
+                <Text variant="microcopy" format={rowCountBold ? { fontWeight: "bold" } : undefined}>{recordCountLabel}</Text>
               </Flex>
             </Box>
           )}
@@ -1034,7 +1036,7 @@ export const DataTable = ({
             {showRowCount && displayCount > 0 && (
               <Box flex={1}>
                 <Flex direction="row" justify="end">
-                  <Text variant="microcopy">{recordCountLabel}</Text>
+                  <Text variant="microcopy" format={rowCountBold ? { fontWeight: "bold" } : undefined}>{recordCountLabel}</Text>
                 </Flex>
               </Box>
             )}
