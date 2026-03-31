@@ -133,6 +133,24 @@
  *     - Small enums (≤5 unique, short strings) → header "min", cells "auto"
  *     - Text → "auto" (browser distributes space evenly)
  *     - Edit type hints: checkbox/toggle → "min", number/currency/select → "auto"
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * PAGINATION OPTIONS:
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ *   pageSize={10}                           // rows per page (default 10)
+ *   maxVisiblePageButtons={5}               // max page number buttons shown
+ *   showButtonLabels={false}                // hide First/Prev/Next/Last labels
+ *   showFirstLastButtons={true}             // show First/Last buttons (auto if > 5 pages)
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ROW COUNT:
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ *   showRowCount={true}                     // show row count (default true)
+ *   rowCountText={(shown, total) =>         // custom row count text
+ *     `Showing ${shown} of ${total} items`
+ *   }
  */
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
@@ -220,7 +238,7 @@ const computeAutoWidths = (columns, data) => {
 
       // Boolean-like values → min
       if (values.every((v) => typeof v === "boolean") ||
-          strings.every((s) => BOOL_VALUES.has(s.toLowerCase()))) {
+        strings.every((s) => BOOL_VALUES.has(s.toLowerCase()))) {
         widthHint = widthHint || "min";
         cellWidthHint = cellWidthHint || "min";
       }
@@ -268,6 +286,19 @@ const getEmptyFilterValue = (filter) => {
   return "";
 };
 
+const BOOLEAN_SELECT_OPTIONS = [
+  { label: "Yes", value: true },
+  { label: "No", value: false },
+];
+
+const resolveEditOptions = (col, data) => {
+  if (col.editOptions && col.editOptions.length > 0) return col.editOptions;
+  // Auto-detect boolean fields and generate Yes/No options
+  const sample = data.find((row) => row[col.field] != null);
+  if (sample && typeof sample[col.field] === "boolean") return BOOLEAN_SELECT_OPTIONS;
+  return [];
+};
+
 const isFilterActive = (filter, value) => {
   const type = filter.type || "select";
   if (type === "multiselect") return Array.isArray(value) && value.length > 0;
@@ -294,6 +325,17 @@ export const DataTable = ({
 
   // Pagination
   pageSize = 10,
+  maxVisiblePageButtons,        // max page number buttons to show
+  showButtonLabels = true,      // show First/Prev/Next/Last text labels
+  showFirstLastButtons,         // show First/Last page buttons (default: auto when pageCount > 5)
+
+  // Row count
+  showRowCount = true,          // show "X records" / "X of Y records" text
+  rowCountText,                 // custom formatter: (displayCount, totalCount) => string
+
+  // Table appearance
+  bordered = true,              // show table borders
+  flush = true,                 // remove bottom margin
 
   // Sorting
   defaultSort = {},
@@ -389,7 +431,7 @@ export const DataTable = ({
     const current = sortState[field] || "none";
     const nextDirection =
       current === "none" ? "ascending" :
-      current === "ascending" ? "descending" : "none";
+        current === "ascending" ? "descending" : "none";
 
     const reset = {};
     Object.keys(sortState).forEach((k) => { reset[k] = "none"; });
@@ -623,8 +665,9 @@ export const DataTable = ({
   // Record count
   const displayCount = serverSide ? (totalCount || data.length) : filteredData.length;
   const totalDataCount = serverSide ? (totalCount || data.length) : data.length;
-  const recordCountText =
-    displayCount === totalDataCount
+  const recordCountLabel = rowCountText
+    ? rowCountText(displayCount, totalDataCount)
+    : displayCount === totalDataCount
       ? `${totalDataCount} records`
       : `${displayCount} of ${totalDataCount} records`;
 
@@ -724,13 +767,13 @@ export const DataTable = ({
     const validationProps = validate && editError ? { error: true, validationMessage: editError } : {};
     const onInputValidate = validate
       ? (val) => {
-          const result = validate(val, row);
-          if (result !== true && result !== undefined && result !== null) {
-            setEditError(typeof result === "string" ? result : "Invalid value");
-          } else {
-            setEditError(null);
-          }
+        const result = validate(val, row);
+        if (result !== true && result !== undefined && result !== null) {
+          setEditError(typeof result === "string" ? result : "Invalid value");
+        } else {
+          setEditError(null);
         }
+      }
       : undefined;
 
     switch (type) {
@@ -743,9 +786,9 @@ export const DataTable = ({
       case "stepper":
         return <StepperInput {...extra} name={fieldName} label="" value={editValue} onChange={update} onBlur={exitEdit} {...validationProps} onInput={onInputValidate} />;
       case "select":
-        return <Select variant="transparent" {...extra} name={fieldName} label="" value={editValue} onChange={commit} options={col.editOptions || []} />;
+        return <Select variant="transparent" {...extra} name={fieldName} label="" value={editValue} onChange={commit} options={resolveEditOptions(col, data)} />;
       case "multiselect":
-        return <MultiSelect {...extra} name={fieldName} label="" value={editValue || []} onChange={commit} options={col.editOptions || []} />;
+        return <MultiSelect {...extra} name={fieldName} label="" value={editValue || []} onChange={commit} options={resolveEditOptions(col, data)} />;
       case "date":
         return <DateInput {...extra} name={fieldName} label="" value={editValue} onChange={commit} />;
       case "toggle":
@@ -798,13 +841,13 @@ export const DataTable = ({
     const validationProps = cellError ? { error: true, validationMessage: cellError } : {};
     const onInputValidate = validate
       ? (val) => {
-          const result = validate(val, row);
-          if (result !== true && result !== undefined && result !== null) {
-            setInlineErrors((prev) => ({ ...prev, [cellKey]: typeof result === "string" ? result : "Invalid value" }));
-          } else {
-            setInlineErrors((prev) => { const next = { ...prev }; delete next[cellKey]; return next; });
-          }
+        const result = validate(val, row);
+        if (result !== true && result !== undefined && result !== null) {
+          setInlineErrors((prev) => ({ ...prev, [cellKey]: typeof result === "string" ? result : "Invalid value" }));
+        } else {
+          setInlineErrors((prev) => { const next = { ...prev }; delete next[cellKey]; return next; });
         }
+      }
       : undefined;
 
     switch (type) {
@@ -817,9 +860,9 @@ export const DataTable = ({
       case "stepper":
         return <StepperInput {...extra} name={fieldName} label="" value={value} onChange={fire} {...validationProps} onInput={onInputValidate} />;
       case "select":
-        return <Select variant="transparent" {...extra} name={fieldName} label="" value={value} onChange={fire} options={col.editOptions || []} />;
+        return <Select variant="transparent" {...extra} name={fieldName} label="" value={value} onChange={fire} options={resolveEditOptions(col, data)} />;
       case "multiselect":
-        return <MultiSelect {...extra} name={fieldName} label="" value={value || []} onChange={fire} options={col.editOptions || []} />;
+        return <MultiSelect {...extra} name={fieldName} label="" value={value || []} onChange={fire} options={resolveEditOptions(col, data)} />;
       case "date":
         return <DateInput {...extra} name={fieldName} label="" value={value} onChange={fire} />;
       case "toggle":
@@ -937,7 +980,7 @@ export const DataTable = ({
       {/* Toolbar */}
       <Flex direction="column" gap="sm">
         {/* Row 1: Search + first 2 filters + Filters toggle */}
-        <Flex direction="row" align="end" gap="sm" wrap="wrap">
+        <Flex direction="row" align="center" gap="sm" wrap="wrap">
           {searchFields.length > 0 && (
             <SearchInput
               name="datatable-search"
@@ -953,14 +996,14 @@ export const DataTable = ({
               size="small"
               onClick={() => setShowMoreFilters((prev) => !prev)}
             >
-              <Icon name="filter" /> Filters
+              <Icon name="filter" size="sm" /> Filters
             </Button>
           )}
           {/* Record count — always on row 1 when no chips */}
-          {activeChips.length === 0 && displayCount > 0 && (
+          {showRowCount && activeChips.length === 0 && displayCount > 0 && (
             <Box flex={1}>
               <Flex direction="row" justify="end">
-                <Text variant="microcopy">{recordCountText}</Text>
+                <Text variant="microcopy">{recordCountLabel}</Text>
               </Flex>
             </Box>
           )}
@@ -988,10 +1031,10 @@ export const DataTable = ({
             >
               Clear all
             </Button>
-            {displayCount > 0 && (
+            {showRowCount && displayCount > 0 && (
               <Box flex={1}>
                 <Flex direction="row" justify="end">
-                  <Text variant="microcopy">{recordCountText}</Text>
+                  <Text variant="microcopy">{recordCountLabel}</Text>
                 </Flex>
               </Box>
             )}
@@ -1006,13 +1049,15 @@ export const DataTable = ({
         </EmptyState>
       ) : (
         <Table
-          bordered={true}
-          flush={true}
+          bordered={bordered}
+          flush={flush}
           paginated={pageCount > 1}
           page={activePage}
           pageCount={pageCount}
           onPageChange={handlePageChange}
-          showFirstLastButtons={pageCount > 5}
+          showFirstLastButtons={showFirstLastButtons != null ? showFirstLastButtons : pageCount > 5}
+          showButtonLabels={showButtonLabels}
+          {...(maxVisiblePageButtons != null ? { maxVisiblePageButtons } : {})}
         >
           <TableHead>
             <TableRow>
@@ -1029,15 +1074,15 @@ export const DataTable = ({
               {columns.map((col) => {
                 const headerAlign = (resolvedEditMode === "inline" && col.editable) ? undefined : col.align;
                 return (
-                <TableHeader
-                  key={col.field}
-                  width={getHeaderWidth(col)}
-                  align={headerAlign}
-                  sortDirection={col.sortable ? (sortState[col.field] || "none") : "never"}
-                  onSortChange={col.sortable ? () => handleSortChange(col.field) : undefined}
-                >
-                  {col.label}
-                </TableHeader>
+                  <TableHeader
+                    key={col.field}
+                    width={getHeaderWidth(col)}
+                    align={headerAlign}
+                    sortDirection={col.sortable ? (sortState[col.field] || "none") : "never"}
+                    onSortChange={col.sortable ? () => handleSortChange(col.field) : undefined}
+                  >
+                    {col.label}
+                  </TableHeader>
                 );
               })}
             </TableRow>

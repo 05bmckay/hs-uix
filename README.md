@@ -27,10 +27,10 @@ That's a searchable, sortable, paginated table with auto-sized columns in 5 line
 - Full-text search across any combination of fields
 - Select, multi-select, and date range filters with active filter chips and a "Clear all" option
 - Click-to-sort headers with three-state cycling (none, ascending, descending)
-- Client-side or server-side pagination with configurable page size
+- Client-side or server-side pagination with configurable page size, visible page buttons, and First/Last navigation
 - Collapsible row groups with per-column aggregation functions
 - Row selection via checkboxes with a select-all header toggle
-- Two inline edit modes (discrete click-to-edit and always-visible) supporting 10 input types, with per-column validation
+- Two inline edit modes (discrete click-to-edit and always-visible) supporting 10 input types, with per-column validation and automatic boolean-to-select conversion
 - Auto-width column sizing based on data analysis, with manual overrides when you need them
 - Footer rows computed from filtered data
 - Server-side mode with callbacks for search, filter, sort, and page changes
@@ -595,6 +595,13 @@ function ServerSideTable({ runServerlessFunction }) {
 | `searchPlaceholder` | string | `"Search..."` | Placeholder text for search input |
 | `filters` | Array | `[]` | Filter configurations (see below) |
 | `pageSize` | number | `10` | Rows per page |
+| `maxVisiblePageButtons` | number | — | Max page number buttons to display |
+| `showButtonLabels` | boolean | `true` | Show First/Prev/Next/Last text labels |
+| `showFirstLastButtons` | boolean | auto | Show First/Last page buttons (auto-enabled when > 5 pages) |
+| `showRowCount` | boolean | `true` | Show "X records" / "X of Y records" text |
+| `rowCountText` | `(displayCount, totalCount) => string` | — | Custom row count formatter |
+| `bordered` | boolean | `true` | Show table borders |
+| `flush` | boolean | `true` | Remove bottom margin |
 | `defaultSort` | object | `{}` | Initial sort state, e.g. `{ name: "ascending" }` |
 | `groupBy` | object | — | Grouping config (see below) |
 | `footer` | `(filteredData) => ReactNode` | — | Footer row renderer |
@@ -627,7 +634,7 @@ function ServerSideTable({ runServerlessFunction }) {
 | `renderCell` | `(value, row) => ReactNode` | Custom cell content renderer |
 | `editable` | boolean | Enable inline editing for this column |
 | `editType` | string | Input type (see supported types above) |
-| `editOptions` | Array | Options for select/multiselect edit types |
+| `editOptions` | Array | Options for select/multiselect edit types. Auto-generates Yes/No options for boolean fields if omitted. |
 | `editValidate` | `(value, row) => true \| string` | Validation function. Return `true` if valid, or an error message string. Invalid values block the edit from committing. |
 | `editProps` | object | Additional props passed to the edit input component |
 
