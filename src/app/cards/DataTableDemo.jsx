@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
 import {
+  Button,
   Flex,
   Heading,
   TableRow,
@@ -382,6 +383,89 @@ const GroupedDemo = () => (
 );
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Demo 5: Server-side mode (simulated)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const SERVER_COLUMNS = [
+  {
+    field: "name", label: "Company", sortable: true,
+    renderCell: (val) => <Text format={{ fontWeight: "demibold" }}>{val}</Text>
+  },
+  {
+    field: "contact", label: "Contact",
+    renderCell: (val) => val
+  },
+  {
+    field: "status", label: "Status", sortable: true,
+    renderCell: (val) => <StatusTag variant={STATUS_COLORS[val]}>{STATUS_LABELS[val]}</StatusTag>
+  },
+  {
+    field: "amount", label: "Amount", sortable: true, align: "right",
+    renderCell: (val) => formatCurrency(val)
+  },
+];
+
+const ServerSideDemo = () => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const pageSize = 4;
+
+  // Simulate server-side: filter then slice
+  const filtered = search
+    ? SAMPLE_DATA.filter((r) =>
+        r.name.toLowerCase().includes(search.toLowerCase()) ||
+        r.contact.toLowerCase().includes(search.toLowerCase())
+      )
+    : SAMPLE_DATA;
+  const pageData = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  const simulateLoad = () => {
+    setLoading(true);
+    setError(null);
+    setTimeout(() => setLoading(false), 2000);
+  };
+
+  const simulateError = () => {
+    setError("Failed to fetch data from server.");
+  };
+
+  const clearError = () => {
+    setError(null);
+  };
+
+  return (
+    <Flex direction="column" gap="sm">
+      <Heading>Server-Side Mode</Heading>
+      <Text variant="microcopy">
+        Simulated server-side with loading/error states. Use the buttons to test each state.
+      </Text>
+      <Flex direction="row" gap="sm">
+        <Button size="small" onClick={simulateLoad}>Simulate Loading (2s)</Button>
+        <Button size="small" variant="destructive" onClick={simulateError}>Simulate Error</Button>
+        <Button size="small" variant="secondary" onClick={clearError}>Clear Error</Button>
+      </Flex>
+      <DataTable
+        serverSide={true}
+        loading={loading}
+        error={error}
+        data={pageData}
+        totalCount={filtered.length}
+        columns={SERVER_COLUMNS}
+        searchFields={["name", "contact"]}
+        searchPlaceholder="Search (debounced 500ms)..."
+        pageSize={pageSize}
+        page={page}
+        searchDebounce={500}
+        onSearchChange={(term) => setSearch(term)}
+        onPageChange={(p) => setPage(p)}
+      />
+    </Flex>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Main entry
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -398,5 +482,7 @@ const DataTableDemoCard = () => (
     <InlineEditDemo />
     <Divider />
     <GroupedDemo />
+    <Divider />
+    <ServerSideDemo />
   </Flex>
 );

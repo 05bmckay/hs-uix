@@ -35,7 +35,7 @@ That's a searchable, sortable, paginated table with auto-sized columns in 5 line
 - Configurable row count display with custom text formatting and bold option
 - Configurable table appearance (bordered, flush)
 - Footer rows computed from filtered data
-- Server-side mode with callbacks for search, filter, sort, and page changes
+- Server-side mode with loading/error states, search debounce, controlled state, and a unified `onParamsChange` callback
 - Built-in empty state when no results match
 
 ## Installation
@@ -467,7 +467,7 @@ Manual overrides always take priority. You can set `width` (applies to header an
 
 If your data comes from an API or you have too many records to load at once, turn on `serverSide={true}`. DataTable still renders all the UI (search box, filter dropdowns, sort headers, pagination buttons), but it skips client-side processing and fires callbacks instead. You handle the fetching.
 
-You pass `data` with just the current page of results, and `totalCount` with the total number of records so pagination works (e.g., "Showing 1-25 of 247"). Then wire up the four callbacks (`onSearchChange`, `onFilterChange`, `onSortChange`, `onPageChange`) to re-fetch whenever the user interacts with the table.
+You pass `data` with just the current page of results, and `totalCount` with the total number of records so pagination works (e.g., "Showing 1-25 of 247"). Wire up callbacks to re-fetch whenever the user interacts with the table. You can use individual callbacks or the unified `onParamsChange` for less boilerplate.
 
 ```jsx
 import React, { useState, useEffect, useCallback } from "react";
@@ -503,20 +503,28 @@ hubspot.extend(({ runServerlessFunction }) => (
 function ServerSideTable({ runServerlessFunction }) {
   const [data, setData] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [params, setParams] = useState({ page: 1, pageSize: 25 });
 
   const fetchData = useCallback(async (nextParams) => {
     const merged = { ...params, ...nextParams };
     setParams(merged);
+    setLoading(true);
+    setError(null);
 
-    const result = await runServerlessFunction({
-      name: "fetchContacts",
-      parameters: merged,
-    });
-
-    setData(result.records);
-    setTotalCount(result.total);
+    try {
+      const result = await runServerlessFunction({
+        name: "fetchContacts",
+        parameters: merged,
+      });
+      setData(result.records);
+      setTotalCount(result.total);
+    } catch (err) {
+      setError(err.message || "Failed to load data.");
+    } finally {
+      setLoading(false);
+    }
   }, [params, runServerlessFunction]);
 
   // Initial load
@@ -525,6 +533,8 @@ function ServerSideTable({ runServerlessFunction }) {
   return (
     <DataTable
       serverSide={true}
+      loading={loading}
+      error={error}
       data={data}
       totalCount={totalCount}
       columns={COLUMNS}
@@ -532,22 +542,9 @@ function ServerSideTable({ runServerlessFunction }) {
       searchPlaceholder="Search contacts..."
       filters={FILTERS}
       pageSize={25}
-      page={page}
-      onSearchChange={(term) => {
-        setPage(1);
-        fetchData({ search: term, page: 1 });
-      }}
-      onFilterChange={(filterValues) => {
-        setPage(1);
-        fetchData({ filters: filterValues, page: 1 });
-      }}
-      onSortChange={(field, direction) => {
-        fetchData({ sort: field, dir: direction });
-      }}
-      onPageChange={(p) => {
-        setPage(p);
-        fetchData({ page: p });
-      }}
+      page={params.page}
+      searchDebounce={300}
+      onParamsChange={(p) => fetchData(p)}
     />
   );
 }
@@ -557,10 +554,11 @@ function ServerSideTable({ runServerlessFunction }) {
 
 | Callback | Arguments | When it fires |
 |---|---|---|
-| `onSearchChange` | `(searchTerm: string)` | User types in the search box |
+| `onSearchChange` | `(searchTerm: string)` | User types in the search box (debounced if `searchDebounce` is set) |
 | `onFilterChange` | `(filterValues: object)` | User selects/clears a filter. Object shape: `{ status: "active", category: ["a", "b"] }` |
 | `onSortChange` | `(field: string, direction: "ascending" \| "descending" \| null)` | User clicks a sortable column header. `null` means sort was cleared. |
 | `onPageChange` | `(page: number)` | User clicks a pagination button |
+| `onParamsChange` | `({ search, filters, sort, page })` | Fires on any of the above changes. `sort` is `{ field, direction }` or `null`. |
 
 #### Key differences from client-side mode
 
@@ -578,9 +576,10 @@ function ServerSideTable({ runServerlessFunction }) {
 #### Tips
 
 - Reset to page 1 when search, filters, or sort change, otherwise the user can land on an empty page.
-- DataTable fires `onSearchChange` on every keystroke. If your API is expensive, debounce the fetch.
-- The callbacks fire independently, so merge them into a single state object (like `params` above) to avoid losing the current search term when the user changes a filter.
-- There's no built-in loading indicator. If your fetches are slow, consider showing a loading overlay or disabling controls while the request is in flight.
+- Use `searchDebounce={300}` to avoid firing a request on every keystroke. The search input updates immediately for responsive UI, but the callback is delayed.
+- Use `onParamsChange` instead of wiring up 4 individual callbacks — it receives a single object with all current state on every change.
+- Set `loading={true}` while fetching and `error={errorMessage}` on failure. DataTable shows a `LoadingSpinner` or `ErrorState` in place of the table automatically.
+- Use `searchValue`, `filterValues`, and `sort` props to externally control the table state (e.g., deep-linking to a pre-filtered view or resetting after an action).
 
 ---
 
@@ -617,12 +616,20 @@ function ServerSideTable({ runServerlessFunction }) {
 | `onRowEdit` | `(row, field, newValue) => void` | — | Called when a cell edit is committed |
 | `autoWidth` | boolean | `true` | Auto-compute column widths from content analysis |
 | `serverSide` | boolean | `false` | Enable server-side mode |
+| `loading` | boolean | `false` | Show a loading spinner in place of the table |
+| `error` | string \| boolean | — | Show an error state. String value is used as the title. |
 | `totalCount` | number | — | Total record count (server-side) |
 | `page` | number | — | Current page (server-side, controlled) |
+| `searchValue` | string | — | Controlled search term (server-side) |
+| `filterValues` | object | — | Controlled filter values (server-side) |
+| `sort` | object | — | Controlled sort state, e.g. `{ name: "ascending" }` |
+| `searchDebounce` | number | `0` | Milliseconds to debounce `onSearchChange` callback |
+| `resetPageOnChange` | boolean | `true` | Auto-reset to page 1 on search, filter, or sort changes |
 | `onSearchChange` | `(term) => void` | — | Search callback (server-side) |
 | `onFilterChange` | `(filterValues) => void` | — | Filter callback (server-side) |
 | `onSortChange` | `(field, direction) => void` | — | Sort callback (server-side) |
 | `onPageChange` | `(page) => void` | — | Page callback (server-side) |
+| `onParamsChange` | `({ search, filters, sort, page }) => void` | — | Unified callback fired on any interaction change |
 
 ### Column Definition
 

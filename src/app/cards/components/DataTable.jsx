@@ -25,6 +25,8 @@
  *
  *   <DataTable
  *     serverSide={true}
+ *     loading={isLoading}
+ *     error={fetchError}
  *     data={currentPageRows}
  *     totalCount={247}
  *     columns={COLUMNS}
@@ -33,10 +35,15 @@
  *     filters={FILTER_CONFIG}
  *     pageSize={10}
  *     page={currentPage}
+ *     searchValue={params.search}
+ *     filterValues={params.filters}
+ *     sort={params.sort}
+ *     searchDebounce={300}
  *     onSearchChange={(term) => refetch({ search: term, page: 1 })}
  *     onFilterChange={(filterValues) => refetch({ filters: filterValues, page: 1 })}
  *     onSortChange={(field, direction) => refetch({ sort: field, dir: direction, page: 1 })}
  *     onPageChange={(page) => refetch({ page })}
+ *     onParamsChange={(params) => refetch(params)}
  *   />
  *
  * ═══════════════════════════════════════════════════════════════════════════
@@ -154,7 +161,7 @@
  *   }
  */
 
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import {
   Box,
   Button,
@@ -162,10 +169,12 @@ import {
   CurrencyInput,
   DateInput,
   EmptyState,
+  ErrorState,
   Flex,
   Icon,
   Input,
   Link,
+  LoadingSpinner,
   MultiSelect,
   NumberInput,
   SearchInput,
@@ -356,12 +365,20 @@ export const DataTable = ({
   // Server-side mode
   // -----------------------------------------------------------------------
   serverSide = false,
-  totalCount,           // server total (server-side only)
-  page: externalPage,   // controlled page (server-side only)
-  onSearchChange,       // (searchTerm) => void
-  onFilterChange,       // (filterValues) => void
-  onSortChange,         // (field, direction) => void
-  onPageChange,         // (page) => void
+  loading = false,        // show loading spinner over the table
+  error,                  // error message string or boolean — shows ErrorState
+  totalCount,             // server total (server-side only)
+  page: externalPage,     // controlled page (server-side only)
+  searchValue,            // controlled search term (server-side only)
+  filterValues: externalFilterValues, // controlled filter values (server-side only)
+  sort: externalSort,     // controlled sort state, e.g. { field: "ascending" }
+  searchDebounce = 0,     // ms to debounce onSearchChange callback
+  resetPageOnChange = true, // auto-reset to page 1 on search/filter/sort change
+  onSearchChange,         // (searchTerm) => void
+  onFilterChange,         // (filterValues) => void
+  onSortChange,           // (field, direction) => void
+  onPageChange,           // (page) => void
+  onParamsChange,         // ({ search, filters, sort, page }) => void
 
   // -----------------------------------------------------------------------
   // Row selection
@@ -395,15 +412,26 @@ export const DataTable = ({
   // ---------------------------------------------------------------------------
   // Internal state (used in client-side mode; also drives UI in server-side)
   // ---------------------------------------------------------------------------
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterValues, setFilterValues] = useState(() => {
+  const [internalSearchTerm, setInternalSearchTerm] = useState("");
+  const [internalFilterValues, setInternalFilterValues] = useState(() => {
     const init = {};
     filters.forEach((f) => { init[f.name] = getEmptyFilterValue(f); });
     return init;
   });
-  const [sortState, setSortState] = useState(initialSortState);
+  const [internalSortState, setInternalSortState] = useState(initialSortState);
   const [currentPage, setCurrentPage] = useState(1);
   const [showMoreFilters, setShowMoreFilters] = useState(false);
+
+  // Resolve controlled vs internal state
+  const searchTerm = serverSide && searchValue != null ? searchValue : internalSearchTerm;
+  const filterValues = serverSide && externalFilterValues != null ? externalFilterValues : internalFilterValues;
+  const sortState = serverSide && externalSort != null
+    ? (() => {
+      const s = {};
+      columns.forEach((col) => { if (col.sortable) s[col.field] = externalSort[col.field] || "none"; });
+      return s;
+    })()
+    : internalSortState;
 
   // In server-side mode, use external page if provided
   const activePage = serverSide && externalPage != null ? externalPage : currentPage;
@@ -411,41 +439,94 @@ export const DataTable = ({
   // Reset page on client-side filter/sort/search change
   useEffect(() => {
     if (!serverSide) setCurrentPage(1);
-  }, [searchTerm, filterValues, sortState, serverSide]);
+  }, [internalSearchTerm, internalFilterValues, internalSortState, serverSide]);
+
+  // ---------------------------------------------------------------------------
+  // Search debounce
+  // ---------------------------------------------------------------------------
+  const debounceRef = useRef(null);
+
+  const fireSearchCallback = useCallback((term) => {
+    if (serverSide && onSearchChange) onSearchChange(term);
+  }, [serverSide, onSearchChange]);
+
+  // ---------------------------------------------------------------------------
+  // Unified params helper
+  // ---------------------------------------------------------------------------
+  const fireParamsChange = useCallback((overrides) => {
+    if (!onParamsChange) return;
+    const activeSortField = Object.keys(overrides.sort || sortState).find(
+      (k) => (overrides.sort || sortState)[k] !== "none"
+    );
+    onParamsChange({
+      search: overrides.search != null ? overrides.search : searchTerm,
+      filters: overrides.filters != null ? overrides.filters : filterValues,
+      sort: activeSortField
+        ? { field: activeSortField, direction: (overrides.sort || sortState)[activeSortField] }
+        : null,
+      page: overrides.page != null ? overrides.page : activePage,
+    });
+  }, [onParamsChange, searchTerm, filterValues, sortState, activePage]);
 
   // ---------------------------------------------------------------------------
   // Handlers — notify parent in server-side mode
   // ---------------------------------------------------------------------------
+  // Helper: reset page to 1 on search/filter/sort changes
+  const resetPage = useCallback(() => {
+    if (resetPageOnChange) {
+      setCurrentPage(1);
+      if (serverSide && onPageChange) onPageChange(1);
+    }
+  }, [resetPageOnChange, serverSide, onPageChange]);
+
   const handleSearchChange = useCallback((term) => {
-    setSearchTerm(term);
-    if (serverSide && onSearchChange) onSearchChange(term);
-  }, [serverSide, onSearchChange]);
+    setInternalSearchTerm(term);
+    resetPage();
+    if (searchDebounce > 0) {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        fireSearchCallback(term);
+        fireParamsChange({ search: term, page: resetPageOnChange ? 1 : undefined });
+      }, searchDebounce);
+    } else {
+      fireSearchCallback(term);
+      fireParamsChange({ search: term, page: resetPageOnChange ? 1 : undefined });
+    }
+  }, [searchDebounce, fireSearchCallback, fireParamsChange, resetPage, resetPageOnChange]);
+
+  // Clean up debounce timer on unmount
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
   const handleFilterChange = useCallback((name, value) => {
-    setFilterValues((prev) => {
+    setInternalFilterValues((prev) => {
       const next = { ...prev, [name]: value };
       if (serverSide && onFilterChange) onFilterChange(next);
+      resetPage();
+      fireParamsChange({ filters: next, page: resetPageOnChange ? 1 : undefined });
       return next;
     });
-  }, [serverSide, onFilterChange]);
+  }, [serverSide, onFilterChange, fireParamsChange, resetPage, resetPageOnChange]);
 
   const handleSortChange = useCallback((field) => {
-    const current = sortState[field] || "none";
+    const current = (serverSide && externalSort ? externalSort[field] : internalSortState[field]) || "none";
     const nextDirection =
       current === "none" ? "ascending" :
         current === "ascending" ? "descending" : "none";
 
     const reset = {};
-    Object.keys(sortState).forEach((k) => { reset[k] = "none"; });
+    Object.keys(internalSortState).forEach((k) => { reset[k] = "none"; });
     const next = { ...reset, [field]: nextDirection };
-    setSortState(next);
+    setInternalSortState(next);
     if (serverSide && onSortChange) onSortChange(field, nextDirection);
-  }, [sortState, serverSide, onSortChange]);
+    resetPage();
+    fireParamsChange({ sort: next, page: resetPageOnChange ? 1 : undefined });
+  }, [internalSortState, serverSide, externalSort, onSortChange, fireParamsChange, resetPage, resetPageOnChange]);
 
   const handlePageChange = useCallback((page) => {
     setCurrentPage(page);
     if (serverSide && onPageChange) onPageChange(page);
-  }, [serverSide, onPageChange]);
+    fireParamsChange({ page });
+  }, [serverSide, onPageChange, fireParamsChange]);
 
   // ---------------------------------------------------------------------------
   // Client-side: Filter
@@ -1005,7 +1086,9 @@ export const DataTable = ({
           {showRowCount && activeChips.length === 0 && displayCount > 0 && (
             <Box flex={1}>
               <Flex direction="row" justify="end">
-                <Text variant="microcopy" format={rowCountBold ? { fontWeight: "bold" } : undefined}>{recordCountLabel}</Text>
+                <Flex direction="column" align="end">
+                  <Text variant="microcopy" format={rowCountBold ? { fontWeight: "bold" } : undefined}>{recordCountLabel}</Text>
+                </Flex>
               </Flex>
             </Box>
           )}
@@ -1044,11 +1127,19 @@ export const DataTable = ({
         )}
       </Flex>
 
-      {/* Table or empty state */}
-      {displayRows.length === 0 ? (
-        <EmptyState title={emptyTitle}>
-          <Text>{emptyMessage}</Text>
-        </EmptyState>
+      {/* Loading / error / table / empty state */}
+      {loading ? (
+        <LoadingSpinner label="Loading..." layout="centered" />
+      ) : error ? (
+        <ErrorState title={typeof error === "string" ? error : "Something went wrong."}>
+          <Text>{typeof error === "string" ? "Please try again." : "An error occurred while loading data."}</Text>
+        </ErrorState>
+      ) : displayRows.length === 0 ? (
+        <Flex direction="column" align="center" justify="center">
+          <EmptyState title={emptyTitle} layout="vertical">
+            <Text>{emptyMessage}</Text>
+          </EmptyState>
+        </Flex>
       ) : (
         <Table
           bordered={bordered}
