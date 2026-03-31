@@ -1,22 +1,40 @@
 # HubSpot DataTable
 
-A feature-rich, reusable table component for HubSpot UI Extensions. Drop it into any CRM card and get search, filtering, sorting, pagination, collapsible row grouping, row selection, inline editing, and intelligent auto-width — all built with native `@hubspot/ui-extensions` components.
+A drop-in table component for HubSpot UI Extensions. Define your columns, pass your data, and you get search, filtering, sorting, pagination, inline editing, row grouping, and auto-sized columns out of the box. One file, no extra dependencies.
 
 ![Full-Featured DataTable](assets/fully-featured-table.png)
 
+## Why DataTable?
+
+If you've built tables with HubSpot's `Table`, `TableRow`, and `TableCell` primitives, you know the drill: wire up search, sorting, pagination, and filtering yourself, then spend an hour tweaking column widths that still look wrong. DataTable does all of that for you.
+
+The column sizing alone is worth it. DataTable looks at your actual data (types, string lengths, unique values, whether a column has edit controls) and picks widths automatically. Booleans and dates get compact columns, text gets room, and editable columns are never too narrow for their inputs. You don't configure any widths unless you want to.
+
+```jsx
+const COLUMNS = [
+  { field: "name", label: "Company", sortable: true, renderCell: (val) => val },
+  { field: "status", label: "Status", renderCell: (val) => <StatusTag>{val}</StatusTag> },
+  { field: "amount", label: "Amount", sortable: true, renderCell: (val) => formatCurrency(val) },
+];
+
+<DataTable data={deals} columns={COLUMNS} searchFields={["name"]} pageSize={10} />
+```
+
+That's a searchable, sortable, paginated table with auto-sized columns in 5 lines of config.
+
 ## Features
 
-- **Search** — Full-text search across any fields
-- **Filters** — Select, multi-select, and date range filters with active filter chips
-- **Sorting** — Click-to-sort with three-state cycle (none → ascending → descending → none)
-- **Pagination** — Client-side or server-side with configurable page size
-- **Row Grouping** — Collapsible groups with aggregation functions per column
-- **Row Selection** — Checkbox column with select-all
-- **Inline Editing** — Two edit modes (discrete click-to-edit and always-visible inline) with 10 input types and input validation
-- **Auto-Width** — Intelligent column sizing based on content analysis (data types, string lengths, edit types)
-- **Footer Rows** — Summary/total rows computed from filtered data
-- **Server-Side Mode** — Callbacks for search, filter, sort, and page changes
-- **Empty State** — Built-in empty state when no results match
+- Full-text search across any combination of fields
+- Select, multi-select, and date range filters with active filter chips and a "Clear all" option
+- Click-to-sort headers with three-state cycling (none, ascending, descending)
+- Client-side or server-side pagination with configurable page size
+- Collapsible row groups with per-column aggregation functions
+- Row selection via checkboxes with a select-all header toggle
+- Two inline edit modes (discrete click-to-edit and always-visible) supporting 10 input types, with per-column validation
+- Auto-width column sizing based on data analysis, with manual overrides when you need them
+- Footer rows computed from filtered data
+- Server-side mode with callbacks for search, filter, sort, and page changes
+- Built-in empty state when no results match
 
 ## Installation
 
@@ -32,7 +50,7 @@ Import it in your card:
 import { DataTable } from "./components/DataTable.jsx";
 ```
 
-No additional dependencies — only uses `@hubspot/ui-extensions`.
+No extra dependencies. It only uses `@hubspot/ui-extensions`.
 
 ---
 
@@ -40,7 +58,7 @@ No additional dependencies — only uses `@hubspot/ui-extensions`.
 
 ### Basic table with search and sorting
 
-The simplest DataTable — define your columns with `renderCell`, pass your data, and specify which fields are searchable. Auto-width handles column sizing automatically.
+Define your columns with `renderCell`, pass your data, and the table handles sizing, search, and sorting.
 
 ```jsx
 import React from "react";
@@ -76,7 +94,7 @@ hubspot.extend(() => (
 ));
 ```
 
-> **Tip:** You can also use `renderRow` for full row control instead of `renderCell`, but `renderCell` is required when using `selectable`, editable columns, or `groupBy`.
+> You can also use `renderRow` for full row control instead of `renderCell`, but `renderCell` is required when using `selectable`, editable columns, or `groupBy`.
 
 ---
 
@@ -307,7 +325,7 @@ function EditableTable() {
 }
 ```
 
-> **Note:** `align` is automatically stripped from cells and headers when input controls are visible, since HubSpot input components don't respect the parent cell's text alignment. You can still set `align` on editable columns — it applies correctly in the display view.
+> `align` is automatically stripped from cells and headers when input controls are visible, since HubSpot input components don't respect the parent cell's text alignment. You can still set `align` on editable columns and it applies correctly in the display view.
 
 ---
 
@@ -351,7 +369,7 @@ Use `editProps` to pass additional props to the edit component (e.g., `{ currenc
 
 ![Row Grouping](assets/row-grouping.png)
 
-Collapsible groups with per-column aggregation functions. Click a group header to expand or collapse it. Groups start expanded by default.
+Groups are collapsible. Click a group header to expand or collapse it. You can define aggregation functions per column, and groups start expanded by default.
 
 ```jsx
 import React from "react";
@@ -411,24 +429,24 @@ groupBy={{
 
 ### Auto-width
 
-By default, columns without explicit `width` or `cellWidth` get auto-computed widths based on content analysis. Disable with `autoWidth={false}`.
+On by default. DataTable scans up to 50 rows and picks widths based on what's in each column. Disable with `autoWidth={false}` if you want full manual control.
 
-**Heuristics:**
+The heuristics:
 
 | Data Pattern | Header Width | Cell Width |
 |---|---|---|
 | Booleans (`true`/`false`) | `min` | `min` |
 | Dates (ISO format) | `min` | `auto` |
 | Numbers | `auto` | `auto` |
-| Small enums (≤5 unique, ≤15 chars) | `min` | `auto` |
+| Small enums (5 or fewer unique values, 15 chars or less) | `min` | `auto` |
 | Text | `auto` | `auto` |
 
-**Smart behaviors:**
-- Editable columns (except checkbox/toggle) are never constrained to `min` headers — input components need room
-- `align` is automatically stripped from headers and cells when showing input controls
-- In discrete edit mode, the active cell switches to `auto` width to accommodate the input
+A few things to know:
+- Editable columns (except checkbox/toggle) never get `min` headers, since input components need room.
+- `align` is stripped from headers and cells when input controls are showing, because HubSpot inputs ignore parent text alignment.
+- In discrete edit mode, the active cell switches to `auto` width while the input is open.
 
-**Manual overrides** always take priority. You can set `width` (applies to header and cells) and `cellWidth` (cells only):
+Manual overrides always take priority. You can set `width` (applies to header and cells) and `cellWidth` (cells only):
 
 ```jsx
 // Header and cells both use "max"
@@ -445,12 +463,36 @@ By default, columns without explicit `width` or `cellWidth` get auto-computed wi
 
 ### Server-side mode
 
-Let the parent manage data fetching. The component renders UI controls and calls back on every interaction. Filtering, sorting, and pagination are all delegated to the parent.
+If your data comes from an API or you have too many records to load at once, turn on `serverSide={true}`. DataTable still renders all the UI (search box, filter dropdowns, sort headers, pagination buttons), but it skips client-side processing and fires callbacks instead. You handle the fetching.
+
+You pass `data` with just the current page of results, and `totalCount` with the total number of records so pagination works (e.g., "Showing 1-25 of 247"). Then wire up the four callbacks (`onSearchChange`, `onFilterChange`, `onSortChange`, `onPageChange`) to re-fetch whenever the user interacts with the table.
 
 ```jsx
-import React, { useState, useEffect } from "react";
-import { hubspot } from "@hubspot/ui-extensions";
+import React, { useState, useEffect, useCallback } from "react";
+import { Text, StatusTag, hubspot } from "@hubspot/ui-extensions";
 import { DataTable } from "./components/DataTable.jsx";
+
+const COLUMNS = [
+  { field: "name", label: "Company", sortable: true,
+    renderCell: (val) => <Text format={{ fontWeight: "demibold" }}>{val}</Text> },
+  { field: "email", label: "Email", sortable: true, renderCell: (val) => val },
+  { field: "status", label: "Status", sortable: true,
+    renderCell: (val) => <StatusTag variant={val === "active" ? "success" : "warning"}>{val}</StatusTag> },
+  { field: "createdAt", label: "Created", sortable: true,
+    renderCell: (val) => new Date(val).toLocaleDateString() },
+];
+
+const FILTERS = [
+  {
+    name: "status",
+    type: "select",
+    placeholder: "All statuses",
+    options: [
+      { label: "Active", value: "active" },
+      { label: "Inactive", value: "inactive" },
+    ],
+  },
+];
 
 hubspot.extend(({ runServerlessFunction }) => (
   <ServerSideTable runServerlessFunction={runServerlessFunction} />
@@ -460,17 +502,23 @@ function ServerSideTable({ runServerlessFunction }) {
   const [data, setData] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
+  const [params, setParams] = useState({ page: 1, pageSize: 25 });
 
-  const fetchData = async (params = {}) => {
+  const fetchData = useCallback(async (nextParams) => {
+    const merged = { ...params, ...nextParams };
+    setParams(merged);
+
     const result = await runServerlessFunction({
-      name: "fetchRecords",
-      parameters: { page: 1, pageSize: 25, ...params },
+      name: "fetchContacts",
+      parameters: merged,
     });
+
     setData(result.records);
     setTotalCount(result.total);
-  };
+  }, [params, runServerlessFunction]);
 
-  useEffect(() => { fetchData(); }, []);
+  // Initial load
+  useEffect(() => { fetchData({ page: 1, pageSize: 25 }); }, []);
 
   return (
     <DataTable
@@ -478,18 +526,59 @@ function ServerSideTable({ runServerlessFunction }) {
       data={data}
       totalCount={totalCount}
       columns={COLUMNS}
-      searchFields={["name"]}
+      searchFields={["name", "email"]}
+      searchPlaceholder="Search contacts..."
       filters={FILTERS}
       pageSize={25}
       page={page}
-      onSearchChange={(term) => fetchData({ search: term, page: 1 })}
-      onFilterChange={(filters) => fetchData({ filters, page: 1 })}
-      onSortChange={(field, direction) => fetchData({ sort: field, dir: direction })}
-      onPageChange={(p) => { setPage(p); fetchData({ page: p }); }}
+      onSearchChange={(term) => {
+        setPage(1);
+        fetchData({ search: term, page: 1 });
+      }}
+      onFilterChange={(filterValues) => {
+        setPage(1);
+        fetchData({ filters: filterValues, page: 1 });
+      }}
+      onSortChange={(field, direction) => {
+        fetchData({ sort: field, dir: direction });
+      }}
+      onPageChange={(p) => {
+        setPage(p);
+        fetchData({ page: p });
+      }}
     />
   );
 }
 ```
+
+#### What each callback receives
+
+| Callback | Arguments | When it fires |
+|---|---|---|
+| `onSearchChange` | `(searchTerm: string)` | User types in the search box |
+| `onFilterChange` | `(filterValues: object)` | User selects/clears a filter. Object shape: `{ status: "active", category: ["a", "b"] }` |
+| `onSortChange` | `(field: string, direction: "ascending" \| "descending" \| null)` | User clicks a sortable column header. `null` means sort was cleared. |
+| `onPageChange` | `(page: number)` | User clicks a pagination button |
+
+#### Key differences from client-side mode
+
+| Behavior | Client-side (default) | Server-side (`serverSide={true}`) |
+|---|---|---|
+| Filtering | DataTable filters `data` in memory | Skipped, you filter on the server |
+| Sorting | DataTable sorts in memory | Skipped, you sort on the server |
+| Pagination | DataTable slices the full array | DataTable renders controls, you fetch the right page |
+| `data` prop | Full dataset | Current page only |
+| `totalCount` prop | Not needed (computed from data) | Required for pagination to work |
+| Search | DataTable searches `searchFields` in memory | Skipped, `onSearchChange` fires and you query the server |
+| Footer | `footer` receives all filtered rows | `footer` receives current `data` (the current page) |
+| Grouping | Works on full in-memory dataset | Works on whatever `data` contains (current page) |
+
+#### Tips
+
+- Reset to page 1 when search, filters, or sort change, otherwise the user can land on an empty page.
+- DataTable fires `onSearchChange` on every keystroke. If your API is expensive, debounce the fetch.
+- The callbacks fire independently, so merge them into a single state object (like `params` above) to avoid losing the current search term when the user changes a filter.
+- There's no built-in loading indicator. If your fetches are slow, consider showing a loading overlay or disabling controls while the request is in flight.
 
 ---
 
@@ -566,7 +655,7 @@ function ServerSideTable({ runServerlessFunction }) {
 
 ### Input Validation
 
-Add `editValidate` to any editable column. The function receives the current value and the full row, and should return `true` if valid or an error message string. Invalid values show inline errors and are blocked from committing.
+Add an `editValidate` function to any editable column. It receives the current value and the full row, and should return `true` if valid or an error message string. Invalid values show inline errors and are blocked from committing.
 
 ```jsx
 const columns = [
@@ -598,45 +687,43 @@ const columns = [
 ];
 ```
 
-Validation works in both edit modes:
-- **Discrete mode** — errors display inline as the user types (via `onInput`). The edit is blocked from committing until the value passes validation. While a validation error is active, the input cannot be dismissed via blur — the user must fix the value before they can leave the cell.
-- **Inline mode** — each cell tracks its own validation state independently. Invalid values are blocked from firing `onRowEdit`.
+Validation works in both edit modes. In discrete mode, errors display inline as the user types (via `onInput`). The edit is blocked from committing until the value passes validation, and while a validation error is active the input can't be dismissed via blur. The user has to fix the value before they can leave the cell. In inline mode, each cell tracks its own validation state independently and invalid values are blocked from firing `onRowEdit`.
 
 ---
 
 ## Limitations
 
-Before choosing DataTable, be aware of these HubSpot UI Extensions constraints:
+These come from HubSpot UI Extensions itself, not DataTable:
 
 | Limitation | Details |
 |---|---|
-| **No sticky headers** | HubSpot's `Table` component doesn't support sticky/fixed headers. Long tables scroll the headers out of view. Use `pageSize` to keep tables short. |
-| **No column resizing** | Users cannot drag to resize columns. Widths are fixed to `"min"`, `"max"`, or `"auto"`. |
-| **No drag-and-drop** | No row reordering or column reordering via drag-and-drop. |
-| **No virtual scrolling** | All visible rows are rendered to the DOM. For very large datasets (500+ rows), use server-side mode with pagination. |
-| **No pixel widths** | `TableCell` `width` only accepts `"min"`, `"max"`, or `"auto"` — numeric pixel values are silently ignored by HubSpot. |
-| **Input alignment** | HubSpot input components (Input, NumberInput, CurrencyInput, etc.) ignore parent `text-align` CSS. DataTable auto-strips `align` when inputs are visible so headers and cells stay consistent. |
-| **No multi-column sort** | Only one column can be sorted at a time. |
-| **No row expansion** | No built-in expand/collapse for individual row detail views (row grouping is supported, but not per-row expansion). |
-| **No export** | No built-in CSV/Excel export. You'd need to implement this in a serverless function. |
-| **Validation on select/toggle/checkbox** | `editValidate` only shows error UI on text-based inputs (text, number, currency, textarea, stepper). Select, toggle, and checkbox inputs commit immediately and don't display `validationMessage`. |
+| No sticky headers | HubSpot's `Table` component doesn't support sticky/fixed headers. Long tables scroll the headers out of view. Use `pageSize` to keep tables short. |
+| No column resizing | Users cannot drag to resize columns. Widths are fixed to `"min"`, `"max"`, or `"auto"`. |
+| No drag-and-drop | No row reordering or column reordering via drag-and-drop. |
+| No virtual scrolling | All visible rows are rendered to the DOM. For large datasets (500+ rows), use server-side mode with pagination. |
+| No pixel widths | `TableCell` `width` only accepts `"min"`, `"max"`, or `"auto"`. Numeric pixel values are silently ignored by HubSpot. |
+| Input alignment | HubSpot input components (Input, NumberInput, CurrencyInput, etc.) ignore parent `text-align` CSS. DataTable strips `align` when inputs are visible so headers and cells stay consistent. |
+| No multi-column sort | Only one column can be sorted at a time. |
+| No row expansion | No expand/collapse for individual row detail views. Row grouping works, but per-row expansion does not. |
+| No export | No built-in CSV/Excel export. You'd need to implement this in a serverless function. |
+| Validation on select/toggle/checkbox | `editValidate` only shows error UI on text-based inputs (text, number, currency, textarea, stepper). Select, toggle, and checkbox commit immediately and don't show `validationMessage`. |
 
 ---
 
 ## Roadmap
 
-Planned features for future releases:
+Planned for future releases:
 
-- **Row actions** — Per-row action buttons/menus (edit, delete, custom actions) in a dedicated column
-- **Column visibility toggle** — Let users show/hide columns via a settings dropdown
-- **Bulk actions** — Action bar that appears when rows are selected (delete selected, update status, etc.)
-- **Expandable rows** — Click to expand a row and show additional detail content below it
-- **Copy to clipboard** — Click-to-copy individual cell values
-- **Conditional formatting** — Color-code cells based on value rules (e.g., red for negative amounts)
-- **Column-level filters** — Per-column filter dropdowns in the header row
-- **Keyboard navigation** — Tab between editable cells, Enter to commit, Escape to cancel
-- **Async validation** — Support `editValidate` returning a Promise for server-side validation
-- **Multi-column sort** — Sort by multiple columns with priority ordering
+- Per-row action buttons/menus (edit, delete, custom actions) in a dedicated column
+- Column visibility toggle so users can show/hide columns
+- Bulk action bar when rows are selected (delete selected, update status, etc.)
+- Expandable rows with detail content below each row
+- Click-to-copy on individual cell values
+- Conditional formatting to color-code cells based on value rules
+- Per-column filter dropdowns in the header row
+- Keyboard navigation (Tab between editable cells, Enter to commit, Escape to cancel)
+- Async validation via `editValidate` returning a Promise
+- Multi-column sort with priority ordering
 
 ---
 
@@ -644,11 +731,11 @@ Planned features for future releases:
 
 This repo includes a demo card at `src/app/cards/DataTableDemo.jsx` that showcases all features:
 
-1. **Full-Featured** — Search, filters, sorting, pagination, footer totals, auto-width
-2. **Row Selection** — Checkbox selection with select-all
-3. **Discrete Editing** — Click-to-edit with text, select, currency, and checkbox inputs + validation on name and amount
-4. **Inline Editing** — Always-visible inputs with currency and checkbox controls
-5. **Row Grouping** — Collapsible groups with aggregated totals and status summaries
+1. Full-featured table with search, filters, sorting, pagination, footer totals, and auto-width
+2. Row selection with checkboxes and select-all
+3. Discrete editing (click-to-edit) with text, select, currency, checkbox inputs and validation on name and amount
+4. Inline editing with always-visible inputs
+5. Collapsible row grouping with aggregated totals and status summaries
 
 To run it:
 
