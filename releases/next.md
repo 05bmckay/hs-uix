@@ -1,19 +1,3 @@
 # Next Release (unreleased)
 
 Changes queued for the next version bump.
-
-## New Features
-
-- **Fuzzy search** — New `fuzzySearch` prop enables typo-tolerant search powered by Fuse.js. Customize matching behavior with the `fuzzyOptions` prop (threshold, distance, etc.). Exact substring matching remains the default when `fuzzySearch` is not set.
-
-- **Controlled row selection** — New `selectedIds` prop allows parent components to control which rows are checked. Enables external systems (e.g. paste-to-select) to drive selection state into the DataTable.
-
-- **Selection action bar** — When rows are selected, a compact action bar appears above the table inside a bordered `Tile`. Shows the selected count (demibold), a "Select all" button (selects all rows across all pages with total count), a "Deselect all" button, and custom action buttons. Configure actions via the new `selectionActions` prop: `[{ label, onClick(selectedIds[]), icon?, variant? }]`.
-
-- **Record label** — New `recordLabel` prop (`{ singular, plural }`) customizes the entity name used throughout the component — row count ("12 companies"), selection bar ("2 companies selected", "Select all 12 companies"), loading state ("Loading companies..."), and empty state ("No companies match your search or filter criteria."). Defaults to "record"/"records". Labels are automatically lowercased.
-
-## Changes
-
-- **Header checkbox scoped to current page** — The header "select all" checkbox now toggles only rows on the current page, not all filtered rows. Use the "Select all" button in the action bar for full selection across pages.
-
-- **Record count moves to action bar when active** — When rows are selected, the record count label shifts from the toolbar into the action bar's right side to avoid duplication.
