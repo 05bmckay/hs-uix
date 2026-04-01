@@ -1,6 +1,6 @@
 # HubSpot DataTable
 
-A drop-in table component for HubSpot UI Extensions. Define your columns, pass your data, and you get search, filtering, sorting, pagination, inline editing, row grouping, and auto-sized columns out of the box. One file, no extra dependencies.
+A drop-in table component for HubSpot UI Extensions. Define your columns, pass your data, and you get search, filtering, sorting, pagination, inline editing, row grouping, and auto-sized columns out of the box.
 
 ![Full-Featured DataTable](assets/fully-featured-table.png)
 
@@ -40,19 +40,17 @@ That's a searchable, sortable, paginated table with auto-sized columns in 5 line
 
 ## Installation
 
-Copy `DataTable.jsx` into your HubSpot project's components directory:
-
-```
-src/app/cards/components/DataTable.jsx
+```bash
+npm install hubspot-datatable
 ```
 
 Import it in your card:
 
 ```jsx
-import { DataTable } from "./components/DataTable.jsx";
+import { DataTable } from "hubspot-datatable";
 ```
 
-No extra dependencies. It only uses `@hubspot/ui-extensions`.
+Requires `@hubspot/ui-extensions` and `react` as peer dependencies (already present in any HubSpot UI Extensions project).
 
 ---
 
@@ -65,7 +63,7 @@ Define your columns with `renderCell`, pass your data, and the table handles siz
 ```jsx
 import React from "react";
 import { Flex, Text, hubspot } from "@hubspot/ui-extensions";
-import { DataTable } from "./components/DataTable.jsx";
+import { DataTable } from "hubspot-datatable";
 
 const CONTACTS = [
   { id: 1, name: "Jane Smith", email: "jane@acme.com", role: "VP Sales" },
@@ -109,7 +107,7 @@ When more than 2 filters are defined, the first 2 appear inline and the rest are
 ```jsx
 import React from "react";
 import { Text, StatusTag, Tag, TableRow, TableHeader, hubspot } from "@hubspot/ui-extensions";
-import { DataTable } from "./components/DataTable.jsx";
+import { DataTable } from "hubspot-datatable";
 
 const DEALS = [
   { id: 1, company: "Acme Corp", status: "active", segment: "enterprise", amount: 125000, closeDate: "2026-01-15" },
@@ -223,7 +221,7 @@ Add checkboxes with a select-all header. Selection state resets when search or f
 ```jsx
 import React, { useState } from "react";
 import { Flex, Heading, Text, StatusTag, hubspot } from "@hubspot/ui-extensions";
-import { DataTable } from "./components/DataTable.jsx";
+import { DataTable } from "hubspot-datatable";
 
 hubspot.extend(() => <SelectableTable />);
 
@@ -270,7 +268,7 @@ In discrete mode (the default), editable cells appear as dark links. Click to op
 ```jsx
 import React, { useState, useCallback } from "react";
 import { Text, StatusTag, Tag, hubspot } from "@hubspot/ui-extensions";
-import { DataTable } from "./components/DataTable.jsx";
+import { DataTable } from "hubspot-datatable";
 
 const STATUS_COLORS = { active: "success", "at-risk": "warning", churned: "danger" };
 const STATUS_LABELS = { active: "Active", "at-risk": "At Risk", churned: "Churned" };
@@ -376,7 +374,7 @@ Groups are collapsible. Click a group header to expand or collapse it. You can d
 ```jsx
 import React from "react";
 import { Text, StatusTag, hubspot } from "@hubspot/ui-extensions";
-import { DataTable } from "./components/DataTable.jsx";
+import { DataTable } from "hubspot-datatable";
 
 const STATUS_COLORS = { active: "success", "at-risk": "warning", churned: "danger" };
 
@@ -472,7 +470,7 @@ You pass `data` with just the current page of results, and `totalCount` with the
 ```jsx
 import React, { useState, useEffect, useCallback } from "react";
 import { Text, StatusTag, hubspot } from "@hubspot/ui-extensions";
-import { DataTable } from "./components/DataTable.jsx";
+import { DataTable } from "hubspot-datatable";
 
 const COLUMNS = [
   { field: "name", label: "Company", sortable: true,
@@ -611,6 +609,7 @@ function ServerSideTable({ runServerlessFunction }) {
 | `emptyMessage` | string | `"No records match..."` | Empty state body |
 | `selectable` | boolean | `false` | Enable row selection checkboxes |
 | `rowIdField` | string | `"id"` | Field name for unique row identifier |
+| `selectedIds` | Array | — | Controlled selection — array of row IDs. When provided, overrides internal selection state. |
 | `onSelectionChange` | `(ids[]) => void` | — | Called when selection changes |
 | `editMode` | `"discrete"` \| `"inline"` | `"discrete"` | Edit mode: click-to-edit or always-visible inputs |
 | `onRowEdit` | `(row, field, newValue) => void` | — | Called when a cell edit is committed |
@@ -746,21 +745,16 @@ Planned for future releases:
 
 ## Demo
 
-This repo includes a demo card at `src/app/cards/DataTableDemo.jsx` that showcases all features:
+A standalone demo app showcasing all features is available in a separate repo: [hubspot-datatable-demo](https://github.com/05bmckay/hubspot-datatable-demo)
+
+It includes examples of:
 
 1. Full-featured table with search, filters, sorting, pagination, footer totals, and auto-width
 2. Row selection with checkboxes and select-all
-3. Discrete editing (click-to-edit) with text, select, currency, checkbox inputs and validation on name and amount
+3. Discrete editing (click-to-edit) with text, select, currency, checkbox inputs and validation
 4. Inline editing with always-visible inputs
 5. Collapsible row grouping with aggregated totals and status summaries
-
-To run it:
-
-1. Clone this repo
-2. `cd src/app/cards && npm install`
-3. Connect to your HubSpot account: `hs init`
-4. `hs project dev` for local development or `hs project upload && hs project deploy` for production
-5. Navigate to any Contact, Company, or Deal record to see the "DataTable Demo" tab
+6. Server-side mode with loading/error states and search debounce
 
 ## License
 
