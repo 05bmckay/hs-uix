@@ -385,6 +385,7 @@ export const DataTable = ({
   // -----------------------------------------------------------------------
   selectable = false,
   rowIdField = "id",     // field name used as unique row identifier
+  selectedIds: externalSelectedIds, // controlled selection — array of row IDs
   onSelectionChange,     // (selectedIds[]) => void
 
   // -----------------------------------------------------------------------
@@ -761,11 +762,24 @@ export const DataTable = ({
   // ---------------------------------------------------------------------------
   // Row selection
   // ---------------------------------------------------------------------------
-  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [internalSelectedIds, setInternalSelectedIds] = useState(new Set());
 
+  // Sync internal state when external selectedIds changes
   useEffect(() => {
-    if (selectable) setSelectedIds(new Set());
-  }, [searchTerm, filterValues, selectable]);
+    if (externalSelectedIds != null) {
+      setInternalSelectedIds(new Set(externalSelectedIds));
+    }
+  }, [externalSelectedIds]);
+
+  // Reset selection on search/filter changes (only when uncontrolled)
+  useEffect(() => {
+    if (selectable && externalSelectedIds == null) setInternalSelectedIds(new Set());
+  }, [searchTerm, filterValues, selectable, externalSelectedIds]);
+
+  const selectedIds = externalSelectedIds != null
+    ? new Set(externalSelectedIds)
+    : internalSelectedIds;
+  const setSelectedIds = setInternalSelectedIds;
 
   const handleSelectRow = useCallback((rowId, checked) => {
     setSelectedIds((prev) => {
@@ -778,26 +792,26 @@ export const DataTable = ({
   }, [onSelectionChange]);
 
   const handleSelectAll = useCallback((checked) => {
-    const visibleIds = displayRows
+    const allIds = flatRows
       .filter((r) => r.type === "data")
       .map((r) => r.row[rowIdField]);
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      visibleIds.forEach((id) => {
+      allIds.forEach((id) => {
         if (checked) next.add(id);
         else next.delete(id);
       });
       if (onSelectionChange) onSelectionChange([...next]);
       return next;
     });
-  }, [displayRows, rowIdField, onSelectionChange]);
+  }, [flatRows, rowIdField, onSelectionChange]);
 
   const allVisibleSelected = useMemo(() => {
-    const visibleIds = displayRows
+    const allIds = flatRows
       .filter((r) => r.type === "data")
       .map((r) => r.row[rowIdField]);
-    return visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
-  }, [displayRows, selectedIds, rowIdField]);
+    return allIds.length > 0 && allIds.every((id) => selectedIds.has(id));
+  }, [flatRows, selectedIds, rowIdField]);
 
   // ---------------------------------------------------------------------------
   // Inline editing

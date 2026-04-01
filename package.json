@@ -1,0 +1,38 @@
+{
+  "name": "hubspot-datatable",
+  "version": "0.1.0",
+  "description": "Filterable, sortable, paginated DataTable for HubSpot UI Extensions",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepublishOnly": "tsup"
+  },
+  "peerDependencies": {
+    "@hubspot/ui-extensions": ">=0.12.0",
+    "react": ">=18.0.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "@hubspot/ui-extensions": "latest",
+    "react": "^18.0.0"
+  },
+  "keywords": [
+    "hubspot",
+    "ui-extensions",
+    "datatable",
+    "table",
+    "crm"
+  ]
+}
