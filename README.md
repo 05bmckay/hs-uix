@@ -1,5 +1,9 @@
 # HubSpot DataTable
 
+[![npm version](https://img.shields.io/npm/v/hubspot-datatable.svg)](https://www.npmjs.com/package/hubspot-datatable)
+[![npm downloads](https://img.shields.io/npm/dm/hubspot-datatable.svg)](https://www.npmjs.com/package/hubspot-datatable)
+[![license](https://img.shields.io/npm/l/hubspot-datatable.svg)](https://github.com/05bmckay/hubspot-datatable/blob/main/LICENSE)
+
 A drop-in table component for HubSpot UI Extensions. Define your columns, pass your data, and you get search, filtering, sorting, pagination, inline editing, row grouping, and auto-sized columns out of the box.
 
 ![Full-Featured DataTable](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/fully-featured-table.png)
