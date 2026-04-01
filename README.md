@@ -28,14 +28,16 @@ That's a searchable, sortable, paginated table with auto-sized columns in 5 line
 
 ## Features
 
-- Full-text search across any combination of fields
+- Full-text search across any combination of fields, with optional fuzzy matching via Fuse.js
 - Select, multi-select, and date range filters with active filter chips and a "Clear all" option
 - Click-to-sort headers with three-state cycling (none, ascending, descending)
 - Client-side or server-side pagination with configurable page size, visible page buttons, and First/Last navigation
 - Collapsible row groups with per-column aggregation functions
-- Row selection via checkboxes with a select-all header toggle
+- Row selection via checkboxes — header checkbox selects current page, "Select all" button in the action bar selects all rows across pages
+- Selection action bar with selected count, select/deselect all, and custom bulk action buttons
 - Two inline edit modes (discrete click-to-edit and always-visible) supporting 10 input types, with per-column validation and automatic boolean-to-select conversion
 - Auto-width column sizing based on data analysis, with manual overrides when you need them
+- Customizable record label (`recordLabel`) that flows into row count, selection bar, loading, and empty states
 - Configurable row count display with custom text formatting and bold option
 - Configurable table appearance (bordered, flush)
 - Footer rows computed from filtered data
@@ -216,14 +218,14 @@ const FILTERS = [
 
 ---
 
-### Row selection
+### Row selection with bulk actions
 
 ![Row Selection](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/row-selection.png)
 
-Add checkboxes with a select-all header. Selection state resets when search or filters change. Requires `renderCell` on each column.
+Add checkboxes with a select-all header (selects current page). When rows are selected, a compact action bar appears above the table showing the selected count, a "Select all" button (selects all rows across all pages), "Deselect all", and any custom action buttons you define. Selection state resets when search or filters change. Requires `renderCell` on each column.
 
 ```jsx
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Flex, Heading, Text, StatusTag, hubspot } from "@hubspot/ui-extensions";
 import { DataTable } from "hubspot-datatable";
 
@@ -231,6 +233,12 @@ hubspot.extend(() => <SelectableTable />);
 
 function SelectableTable() {
   const [selected, setSelected] = useState([]);
+
+  const selectionActions = useMemo(() => [
+    { label: "Edit", icon: "edit", onClick: (ids) => console.log("Edit", ids) },
+    { label: "Delete", icon: "delete", onClick: (ids) => console.log("Delete", ids) },
+    { label: "Export", icon: "dataExport", onClick: (ids) => console.log("Export", ids) },
+  ], []);
 
   const columns = [
     { field: "name", label: "Company", sortable: true,
@@ -243,15 +251,14 @@ function SelectableTable() {
   return (
     <Flex direction="column" gap="sm">
       <Heading>Companies</Heading>
-      {selected.length > 0 && (
-        <Text variant="microcopy">{selected.length} selected</Text>
-      )}
       <DataTable
         data={COMPANIES}
         columns={columns}
         selectable={true}
         rowIdField="id"
+        recordLabel={{ singular: "Company", plural: "Companies" }}
         onSelectionChange={setSelected}
+        selectionActions={selectionActions}
         searchFields={["name", "contact"]}
         pageSize={10}
       />
@@ -259,6 +266,8 @@ function SelectableTable() {
   );
 }
 ```
+
+Each action in `selectionActions` receives the array of selected row IDs when clicked. You can optionally set `icon` (any HubSpot Icon name) and `variant` (Button variant) on each action.
 
 ---
 
@@ -595,6 +604,8 @@ function ServerSideTable({ runServerlessFunction }) {
 | `columns` | Array | *required* | Column definitions (see below) |
 | `renderRow` | `(row) => ReactNode` | — | Renders a full `<TableRow>`. Omit to use column-based rendering via `renderCell`. |
 | `searchFields` | string[] | `[]` | Fields to search across |
+| `fuzzySearch` | boolean | `false` | Enable fuzzy matching via Fuse.js |
+| `fuzzyOptions` | object | — | Custom Fuse.js options (threshold, distance, etc.) |
 | `searchPlaceholder` | string | `"Search..."` | Placeholder text for search input |
 | `filters` | Array | `[]` | Filter configurations (see below) |
 | `pageSize` | number | `10` | Rows per page |
@@ -610,11 +621,13 @@ function ServerSideTable({ runServerlessFunction }) {
 | `groupBy` | object | — | Grouping config (see below) |
 | `footer` | `(filteredData) => ReactNode` | — | Footer row renderer |
 | `emptyTitle` | string | `"No results found"` | Empty state heading |
-| `emptyMessage` | string | `"No records match..."` | Empty state body |
+| `emptyMessage` | string | `"No {pluralLabel} match..."` | Empty state body. Uses `recordLabel` plural by default. |
+| `recordLabel` | `{ singular, plural }` | `{ singular: "record", plural: "records" }` | Entity name used in row count, selection bar, loading, and empty states. Automatically lowercased. |
 | `selectable` | boolean | `false` | Enable row selection checkboxes |
 | `rowIdField` | string | `"id"` | Field name for unique row identifier |
 | `selectedIds` | Array | — | Controlled selection — array of row IDs. When provided, overrides internal selection state. |
 | `onSelectionChange` | `(ids[]) => void` | — | Called when selection changes |
+| `selectionActions` | Array | `[]` | Bulk action buttons: `[{ label, onClick(ids[]), icon?, variant? }]` |
 | `editMode` | `"discrete"` \| `"inline"` | `"discrete"` | Edit mode: click-to-edit or always-visible inputs |
 | `onRowEdit` | `(row, field, newValue) => void` | — | Called when a cell edit is committed |
 | `autoWidth` | boolean | `true` | Auto-compute column widths from content analysis |
@@ -736,7 +749,6 @@ Planned for future releases:
 
 - Per-row action buttons/menus (edit, delete, custom actions) in a dedicated column
 - Column visibility toggle so users can show/hide columns
-- Bulk action bar when rows are selected (delete selected, update status, etc.)
 - Expandable rows with detail content below each row
 - Click-to-copy on individual cell values
 - Conditional formatting to color-code cells based on value rules
@@ -754,7 +766,7 @@ A standalone demo app showcasing all features is available in a separate repo: [
 It includes examples of:
 
 1. Full-featured table with search, filters, sorting, pagination, footer totals, and auto-width
-2. Row selection with checkboxes and select-all
+2. Row selection with bulk action bar, custom actions, filters, and record labels
 3. Discrete editing (click-to-edit) with text, select, currency, checkbox inputs and validation
 4. Inline editing with always-visible inputs
 5. Collapsible row grouping with aggregated totals and status summaries

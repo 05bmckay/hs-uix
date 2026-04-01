@@ -33,9 +33,9 @@
     "react": ">=18.0.0"
   },
   "devDependencies": {
-    "tsup": "^8.0.0",
     "@hubspot/ui-extensions": "latest",
-    "react": "^18.0.0"
+    "react": "^18.0.0",
+    "tsup": "^8.0.0"
   },
   "keywords": [
     "hubspot",
@@ -43,5 +43,8 @@
     "datatable",
     "table",
     "crm"
-  ]
+  ],
+  "dependencies": {
+    "fuse.js": "^7.1.0"
+  }
 }

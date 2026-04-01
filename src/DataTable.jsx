@@ -87,11 +87,23 @@
  *     selectable={true}
  *     rowIdField="id"
  *     onSelectionChange={(selectedIds) => handleSelection(selectedIds)}
+ *     selectionActions={[
+ *       { label: "Delete", icon: "delete", onClick: (ids) => handleDelete(ids) },
+ *       { label: "Export", onClick: (ids) => handleExport(ids) },
+ *     ]}
  *     columns={[
  *       { field: "name", label: "Name", renderCell: (val) => val },
  *       ...
  *     ]}
  *   />
+ *
+ *   When rows are selected, a single-row tip Alert bar appears above the table:
+ *     - Number of selected rows (demibold)
+ *     - "Select all" button (selects all rows across all pages)
+ *     - "Deselect all" button
+ *     - Custom action buttons from selectionActions[]
+ *
+ *   The header checkbox selects/deselects rows on the current page only.
  *
  * ═══════════════════════════════════════════════════════════════════════════
  * INLINE EDITING:
@@ -162,11 +174,14 @@
  */
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import Fuse from "fuse.js";
 import {
   Box,
   Button,
+  Tile,
   Checkbox,
   CurrencyInput,
+  Divider,
   DateInput,
   EmptyState,
   ErrorState,
@@ -329,6 +344,8 @@ export const DataTable = ({
   // Search
   searchFields = [],
   searchPlaceholder = "Search...",
+  fuzzySearch = false,            // enable fuzzy matching via Fuse.js
+  fuzzyOptions,                   // custom Fuse.js options (threshold, distance, etc.)
 
   // Filters
   filters = [],
@@ -358,8 +375,8 @@ export const DataTable = ({
   footer,
 
   // Empty state
-  emptyTitle = "No results found",
-  emptyMessage = "No records match your search or filter criteria.",
+  emptyTitle,
+  emptyMessage,
 
   // -----------------------------------------------------------------------
   // Server-side mode
@@ -387,6 +404,8 @@ export const DataTable = ({
   rowIdField = "id",     // field name used as unique row identifier
   selectedIds: externalSelectedIds, // controlled selection — array of row IDs
   onSelectionChange,     // (selectedIds[]) => void
+  selectionActions = [], // [{ label, onClick(selectedIds[]), icon?, variant? }]
+  recordLabel,           // { singular: "Contact", plural: "Contacts" } — defaults to Record/Records
 
   // -----------------------------------------------------------------------
   // Inline editing
@@ -566,17 +585,28 @@ export const DataTable = ({
 
     // Search across searchFields
     if (searchTerm && searchFields.length > 0) {
-      const term = searchTerm.toLowerCase();
-      result = result.filter((row) =>
-        searchFields.some((field) => {
-          const val = row[field];
-          return val && String(val).toLowerCase().includes(term);
-        })
-      );
+      if (fuzzySearch) {
+        const fuse = new Fuse(result, {
+          keys: searchFields,
+          threshold: 0.4,
+          distance: 100,
+          ignoreLocation: true,
+          ...fuzzyOptions,
+        });
+        result = fuse.search(searchTerm).map((r) => r.item);
+      } else {
+        const term = searchTerm.toLowerCase();
+        result = result.filter((row) =>
+          searchFields.some((field) => {
+            const val = row[field];
+            return val && String(val).toLowerCase().includes(term);
+          })
+        );
+      }
     }
 
     return result;
-  }, [data, filterValues, searchTerm, filters, searchFields, serverSide]);
+  }, [data, filterValues, searchTerm, filters, searchFields, serverSide, fuzzySearch, fuzzyOptions]);
 
   // ---------------------------------------------------------------------------
   // Client-side: Sort
@@ -753,11 +783,17 @@ export const DataTable = ({
   // Record count
   const displayCount = serverSide ? (totalCount || data.length) : filteredData.length;
   const totalDataCount = serverSide ? (totalCount || data.length) : data.length;
+  const pluralLabel = (recordLabel?.plural || "records").toLowerCase();
+  const singularLabel = (recordLabel?.singular || "record").toLowerCase();
+  const countLabel = (n) => n === 1 ? singularLabel : pluralLabel;
+  const resolvedEmptyTitle = emptyTitle || "No results found";
+  const resolvedEmptyMessage = emptyMessage || `No ${pluralLabel} match your search or filter criteria.`;
+  const resolvedLoadingLabel = `Loading ${pluralLabel}...`;
   const recordCountLabel = rowCountText
     ? rowCountText(displayCount, totalDataCount)
     : displayCount === totalDataCount
-      ? `${totalDataCount} records`
-      : `${displayCount} of ${totalDataCount} records`;
+      ? `${totalDataCount} ${countLabel(totalDataCount)}`
+      : `${displayCount} of ${totalDataCount} ${countLabel(totalDataCount)}`;
 
   // ---------------------------------------------------------------------------
   // Row selection
@@ -791,27 +827,47 @@ export const DataTable = ({
     });
   }, [onSelectionChange]);
 
+  // Header checkbox — toggles current page rows only
   const handleSelectAll = useCallback((checked) => {
-    const allIds = flatRows
+    const pageIds = displayRows
       .filter((r) => r.type === "data")
       .map((r) => r.row[rowIdField]);
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      allIds.forEach((id) => {
+      pageIds.forEach((id) => {
         if (checked) next.add(id);
         else next.delete(id);
       });
       if (onSelectionChange) onSelectionChange([...next]);
       return next;
     });
-  }, [flatRows, rowIdField, onSelectionChange]);
+  }, [displayRows, rowIdField, onSelectionChange]);
 
+  // Header checkbox reflects current page selection state
   const allVisibleSelected = useMemo(() => {
+    const pageIds = displayRows
+      .filter((r) => r.type === "data")
+      .map((r) => r.row[rowIdField]);
+    return pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+  }, [displayRows, selectedIds, rowIdField]);
+
+  // Action bar "Select all" — selects ALL rows across all pages
+  const handleSelectAllRows = useCallback(() => {
     const allIds = flatRows
       .filter((r) => r.type === "data")
       .map((r) => r.row[rowIdField]);
-    return allIds.length > 0 && allIds.every((id) => selectedIds.has(id));
-  }, [flatRows, selectedIds, rowIdField]);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      allIds.forEach((id) => next.add(id));
+      if (onSelectionChange) onSelectionChange([...next]);
+      return next;
+    });
+  }, [flatRows, rowIdField, onSelectionChange]);
+
+  const handleDeselectAll = useCallback(() => {
+    setSelectedIds(new Set());
+    if (onSelectionChange) onSelectionChange([]);
+  }, [onSelectionChange]);
 
   // ---------------------------------------------------------------------------
   // Inline editing
@@ -1134,7 +1190,7 @@ export const DataTable = ({
         </Box>
 
         {/* Right: Record count (up to 25%) */}
-        {showRowCount && displayCount > 0 && (
+        {showRowCount && displayCount > 0 && !(selectable && selectedIds.size > 0) && (
           <Box flex={1} alignSelf="end">
             <Flex direction="row" justify="end">
               <Text variant="microcopy" format={rowCountBold ? { fontWeight: "bold" } : undefined}>{recordCountLabel}</Text>
@@ -1143,17 +1199,53 @@ export const DataTable = ({
         )}
       </Flex>
 
+      {/* Selection action bar */}
+      {selectable && selectedIds.size > 0 && (
+
+        <Flex direction="row" gap="sm">
+          <Box flex={3}>
+            <Flex direction="row" align="center" gap="sm" wrap="nowrap">
+              <Text inline={true} format={{ fontWeight: "demibold" }}>{selectedIds.size}&nbsp;{countLabel(selectedIds.size)}&nbsp;selected</Text>
+              <Button variant="transparent" size="extra-small" onClick={handleSelectAllRows}>
+                Select all {displayCount} {countLabel(displayCount)}
+              </Button>
+              <Button variant="transparent" size="extra-small" onClick={handleDeselectAll}>
+                Deselect all
+              </Button>
+              {selectionActions.map((action, i) => (
+                <Button
+                  key={i}
+                  variant={action.variant || "transparent"}
+                  size="extra-small"
+                  onClick={() => action.onClick([...selectedIds])}
+                >
+                  {action.icon && <Icon name={action.icon} size="sm" />} {action.label}
+                </Button>
+              ))}
+            </Flex>
+          </Box>
+          {showRowCount && displayCount > 0 && (
+            <Box flex={1} alignSelf="center">
+              <Flex direction="row" justify="end">
+                <Text variant="microcopy" format={rowCountBold ? { fontWeight: "bold" } : undefined}>{recordCountLabel}</Text>
+              </Flex>
+            </Box>
+          )}
+        </Flex>
+
+      )}
+
       {/* Loading / error / table / empty state */}
       {loading ? (
-        <LoadingSpinner label="Loading..." layout="centered" />
+        <LoadingSpinner label={resolvedLoadingLabel} layout="centered" />
       ) : error ? (
         <ErrorState title={typeof error === "string" ? error : "Something went wrong."}>
           <Text>{typeof error === "string" ? "Please try again." : "An error occurred while loading data."}</Text>
         </ErrorState>
       ) : displayRows.length === 0 ? (
         <Flex direction="column" align="center" justify="center">
-          <EmptyState title={emptyTitle} layout="vertical">
-            <Text>{emptyMessage}</Text>
+          <EmptyState title={resolvedEmptyTitle} layout="vertical">
+            <Text>{resolvedEmptyMessage}</Text>
           </EmptyState>
         </Flex>
       ) : (
