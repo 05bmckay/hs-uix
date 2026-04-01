@@ -1,6 +1,6 @@
 {
   "name": "hubspot-datatable",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Filterable, sortable, paginated DataTable for HubSpot UI Extensions",
   "license": "MIT",
   "main": "./dist/index.js",
@@ -12,8 +12,14 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/05bmckay/hubspot-datatable.git"
+  },
+  "homepage": "https://github.com/05bmckay/hubspot-datatable#readme",
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
