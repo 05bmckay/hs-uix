@@ -2,7 +2,7 @@
 
 A drop-in table component for HubSpot UI Extensions. Define your columns, pass your data, and you get search, filtering, sorting, pagination, inline editing, row grouping, and auto-sized columns out of the box.
 
-![Full-Featured DataTable](assets/fully-featured-table.png)
+![Full-Featured DataTable](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/fully-featured-table.png)
 
 ## Why DataTable?
 
@@ -100,7 +100,7 @@ hubspot.extend(() => (
 
 ### Filters, sorting, and footer totals
 
-![Active Filters](assets/fully-featured-table-active-filters.png)
+![Active Filters](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/fully-featured-table-active-filters.png)
 
 When more than 2 filters are defined, the first 2 appear inline and the rest are tucked behind a **Filters** button with a funnel icon. Active filters display as removable chips with a "Clear all" option. The footer receives the filtered data so totals stay accurate.
 
@@ -214,7 +214,7 @@ const FILTERS = [
 
 ### Row selection
 
-![Row Selection](assets/row-selection.png)
+![Row Selection](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/row-selection.png)
 
 Add checkboxes with a select-all header. Selection state resets when search or filters change. Requires `renderCell` on each column.
 
@@ -260,8 +260,8 @@ function SelectableTable() {
 
 ### Inline editing — discrete mode
 
-![Discrete Editing - Select](assets/inline-editing-discreet.png)
-![Discrete Editing - Text](assets/inline-editing-discreet2.png)
+![Discrete Editing - Select](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/inline-editing-discreet.png)
+![Discrete Editing - Text](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/inline-editing-discreet2.png)
 
 In discrete mode (the default), editable cells appear as dark links. Click to open the input. The cell reverts to display when you click away, keeping the last entered value. Select, checkbox, and toggle inputs commit and close instantly on change.
 
@@ -331,7 +331,7 @@ function EditableTable() {
 
 ### Inline editing — inline mode
 
-![Inline Edit Mode](assets/inline-editing-regular.png)
+![Inline Edit Mode](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/inline-editing-regular.png)
 
 In inline mode, all editable cells always show their input controls. Changes fire `onRowEdit` immediately. Set `editMode="inline"` to enable.
 
@@ -367,7 +367,7 @@ Use `editProps` to pass additional props to the edit component (e.g., `{ currenc
 
 ### Row grouping with aggregations
 
-![Row Grouping](assets/row-grouping.png)
+![Row Grouping](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/row-grouping.png)
 
 Groups are collapsible. Click a group header to expand or collapse it. You can define aggregation functions per column, and groups start expanded by default.
 
