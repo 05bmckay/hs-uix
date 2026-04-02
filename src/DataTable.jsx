@@ -209,7 +209,9 @@
  *     "min"  — shrink to fit content (may overflow with scrollbar)
  *     "max"  — expand to fill available space
  *     "auto" — adjust based on available space (default)
- *     number — fixed width in pixels (e.g. 200)
+ *
+ *   `width` also accepts number for fixed pixels (e.g. 200).
+ *   `cellWidth` does not support numeric values.
  *
  *   Example: { field: "name", label: "Name", width: "min", cellWidth: "max" }
  *   Header stays tight around "Name", cells expand to show full values.
@@ -244,8 +246,8 @@
  *
  *   showRowCount={true}                     // show row count (default true)
  *   rowCountBold={false}                    // bold row count text (default false)
- *   rowCountText={(shown, total) =>         // custom row count text
- *     `Showing ${shown} of ${total} items`
+ *   rowCountText={(shownOnPage, totalMatching) =>   // custom row count text
+ *     `Showing ${shownOnPage} of ${totalMatching} items`
  *   }
  */
 
@@ -462,6 +464,8 @@ export const DataTable = ({
 
   // Filters
   filters = [],
+  showFilterBadges = true,       // show active filter chips/badges
+  showClearFiltersButton = true, // show "Clear all" filters reset button
 
   // Pagination
   pageSize = 10,
@@ -472,7 +476,7 @@ export const DataTable = ({
   // Row count
   showRowCount = true,          // show "X records" / "X of Y records" text
   rowCountBold = false,         // bold the row count text
-  rowCountText,                 // custom formatter: (displayCount, totalCount) => string
+  rowCountText,                 // custom formatter: (shownOnPage, totalMatching) => string
 
   // Table appearance
   bordered = true,              // show table borders
@@ -899,6 +903,7 @@ export const DataTable = ({
   // Record count
   const displayCount = serverSide ? (totalCount || data.length) : filteredData.length;
   const totalDataCount = serverSide ? (totalCount || data.length) : data.length;
+  const shownOnPageCount = displayRows.filter((item) => item.type === "data").length;
   const pluralLabel = (recordLabel?.plural || "records").toLowerCase();
   const singularLabel = (recordLabel?.singular || "record").toLowerCase();
   const countLabel = (n) => n === 1 ? singularLabel : pluralLabel;
@@ -906,7 +911,7 @@ export const DataTable = ({
   const resolvedEmptyMessage = emptyMessage || `No ${pluralLabel} match your search or filter criteria.`;
   const resolvedLoadingLabel = `Loading ${pluralLabel}...`;
   const recordCountLabel = rowCountText
-    ? rowCountText(displayCount, totalDataCount)
+    ? rowCountText(shownOnPageCount, displayCount)
     : displayCount === totalDataCount
       ? `${totalDataCount} ${countLabel(totalDataCount)}`
       : `${displayCount} of ${totalDataCount} ${countLabel(totalDataCount)}`;
@@ -1414,21 +1419,23 @@ export const DataTable = ({
               </Flex>
             )}
 
-            {/* Active filter chips */}
-            {activeChips.length > 0 && (
+            {/* Active filter chips / clear filters */}
+            {activeChips.length > 0 && (showFilterBadges || showClearFiltersButton) && (
               <Flex direction="row" align="center" gap="sm" wrap="wrap">
-                {activeChips.map((chip) => (
+                {showFilterBadges && activeChips.map((chip) => (
                   <Tag key={chip.key} variant="default" onDelete={() => handleFilterRemove(chip.key)}>
                     {chip.label}
                   </Tag>
                 ))}
-                <Button
-                  variant="transparent"
-                  size="extra-small"
-                  onClick={() => handleFilterRemove("all")}
-                >
-                  Clear all
-                </Button>
+                {showClearFiltersButton && (
+                  <Button
+                    variant="transparent"
+                    size="extra-small"
+                    onClick={() => handleFilterRemove("all")}
+                  >
+                    Clear all
+                  </Button>
+                )}
               </Flex>
             )}
           </Flex>

@@ -5,14 +5,17 @@
   "license": "MIT",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
+  "types": "./index.d.ts",
   "exports": {
     ".": {
+      "types": "./index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     }
   },
   "files": [
     "dist",
+    "index.d.ts",
     "README.md"
   ],
   "repository": {

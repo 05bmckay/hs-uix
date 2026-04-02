@@ -29,7 +29,7 @@ That's a searchable, sortable, paginated table with auto-sized columns in 5 line
 ## Features
 
 - Full-text search across any combination of fields, with optional fuzzy matching via Fuse.js
-- Select, multi-select, and date range filters with active filter chips and a "Clear all" option
+- Select, multi-select, and date range filters with configurable active badges and clear/reset controls
 - Click-to-sort headers with three-state cycling (none, ascending, descending)
 - Client-side or server-side pagination with configurable page size, visible page buttons, and First/Last navigation
 - Collapsible row groups with per-column aggregation functions
@@ -60,6 +60,7 @@ import { DataTable } from "hubspot-datatable";
 ```
 
 Requires `@hubspot/ui-extensions` and `react` as peer dependencies (already present in any HubSpot UI Extensions project).
+TypeScript declarations are bundled with this package (`index.d.ts`).
 
 ---
 
@@ -111,7 +112,7 @@ hubspot.extend(() => (
 
 ![Active Filters](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/fully-featured-table-active-filters.png)
 
-When more than 2 filters are defined, the first 2 appear inline and the rest are tucked behind a **Filters** button with a funnel icon. Active filters display as removable chips with a "Clear all" option. The footer receives the filtered data so totals stay accurate.
+When more than 2 filters are defined, the first 2 appear inline and the rest are tucked behind a **Filters** button with a funnel icon. Active filters display as removable chips with a "Clear all" option by default. You can hide badges via `showFilterBadges={false}` and keep reset with `showClearFiltersButton={true}`. The footer receives the filtered data so totals stay accurate.
 
 ```jsx
 import React from "react";
@@ -193,6 +194,18 @@ hubspot.extend(() => (
     )}
   />
 ));
+```
+
+Hide badges but keep reset:
+
+```jsx
+<DataTable
+  data={DEALS}
+  columns={COLUMNS}
+  filters={FILTERS}
+  showFilterBadges={false}
+  showClearFiltersButton={true}
+/>
 ```
 
 #### Custom filter functions
@@ -592,6 +605,30 @@ Manual overrides always take priority. You can set `width` (applies to header an
 
 ---
 
+### Row count customization
+
+Use `rowCountText` when you want full control over the row count label.
+
+```jsx
+<DataTable
+  data={products}
+  columns={columns}
+  pageSize={25}
+  rowCountText={(shownOnPage, totalMatching) =>
+    `Showing ${shownOnPage} of ${totalMatching} products`
+  }
+/>
+```
+
+`rowCountText` callback args:
+
+- `shownOnPage`: number of data rows on the current page
+- `totalMatching`: total rows matching the current query/filter state
+
+In server-side mode, `totalMatching` maps to `totalCount` (or `data.length` if `totalCount` is not provided).
+
+---
+
 ### Server-side mode
 
 If your data comes from an API or you have too many records to load at once, turn on `serverSide={true}`. DataTable still renders all the UI (search box, filter dropdowns, sort headers, pagination buttons), but it skips client-side processing and fires callbacks instead. You handle the fetching.
@@ -730,13 +767,15 @@ function ServerSideTable({ runServerlessFunction }) {
 | `fuzzyOptions` | object | — | Custom Fuse.js options (threshold, distance, etc.) |
 | `searchPlaceholder` | string | `"Search..."` | Placeholder text for search input |
 | `filters` | Array | `[]` | Filter configurations (see below) |
+| `showFilterBadges` | boolean | `true` | Show active filter chips/badges below the filter controls |
+| `showClearFiltersButton` | boolean | `true` | Show "Clear all" filters reset button when filters are active |
 | `pageSize` | number | `10` | Rows per page |
 | `maxVisiblePageButtons` | number | — | Max page number buttons to display |
 | `showButtonLabels` | boolean | `true` | Show First/Prev/Next/Last text labels |
 | `showFirstLastButtons` | boolean | auto | Show First/Last page buttons (auto-enabled when > 5 pages) |
 | `showRowCount` | boolean | `true` | Show "X records" / "X of Y records" text |
 | `rowCountBold` | boolean | `false` | Bold the row count text |
-| `rowCountText` | `(displayCount, totalCount) => string` | — | Custom row count formatter |
+| `rowCountText` | `(shownOnPage, totalMatching) => string` | — | Custom row count formatter. `shownOnPage` is current-page row count; `totalMatching` is total rows matching current query/filter state. |
 | `bordered` | boolean | `true` | Show table borders |
 | `flush` | boolean | `true` | Remove bottom margin |
 | `scrollable` | boolean | `false` | Use `"min"` fallback widths for unspecified columns to allow horizontal scrolling instead of column squish |
@@ -784,8 +823,8 @@ function ServerSideTable({ runServerlessFunction }) {
 | `field` | string | Key in the row object |
 | `label` | string | Column header text |
 | `sortable` | boolean | Enable sorting on this column |
-| `width` | `"min"` \| `"max"` \| `"auto"` | Column width (header + cell fallback) |
-| `cellWidth` | `"min"` \| `"max"` \| `"auto"` | Cell-only width override |
+| `width` | `"min"` \| `"max"` \| `"auto"` \| `number` | Column width (header + cell fallback). Numeric value is treated as fixed width in pixels. |
+| `cellWidth` | `"min"` \| `"max"` \| `"auto"` | Cell-only width override (numeric values are not supported) |
 | `align` | `"left"` \| `"center"` \| `"right"` | Text alignment (auto-stripped when inputs are visible) |
 | `renderCell` | `(value, row) => ReactNode` | Custom cell content renderer |
 | `truncate` | `true` \| `{ maxLength?: number }` | Optional text truncation helper with tooltip |
