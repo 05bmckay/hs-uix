@@ -33,13 +33,16 @@ That's a searchable, sortable, paginated table with auto-sized columns in 5 line
 - Click-to-sort headers with three-state cycling (none, ascending, descending)
 - Client-side or server-side pagination with configurable page size, visible page buttons, and First/Last navigation
 - Collapsible row groups with per-column aggregation functions
-- Row selection via checkboxes — header checkbox selects current page, "Select all" button in the action bar selects all rows across pages
+- Row selection via checkboxes with client/server-aware "Select all" behavior and optional parent callback for dataset-level selection flows
 - Selection action bar with selected count, select/deselect all, and custom bulk action buttons
-- Two inline edit modes (discrete click-to-edit and always-visible) supporting 10 input types, with per-column validation and automatic boolean-to-select conversion
+- Per-row actions via `rowActions` (static array or dynamic function), with optional hide-on-selection behavior
+- Two edit modes (discrete and inline/full-row) supporting 12 input types, with per-column validation and automatic boolean-to-select conversion
+- Separate edit callbacks for committed values (`onRowEdit`) and live input (`onRowEditInput`)
 - Auto-width column sizing based on data analysis, with manual overrides when you need them
+- Optional text truncation helpers (`truncate: true` or `truncate: { maxLength }`)
 - Customizable record label (`recordLabel`) that flows into row count, selection bar, loading, and empty states
 - Configurable row count display with custom text formatting and bold option
-- Configurable table appearance (bordered, flush)
+- Configurable table appearance (`bordered`, `flush`, `scrollable`)
 - Footer rows computed from filtered data
 - Server-side mode with loading/error states, search debounce, controlled state, and a unified `onParamsChange` callback
 - Built-in empty state when no results match
@@ -222,7 +225,13 @@ const FILTERS = [
 
 ![Row Selection](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/row-selection.png)
 
-Add checkboxes with a select-all header (selects current page). When rows are selected, a compact action bar appears above the table showing the selected count, a "Select all" button (selects all rows across all pages), "Deselect all", and any custom action buttons you define. Selection state resets when search or filters change. Requires `renderCell` on each column.
+Add checkboxes with a select-all header (selects current page). When rows are selected, a compact action bar appears above the table showing the selected count, a "Select all" button, "Deselect all", and any custom action buttons you define.
+
+- Client-side mode: action-bar "Select all" selects all matching rows across pages.
+- Server-side mode: action-bar "Select all" selects current page rows for visual feedback and optionally fires `onSelectAllRequest` so the parent can trigger a true dataset-level select-all flow.
+- Uncontrolled selection memory persists across pages and resets on search/filter/sort changes by default. Use `selectionResetKey` to force a reset when dataset identity changes.
+
+Requires `renderCell` on each column.
 
 ```jsx
 import React, { useState, useMemo } from "react";
@@ -269,6 +278,94 @@ function SelectableTable() {
 
 Each action in `selectionActions` receives the array of selected row IDs when clicked. You can optionally set `icon` (any HubSpot Icon name) and `variant` (Button variant) on each action.
 
+Server-side selection example:
+
+```jsx
+<DataTable
+  serverSide={true}
+  data={pageRows}
+  totalCount={totalCount}
+  columns={columns}
+  selectable={true}
+  selectedIds={selectedIds}
+  onSelectionChange={setSelectedIds}
+  onSelectAllRequest={({ selectedIds, pageIds, totalCount }) => {
+    // Keep page-level visual selection in sync, then trigger dataset-level selection flow
+    requestSelectAllMatchingRows({ selectedIds, pageIds, totalCount });
+  }}
+  selectionResetKey={`${query.search}|${JSON.stringify(query.filters)}|${query.sort?.field || ""}:${query.sort?.direction || ""}`}
+/>
+```
+
+---
+
+### Row actions and full-row "Edit/Done" flow
+
+Use `rowActions` to append an actions column on the right. You can pass a static action list or a row-aware function.
+
+```jsx
+function DealsTable() {
+  const [rows, setRows] = useState(DEALS);
+  const [drafts, setDrafts] = useState({});
+  const [editingRowId, setEditingRowId] = useState(null);
+
+  const handleCommittedEdit = useCallback((row, field, value) => {
+    setDrafts((prev) => ({
+      ...prev,
+      [row.id]: { ...(prev[row.id] || row), [field]: value },
+    }));
+  }, []);
+
+  const saveRow = useCallback((rowId) => {
+    const draft = drafts[rowId];
+    if (!draft) return;
+    setRows((prev) => prev.map((r) => (r.id === rowId ? draft : r)));
+    setDrafts((prev) => {
+      const next = { ...prev };
+      delete next[rowId];
+      return next;
+    });
+    setEditingRowId(null);
+  }, [drafts]);
+
+  return (
+    <DataTable
+      data={rows.map((r) => drafts[r.id] || r)}
+      columns={columns}
+      rowIdField="id"
+      editingRowId={editingRowId}
+      hideRowActionsWhenSelectionActive={true}
+      onRowEdit={handleCommittedEdit}
+      rowActions={(row) => editingRowId === row.id
+        ? [{ label: "Done", icon: "success", onClick: () => saveRow(row.id) }]
+        : [{ label: "Edit", icon: "edit", onClick: () => setEditingRowId(row.id) }]}
+    />
+  );
+}
+```
+
+This pattern keeps edits local while the row is in edit mode and only persists to your real data source when the user clicks **Done**.
+
+If you also enable row selection, set `hideRowActionsWhenSelectionActive={true}` to hide per-row actions while the selected-row action bar is visible.
+
+---
+
+### Text truncation
+
+Use column-level `truncate` when you want safer defaults for long text fields.
+
+```jsx
+const columns = [
+  { field: "company", label: "Company", renderCell: (val) => val },
+  { field: "notes", label: "Notes", truncate: true, renderCell: (val) => val },
+  { field: "summary", label: "Summary", truncate: { maxLength: 120 }, renderCell: (val) => val },
+];
+```
+
+- `truncate: true` uses single-line truncation with full text in tooltip.
+- `truncate: { maxLength }` truncates by character count with `...` and tooltip.
+- Truncation is skipped while a cell is actively being edited.
+
 ---
 
 ### Inline editing — discrete mode
@@ -276,7 +373,7 @@ Each action in `selectionActions` receives the array of selected row IDs when cl
 ![Discrete Editing - Select](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/inline-editing-discreet.png)
 ![Discrete Editing - Text](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/inline-editing-discreet2.png)
 
-In discrete mode (the default), editable cells appear as dark links. Click to open the input. The cell reverts to display when you click away, keeping the last entered value. Select, checkbox, and toggle inputs commit and close instantly on change.
+In discrete mode (the default), editable cells appear as dark links. Click to open the input. The cell reverts to display when you click away, keeping the last committed value. Select/date/toggle-type inputs commit and close instantly on change. Text-like inputs commit via HubSpot `onChange` (typically blur/submit), and can stream live input through `onRowEditInput`.
 
 ```jsx
 import React, { useState, useCallback } from "react";
@@ -346,7 +443,7 @@ function EditableTable() {
 
 ![Inline Edit Mode](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/inline-editing-regular.png)
 
-In inline mode, all editable cells always show their input controls. Changes fire `onRowEdit` immediately. Set `editMode="inline"` to enable.
+In inline mode, all editable cells always show their input controls. This mode is also used for full-row editing when `editingRowId` is set. Set `editMode="inline"` to enable always-visible inputs.
 
 ```jsx
 <DataTable
@@ -363,18 +460,20 @@ In inline mode, all editable cells always show their input controls. Changes fir
 
 | editType | Component | Commit Behavior |
 |---|---|---|
-| `text` | Input | Fires on every change, exits on blur |
-| `textarea` | TextArea | Fires on every change, exits on blur |
-| `number` | NumberInput | Fires on every change, exits on blur |
-| `currency` | CurrencyInput | Fires on every change, exits on blur |
-| `stepper` | StepperInput | Fires on every change, exits on blur |
+| `text` | Input | Commit on `onChange` (HubSpot: usually blur/submit); optional live input via `onRowEditInput` |
+| `textarea` | TextArea | Commit on `onChange` (HubSpot: usually blur/submit); optional live input via `onRowEditInput` |
+| `number` | NumberInput | Commit on `onChange` (HubSpot: usually blur/submit); optional live input via `onRowEditInput` |
+| `currency` | CurrencyInput | Commit on `onChange` (HubSpot: usually blur/submit); optional live input via `onRowEditInput` |
+| `stepper` | StepperInput | Commit on `onChange` (HubSpot: usually blur/submit); optional live input via `onRowEditInput` |
 | `select` | Select | Instant on change |
 | `multiselect` | MultiSelect | Instant on change |
 | `date` | DateInput | Instant on change |
+| `time` | TimeInput | Instant on change |
+| `datetime` | DateInput + TimeInput | Emits `{ date, time }` updates as either control changes |
 | `toggle` | Toggle | Instant on change |
 | `checkbox` | Checkbox | Instant on change |
 
-Use `editProps` to pass additional props to the edit component (e.g., `{ currencyCode: "EUR" }` for CurrencyInput).
+Use `editProps` to pass additional props to the edit component (e.g., `{ currencyCode: "EUR" }` for `CurrencyInput` or `timeProps` for datetime time input options).
 
 ---
 
@@ -567,9 +666,10 @@ function ServerSideTable({ runServerlessFunction }) {
 |---|---|---|
 | `onSearchChange` | `(searchTerm: string)` | User types in the search box (debounced if `searchDebounce` is set) |
 | `onFilterChange` | `(filterValues: object)` | User selects/clears a filter. Object shape: `{ status: "active", category: ["a", "b"] }` |
-| `onSortChange` | `(field: string, direction: "ascending" \| "descending" \| null)` | User clicks a sortable column header. `null` means sort was cleared. |
+| `onSortChange` | `(field: string, direction: "ascending" \| "descending" \| "none")` | User clicks a sortable column header. `"none"` means sort was cleared. |
 | `onPageChange` | `(page: number)` | User clicks a pagination button |
 | `onParamsChange` | `({ search, filters, sort, page })` | Fires on any of the above changes. `sort` is `{ field, direction }` or `null`. |
+| `onSelectAllRequest` | `({ selectedIds, pageIds, totalCount })` | Server-side only: user clicks selection-bar "Select all". |
 
 #### Key differences from client-side mode
 
@@ -581,6 +681,7 @@ function ServerSideTable({ runServerlessFunction }) {
 | `data` prop | Full dataset | Current page only |
 | `totalCount` prop | Not needed (computed from data) | Required for pagination to work |
 | Search | DataTable searches `searchFields` in memory | Skipped, `onSearchChange` fires and you query the server |
+| Selection action-bar "Select all" | Selects all matching rows in-memory | Selects current page rows + optional `onSelectAllRequest` callback for dataset-level selection |
 | Footer | `footer` receives all filtered rows | `footer` receives current `data` (the current page) |
 | Grouping | Works on full in-memory dataset | Works on whatever `data` contains (current page) |
 
@@ -590,7 +691,9 @@ function ServerSideTable({ runServerlessFunction }) {
 - Use `searchDebounce={300}` to avoid firing a request on every keystroke. The search input updates immediately for responsive UI, but the callback is delayed.
 - Use `onParamsChange` instead of wiring up 4 individual callbacks — it receives a single object with all current state on every change.
 - Set `loading={true}` while fetching and `error={errorMessage}` on failure. DataTable shows a `LoadingSpinner` or `ErrorState` in place of the table automatically.
-- Use `searchValue`, `filterValues`, and `sort` props to externally control the table state (e.g., deep-linking to a pre-filtered view or resetting after an action).
+- Use `searchValue`, `filterValues`, and `sort` props to externally control the table state (e.g., deep-linking to a pre-filtered view or resetting after an action). `sort` accepts `{ field, direction }` or `{ [field]: direction }`.
+- Use `selectedIds` (controlled selection) to persist selection memory across page fetches.
+- Use `selectionResetKey` to clear uncontrolled selection when dataset identity changes (for example, when switching tabs or query scopes).
 
 ---
 
@@ -617,6 +720,7 @@ function ServerSideTable({ runServerlessFunction }) {
 | `rowCountText` | `(displayCount, totalCount) => string` | — | Custom row count formatter |
 | `bordered` | boolean | `true` | Show table borders |
 | `flush` | boolean | `true` | Remove bottom margin |
+| `scrollable` | boolean | `false` | Use `"min"` fallback widths for unspecified columns to allow horizontal scrolling instead of column squish |
 | `defaultSort` | object | `{}` | Initial sort state, e.g. `{ name: "ascending" }` |
 | `groupBy` | object | — | Grouping config (see below) |
 | `footer` | `(filteredData) => ReactNode` | — | Footer row renderer |
@@ -627,9 +731,16 @@ function ServerSideTable({ runServerlessFunction }) {
 | `rowIdField` | string | `"id"` | Field name for unique row identifier |
 | `selectedIds` | Array | — | Controlled selection — array of row IDs. When provided, overrides internal selection state. |
 | `onSelectionChange` | `(ids[]) => void` | — | Called when selection changes |
+| `onSelectAllRequest` | `({ selectedIds, pageIds, totalCount }) => void` | — | Server-side only. Fired when action-bar "Select all" is clicked. |
 | `selectionActions` | Array | `[]` | Bulk action buttons: `[{ label, onClick(ids[]), icon?, variant? }]` |
+| `selectionResetKey` | string \| number \| object | — | Optional reset key for uncontrolled selection memory. When it changes, selection clears. |
+| `resetSelectionOnQueryChange` | boolean | `true` | Whether uncontrolled selection resets when search/filter/sort changes |
+| `rowActions` | Array \| `(row) => actions[]` | — | Per-row action buttons shown in a right-side actions column |
+| `hideRowActionsWhenSelectionActive` | boolean | `false` | Hide per-row action column while selected-row action bar is visible |
 | `editMode` | `"discrete"` \| `"inline"` | `"discrete"` | Edit mode: click-to-edit or always-visible inputs |
-| `onRowEdit` | `(row, field, newValue) => void` | — | Called when a cell edit is committed |
+| `editingRowId` | string \| number | — | Full-row edit mode. When set, editable cells for that row render inline controls. |
+| `onRowEdit` | `(row, field, newValue) => void` | — | Called when an edit value is committed |
+| `onRowEditInput` | `(row, field, inputValue) => void` | — | Optional live input callback (validation/drafts) for text-like edit controls |
 | `autoWidth` | boolean | `true` | Auto-compute column widths from content analysis |
 | `serverSide` | boolean | `false` | Enable server-side mode |
 | `loading` | boolean | `false` | Show a loading spinner in place of the table |
@@ -638,12 +749,12 @@ function ServerSideTable({ runServerlessFunction }) {
 | `page` | number | — | Current page (server-side, controlled) |
 | `searchValue` | string | — | Controlled search term (server-side) |
 | `filterValues` | object | — | Controlled filter values (server-side) |
-| `sort` | object | — | Controlled sort state, e.g. `{ name: "ascending" }` |
+| `sort` | object | — | Controlled sort state. Accepts `{ field, direction }` or `{ [field]: "ascending" \| "descending" \| "none" }`. |
 | `searchDebounce` | number | `0` | Milliseconds to debounce `onSearchChange` callback |
 | `resetPageOnChange` | boolean | `true` | Auto-reset to page 1 on search, filter, or sort changes |
 | `onSearchChange` | `(term) => void` | — | Search callback (server-side) |
 | `onFilterChange` | `(filterValues) => void` | — | Filter callback (server-side) |
-| `onSortChange` | `(field, direction) => void` | — | Sort callback (server-side) |
+| `onSortChange` | `(field, "ascending" \| "descending" \| "none") => void` | — | Sort callback (server-side). `"none"` indicates cleared sort. |
 | `onPageChange` | `(page) => void` | — | Page callback (server-side) |
 | `onParamsChange` | `({ search, filters, sort, page }) => void` | — | Unified callback fired on any interaction change |
 
@@ -658,6 +769,7 @@ function ServerSideTable({ runServerlessFunction }) {
 | `cellWidth` | `"min"` \| `"max"` \| `"auto"` | Cell-only width override |
 | `align` | `"left"` \| `"center"` \| `"right"` | Text alignment (auto-stripped when inputs are visible) |
 | `renderCell` | `(value, row) => ReactNode` | Custom cell content renderer |
+| `truncate` | `true` \| `{ maxLength?: number }` | Optional text truncation helper with tooltip |
 | `editable` | boolean | Enable inline editing for this column |
 | `editType` | string | Input type (see supported types above) |
 | `editOptions` | Array | Options for select/multiselect edit types. Auto-generates Yes/No options for boolean fields if omitted. |
@@ -689,6 +801,8 @@ function ServerSideTable({ runServerlessFunction }) {
 ### Input Validation
 
 Add an `editValidate` function to any editable column. It receives the current value and the full row, and should return `true` if valid or an error message string. Invalid values show inline errors and are blocked from committing.
+
+If you need live draft handling (for example, optimistic form state or custom keystroke-level validation), use `onRowEditInput` alongside `onRowEdit`.
 
 ```jsx
 const columns = [
@@ -747,7 +861,6 @@ These come from HubSpot UI Extensions itself, not DataTable:
 
 Planned for future releases:
 
-- Per-row action buttons/menus (edit, delete, custom actions) in a dedicated column
 - Column visibility toggle so users can show/hide columns
 - Expandable rows with detail content below each row
 - Click-to-copy on individual cell values
@@ -765,12 +878,10 @@ A standalone demo app showcasing all features is available in a separate repo: [
 
 It includes examples of:
 
-1. Full-featured table with search, filters, sorting, pagination, footer totals, and auto-width
-2. Row selection with bulk action bar, custom actions, filters, and record labels
-3. Discrete editing (click-to-edit) with text, select, currency, checkbox inputs and validation
-4. Inline editing with always-visible inputs
-5. Collapsible row grouping with aggregated totals and status summaries
-6. Server-side mode with loading/error states and search debounce
+1. Full-featured table with search, filters, sorting, pagination, footer totals, fuzzy search, record labels, and auto-width
+2. Row selection with bulk action bar, per-row action buttons, text truncation, and record labels
+3. Full-row editing with Edit/Done toggle via row actions, time and datetime inputs, and validation
+4. Scrollable wide table with many columns and single-line truncation
 
 ## License
 

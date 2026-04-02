@@ -63,6 +63,39 @@
  *   { name: "score", type: "select", options: [...], filterFn: (row, value) => row.score >= value }
  *
  * ═══════════════════════════════════════════════════════════════════════════
+ * DATE HANDLING:
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ *   Date values in your data should be stored as ISO strings ("2026-01-15")
+ *   or unix millisecond timestamps (1737000000000). These are the formats
+ *   that work with the built-in dateRange filter comparison, which uses
+ *   `new Date(value).getTime()` internally.
+ *
+ *   Custom date formats (e.g. "MM/dd/YYYY", "Jan 15, 2026") are NOT
+ *   auto-parsed. If your data uses a non-standard format, provide a
+ *   custom `filterFn` on your dateRange filter to handle comparison.
+ *
+ *   Display formatting is handled entirely by `renderCell`:
+ *     { field: "date", renderCell: (val) => new Date(val).toLocaleDateString() }
+ *
+ *   Date editing (editType: "date") uses HubSpot's DateInput, which
+ *   returns `{ year, month, date }` objects (month is 0-indexed). Your
+ *   `onRowEdit` handler is responsible for converting this back to your
+ *   data's format:
+ *
+ *     onRowEdit={(row, field, value) => {
+ *       const formatted = `${value.year}-${String(value.month+1).padStart(2,"0")}-${String(value.date).padStart(2,"0")}`;
+ *       updateRow(row.id, field, formatted);
+ *     }}
+ *
+ *   Time editing (editType: "time") uses HubSpot's TimeInput.
+ *   Returns `{ hours, minutes }`. Use editProps for interval, min, max.
+ *
+ *   Datetime editing (editType: "datetime") renders DateInput + TimeInput
+ *   side by side. Returns `{ date: { year, month, date }, time: { hours, minutes } }`.
+ *   Pass time-specific props via `editProps.timeProps`.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
  * ROW GROUPING:
  * ═══════════════════════════════════════════════════════════════════════════
  *
@@ -87,6 +120,8 @@
  *     selectable={true}
  *     rowIdField="id"
  *     onSelectionChange={(selectedIds) => handleSelection(selectedIds)}
+ *     onSelectAllRequest={({ selectedIds, pageIds }) => handleSelectAllAcrossDataset(selectedIds, pageIds)}
+ *     selectionResetKey={queryFingerprint} // optional, clears selection when this key changes
  *     selectionActions={[
  *       { label: "Delete", icon: "delete", onClick: (ids) => handleDelete(ids) },
  *       { label: "Export", onClick: (ids) => handleExport(ids) },
@@ -106,6 +141,28 @@
  *   The header checkbox selects/deselects rows on the current page only.
  *
  * ═══════════════════════════════════════════════════════════════════════════
+ * ROW ACTIONS:
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ *   // Static actions — same buttons on every row
+ *   rowActions={[
+ *     { label: "Edit", icon: "edit", onClick: (row) => edit(row) },
+ *     { label: "Delete", icon: "delete", onClick: (row) => remove(row) },
+ *   ]}
+ *
+ *   // Dynamic actions — different buttons per row
+ *   rowActions={(row) => [
+ *     { label: "Edit", icon: "edit", onClick: (row) => edit(row) },
+ *     row.status !== "active" && { label: "Activate", onClick: (row) => activate(row) },
+ *   ].filter(Boolean)}
+ *   hideRowActionsWhenSelectionActive={true}
+ *
+ *   Actions appear in a right-aligned "min" width column appended after
+ *   all data columns. Each action receives the full row object on click.
+ *   Set hideRowActionsWhenSelectionActive to hide this column while
+ *   selected-row action bar is visible.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
  * INLINE EDITING:
  * ═══════════════════════════════════════════════════════════════════════════
  *
@@ -117,13 +174,32 @@
  *       editProps: { currencyCode: "USD" } },
  *   ]}
  *   onRowEdit={(row, field, newValue) => save(row.id, field, newValue)}
+ *   onRowEditInput={(row, field, draftValue) => validateDraft(row, field, draftValue)}
  *
  *   Supported editType values:
  *     "text" | "textarea" | "number" | "currency" | "stepper"
- *     "select" | "multiselect" | "date" | "toggle" | "checkbox"
+ *     "select" | "multiselect" | "date" | "time" | "datetime"
+ *     "toggle" | "checkbox"
+ *
+ *   "time" uses HubSpot's TimeInput. Value format: { hours, minutes }
+ *   "datetime" renders DateInput + TimeInput side by side.
+ *     Value format: { date: { year, month, date }, time: { hours, minutes } }
+ *     Pass time-specific props via editProps.timeProps (e.g. { interval: 15 })
  *
  *   NOTE: selectable or editable columns require renderCell(value, row)
  *   on each column. renderRow is used only when neither feature is active.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * TEXT TRUNCATION:
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ *   // Single-line truncation with tooltip on hover
+ *   { field: "notes", label: "Notes", truncate: true }
+ *
+ *   // Character-limited with "See more"/"See less" toggle + tooltip
+ *   { field: "notes", label: "Notes", truncate: { maxLength: 100 } }
+ *
+ *   Truncation is skipped when a cell is in edit mode.
  *
  * ═══════════════════════════════════════════════════════════════════════════
  * COLUMN WIDTH:
@@ -178,10 +254,8 @@ import Fuse from "fuse.js";
 import {
   Box,
   Button,
-  Tile,
   Checkbox,
   CurrencyInput,
-  Divider,
   DateInput,
   EmptyState,
   ErrorState,
@@ -205,6 +279,7 @@ import {
   Tag,
   Text,
   TextArea,
+  TimeInput,
   Toggle,
 } from "@hubspot/ui-extensions";
 
@@ -233,6 +308,44 @@ const NARROW_EDIT_TYPES = new Set(["checkbox", "toggle"]);
 
 const DATE_PATTERN = /^\d{4}[-/]\d{2}[-/]\d{2}/;
 const BOOL_VALUES = new Set(["true", "false", "yes", "no", "0", "1"]);
+const SORT_DIRECTIONS = new Set(["ascending", "descending", "none"]);
+
+const normalizeSortState = (columns, sort) => {
+  const normalized = {};
+  columns.forEach((col) => {
+    if (col.sortable) normalized[col.field] = "none";
+  });
+
+  if (!sort) return normalized;
+
+  // Accept object shape: { field, direction }
+  if (sort.field && SORT_DIRECTIONS.has(sort.direction) && sort.field in normalized) {
+    normalized[sort.field] = sort.direction;
+    return normalized;
+  }
+
+  // Accept map shape: { fieldName: "ascending" | "descending" | "none" }
+  Object.keys(normalized).forEach((field) => {
+    const direction = sort[field];
+    if (SORT_DIRECTIONS.has(direction)) normalized[field] = direction;
+  });
+
+  return normalized;
+};
+
+const serializeSortState = (sortState) => {
+  const activeField = Object.keys(sortState).find((field) => sortState[field] !== "none");
+  if (!activeField) return null;
+  return { field: activeField, direction: sortState[activeField] };
+};
+
+const toStableKey = (value) => {
+  try {
+    return JSON.stringify(value);
+  } catch (_error) {
+    return String(value);
+  }
+};
 
 const computeAutoWidths = (columns, data) => {
   if (!data || data.length === 0) return {};
@@ -364,6 +477,7 @@ export const DataTable = ({
   // Table appearance
   bordered = true,              // show table borders
   flush = true,                 // remove bottom margin
+  scrollable = false,           // allow horizontal overflow with scrollbar
 
   // Sorting
   defaultSort = {},
@@ -404,14 +518,25 @@ export const DataTable = ({
   rowIdField = "id",     // field name used as unique row identifier
   selectedIds: externalSelectedIds, // controlled selection — array of row IDs
   onSelectionChange,     // (selectedIds[]) => void
+  onSelectAllRequest,    // server-side: ({ selectedIds, pageIds, totalCount }) => void
   selectionActions = [], // [{ label, onClick(selectedIds[]), icon?, variant? }]
+  selectionResetKey,     // optional key to force clear uncontrolled selection memory
+  resetSelectionOnQueryChange = true, // clear uncontrolled selection on search/filter/sort changes
   recordLabel,           // { singular: "Contact", plural: "Contacts" } — defaults to Record/Records
+
+  // -----------------------------------------------------------------------
+  // Row actions
+  // -----------------------------------------------------------------------
+  rowActions,             // [{ label, onClick(row), icon?, variant? }] or (row) => actions[]
+  hideRowActionsWhenSelectionActive = false, // hide row action column while selected-row action bar is visible
 
   // -----------------------------------------------------------------------
   // Inline editing
   // -----------------------------------------------------------------------
   editMode,              // "discrete" (click-to-edit) | "inline" (always show inputs)
+  editingRowId,          // controlled — row ID currently in full-row edit mode
   onRowEdit,             // (row, field, newValue) => void
+  onRowEditInput,        // optional live-input callback: (row, field, inputValue) => void
 
   // -----------------------------------------------------------------------
   // Auto-width
@@ -420,13 +545,7 @@ export const DataTable = ({
 }) => {
   // Build initial sort state
   const initialSortState = useMemo(() => {
-    const state = {};
-    columns.forEach((col) => {
-      if (col.sortable) {
-        state[col.field] = defaultSort[col.field] || "none";
-      }
-    });
-    return state;
+    return normalizeSortState(columns, defaultSort);
   }, [columns, defaultSort]);
 
   // ---------------------------------------------------------------------------
@@ -445,13 +564,11 @@ export const DataTable = ({
   // Resolve controlled vs internal state
   const searchTerm = serverSide && searchValue != null ? searchValue : internalSearchTerm;
   const filterValues = serverSide && externalFilterValues != null ? externalFilterValues : internalFilterValues;
-  const sortState = serverSide && externalSort != null
-    ? (() => {
-      const s = {};
-      columns.forEach((col) => { if (col.sortable) s[col.field] = externalSort[col.field] || "none"; });
-      return s;
-    })()
-    : internalSortState;
+  const externalSortState = useMemo(
+    () => normalizeSortState(columns, externalSort),
+    [columns, externalSort]
+  );
+  const sortState = serverSide && externalSort != null ? externalSortState : internalSortState;
 
   // In server-side mode, use external page if provided
   const activePage = serverSide && externalPage != null ? externalPage : currentPage;
@@ -475,18 +592,16 @@ export const DataTable = ({
   // ---------------------------------------------------------------------------
   const fireParamsChange = useCallback((overrides) => {
     if (!onParamsChange) return;
-    const activeSortField = Object.keys(overrides.sort || sortState).find(
-      (k) => (overrides.sort || sortState)[k] !== "none"
-    );
+    const nextSortState = overrides.sort != null
+      ? normalizeSortState(columns, overrides.sort)
+      : sortState;
     onParamsChange({
       search: overrides.search != null ? overrides.search : searchTerm,
       filters: overrides.filters != null ? overrides.filters : filterValues,
-      sort: activeSortField
-        ? { field: activeSortField, direction: (overrides.sort || sortState)[activeSortField] }
-        : null,
+      sort: serializeSortState(nextSortState),
       page: overrides.page != null ? overrides.page : activePage,
     });
-  }, [onParamsChange, searchTerm, filterValues, sortState, activePage]);
+  }, [onParamsChange, columns, searchTerm, filterValues, sortState, activePage]);
 
   // ---------------------------------------------------------------------------
   // Handlers — notify parent in server-side mode
@@ -518,29 +633,31 @@ export const DataTable = ({
   useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
   const handleFilterChange = useCallback((name, value) => {
-    setInternalFilterValues((prev) => {
-      const next = { ...prev, [name]: value };
-      if (serverSide && onFilterChange) onFilterChange(next);
-      resetPage();
-      fireParamsChange({ filters: next, page: resetPageOnChange ? 1 : undefined });
-      return next;
-    });
-  }, [serverSide, onFilterChange, fireParamsChange, resetPage, resetPageOnChange]);
+    const next = { ...filterValues, [name]: value };
+    setInternalFilterValues(next);
+    if (serverSide && onFilterChange) onFilterChange(next);
+    resetPage();
+    fireParamsChange({ filters: next, page: resetPageOnChange ? 1 : undefined });
+  }, [filterValues, serverSide, onFilterChange, fireParamsChange, resetPage, resetPageOnChange]);
 
   const handleSortChange = useCallback((field) => {
-    const current = (serverSide && externalSort ? externalSort[field] : internalSortState[field]) || "none";
+    const current = sortState[field] || "none";
     const nextDirection =
       current === "none" ? "ascending" :
         current === "ascending" ? "descending" : "none";
 
     const reset = {};
-    Object.keys(internalSortState).forEach((k) => { reset[k] = "none"; });
-    const next = { ...reset, [field]: nextDirection };
+    columns.forEach((col) => {
+      if (col.sortable) reset[col.field] = "none";
+    });
+    const next = nextDirection === "none"
+      ? reset
+      : { ...reset, [field]: nextDirection };
     setInternalSortState(next);
     if (serverSide && onSortChange) onSortChange(field, nextDirection);
     resetPage();
     fireParamsChange({ sort: next, page: resetPageOnChange ? 1 : undefined });
-  }, [internalSortState, serverSide, externalSort, onSortChange, fireParamsChange, resetPage, resetPageOnChange]);
+  }, [sortState, columns, serverSide, onSortChange, fireParamsChange, resetPage, resetPageOnChange]);
 
   const handlePageChange = useCallback((page) => {
     setCurrentPage(page);
@@ -573,6 +690,7 @@ export const DataTable = ({
         const toTs = value.to ? dateToTimestamp(value.to) + 86400000 - 1 : null; // end of day
         result = result.filter((row) => {
           const rowTs = new Date(row[filter.name]).getTime();
+          if (Number.isNaN(rowTs)) return false;
           if (fromTs && rowTs < fromTs) return false;
           if (toTs && rowTs > toTs) return false;
           return true;
@@ -770,15 +888,13 @@ export const DataTable = ({
     } else {
       const filter = filters.find((f) => f.name === key);
       const emptyVal = filter ? getEmptyFilterValue(filter) : "";
-      setInternalFilterValues((prev) => {
-        const next = { ...prev, [key]: emptyVal };
-        if (serverSide && onFilterChange) onFilterChange(next);
-        resetPage();
-        fireParamsChange({ filters: next, page: resetPageOnChange ? 1 : undefined });
-        return next;
-      });
+      const next = { ...filterValues, [key]: emptyVal };
+      setInternalFilterValues(next);
+      if (serverSide && onFilterChange) onFilterChange(next);
+      resetPage();
+      fireParamsChange({ filters: next, page: resetPageOnChange ? 1 : undefined });
     }
-  }, [filters, serverSide, onFilterChange, resetPage, fireParamsChange, resetPageOnChange]);
+  }, [filters, filterValues, serverSide, onFilterChange, resetPage, fireParamsChange, resetPageOnChange]);
 
   // Record count
   const displayCount = serverSide ? (totalCount || data.length) : filteredData.length;
@@ -799,6 +915,7 @@ export const DataTable = ({
   // Row selection
   // ---------------------------------------------------------------------------
   const [internalSelectedIds, setInternalSelectedIds] = useState(new Set());
+  const selectionResetRef = useRef("");
 
   // Sync internal state when external selectedIds changes
   useEffect(() => {
@@ -807,67 +924,109 @@ export const DataTable = ({
     }
   }, [externalSelectedIds]);
 
-  // Reset selection on search/filter changes (only when uncontrolled)
+  const selectionQueryKey = useMemo(() => {
+    if (!resetSelectionOnQueryChange) return "";
+    return toStableKey({
+      search: searchTerm,
+      filters: filterValues,
+      sort: serializeSortState(sortState),
+    });
+  }, [searchTerm, filterValues, sortState, resetSelectionOnQueryChange]);
+
+  const combinedSelectionResetKey = useMemo(
+    () => `${selectionQueryKey}::${selectionResetKey == null ? "" : toStableKey(selectionResetKey)}`,
+    [selectionQueryKey, selectionResetKey]
+  );
+
+  // Reset selection memory on query changes or explicit reset-key changes (uncontrolled mode only)
   useEffect(() => {
-    if (selectable && externalSelectedIds == null) setInternalSelectedIds(new Set());
-  }, [searchTerm, filterValues, selectable, externalSelectedIds]);
+    if (!selectable || externalSelectedIds != null) {
+      selectionResetRef.current = combinedSelectionResetKey;
+      return;
+    }
+    if (selectionResetRef.current && selectionResetRef.current !== combinedSelectionResetKey) {
+      setInternalSelectedIds(new Set());
+    }
+    selectionResetRef.current = combinedSelectionResetKey;
+  }, [combinedSelectionResetKey, selectable, externalSelectedIds]);
 
   const selectedIds = externalSelectedIds != null
     ? new Set(externalSelectedIds)
     : internalSelectedIds;
-  const setSelectedIds = setInternalSelectedIds;
+  const showRowActionsColumn = !!rowActions && !(
+    hideRowActionsWhenSelectionActive && selectable && selectedIds.size > 0
+  );
+
+  const applySelection = useCallback((nextSet) => {
+    if (externalSelectedIds == null) {
+      setInternalSelectedIds(nextSet);
+    }
+    if (onSelectionChange) onSelectionChange([...nextSet]);
+  }, [externalSelectedIds, onSelectionChange]);
+
+  // Header checkbox applies to current-page rows
+  const pageRowIds = useMemo(() => {
+    if (serverSide) {
+      return data
+        .map((row) => row[rowIdField])
+        .filter((id) => id != null);
+    }
+    return displayRows
+      .filter((r) => r.type === "data")
+      .map((r) => r.row[rowIdField])
+      .filter((id) => id != null);
+  }, [serverSide, data, displayRows, rowIdField]);
+
+  // "Select all rows" in client mode means all rows in filtered/grouped data
+  const allRowIds = useMemo(
+    () => flatRows
+      .filter((r) => r.type === "data")
+      .map((r) => r.row[rowIdField])
+      .filter((id) => id != null),
+    [flatRows, rowIdField]
+  );
 
   const handleSelectRow = useCallback((rowId, checked) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(rowId);
-      else next.delete(rowId);
-      if (onSelectionChange) onSelectionChange([...next]);
-      return next;
-    });
-  }, [onSelectionChange]);
+    const next = new Set(selectedIds);
+    if (checked) next.add(rowId);
+    else next.delete(rowId);
+    applySelection(next);
+  }, [selectedIds, applySelection]);
 
   // Header checkbox — toggles current page rows only
   const handleSelectAll = useCallback((checked) => {
-    const pageIds = displayRows
-      .filter((r) => r.type === "data")
-      .map((r) => r.row[rowIdField]);
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      pageIds.forEach((id) => {
-        if (checked) next.add(id);
-        else next.delete(id);
-      });
-      if (onSelectionChange) onSelectionChange([...next]);
-      return next;
+    const next = new Set(selectedIds);
+    pageRowIds.forEach((id) => {
+      if (checked) next.add(id);
+      else next.delete(id);
     });
-  }, [displayRows, rowIdField, onSelectionChange]);
+    applySelection(next);
+  }, [selectedIds, pageRowIds, applySelection]);
 
   // Header checkbox reflects current page selection state
   const allVisibleSelected = useMemo(() => {
-    const pageIds = displayRows
-      .filter((r) => r.type === "data")
-      .map((r) => r.row[rowIdField]);
-    return pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
-  }, [displayRows, selectedIds, rowIdField]);
+    return pageRowIds.length > 0 && pageRowIds.every((id) => selectedIds.has(id));
+  }, [pageRowIds, selectedIds]);
 
-  // Action bar "Select all" — selects ALL rows across all pages
+  // Action bar "Select all" — client: select all rows in memory; server: select current page + notify parent
   const handleSelectAllRows = useCallback(() => {
-    const allIds = flatRows
-      .filter((r) => r.type === "data")
-      .map((r) => r.row[rowIdField]);
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      allIds.forEach((id) => next.add(id));
-      if (onSelectionChange) onSelectionChange([...next]);
-      return next;
-    });
-  }, [flatRows, rowIdField, onSelectionChange]);
+    const idsToAdd = serverSide ? pageRowIds : allRowIds;
+    const next = new Set(selectedIds);
+    idsToAdd.forEach((id) => next.add(id));
+    applySelection(next);
+
+    if (serverSide && onSelectAllRequest) {
+      onSelectAllRequest({
+        selectedIds: [...next],
+        pageIds: pageRowIds,
+        totalCount: totalCount || data.length,
+      });
+    }
+  }, [serverSide, pageRowIds, allRowIds, selectedIds, applySelection, onSelectAllRequest, totalCount, data.length]);
 
   const handleDeselectAll = useCallback(() => {
-    setSelectedIds(new Set());
-    if (onSelectionChange) onSelectionChange([]);
-  }, [onSelectionChange]);
+    applySelection(new Set());
+  }, [applySelection]);
 
   // ---------------------------------------------------------------------------
   // Inline editing
@@ -879,12 +1038,6 @@ export const DataTable = ({
   const startEditing = useCallback((rowId, field, currentValue) => {
     setEditingCell({ rowId, field });
     setEditValue(currentValue);
-    setEditError(null);
-  }, []);
-
-  const cancelEdit = useCallback(() => {
-    setEditingCell(null);
-    setEditValue(null);
     setEditError(null);
   }, []);
 
@@ -908,10 +1061,6 @@ export const DataTable = ({
     const rowId = row[rowIdField];
     const fieldName = `edit-${rowId}-${col.field}`;
     const commit = (val) => commitEdit(row, col.field, val);
-    const update = (val) => {
-      setEditValue(val);
-      if (onRowEdit) onRowEdit(row, col.field, val);
-    };
     const exitEdit = () => {
       if (editError) return;
       setEditingCell(null);
@@ -932,33 +1081,64 @@ export const DataTable = ({
         }
       }
       : undefined;
+    const handleInput = (val) => {
+      setEditValue(val);
+      if (onInputValidate) onInputValidate(val);
+      if (onRowEditInput) onRowEditInput(row, col.field, val);
+    };
+    const maybeExitDatetimeEdit = () => {
+      if (typeof document === "undefined") return;
+      setTimeout(() => {
+        const activeName = document.activeElement?.getAttribute?.("name");
+        if (activeName !== `${fieldName}-date` && activeName !== `${fieldName}-time`) {
+          exitEdit();
+        }
+      }, 0);
+    };
 
     switch (type) {
       case "textarea":
-        return <TextArea {...extra} name={fieldName} label="" value={editValue ?? ""} onChange={update} onBlur={exitEdit} {...validationProps} onInput={onInputValidate} />;
+        return <TextArea {...extra} name={fieldName} label="" value={editValue ?? ""} onChange={commit} onBlur={exitEdit} {...validationProps} onInput={handleInput} />;
       case "number":
-        return <NumberInput {...extra} name={fieldName} label="" value={editValue} onChange={update} onBlur={exitEdit} {...validationProps} onInput={onInputValidate} />;
+        return <NumberInput {...extra} name={fieldName} label="" value={editValue} onChange={commit} onBlur={exitEdit} {...validationProps} onInput={handleInput} />;
       case "currency":
-        return <CurrencyInput currencyCode="USD" {...extra} name={fieldName} label="" value={editValue} onChange={update} onBlur={exitEdit} {...validationProps} onInput={onInputValidate} />;
+        return <CurrencyInput currencyCode="USD" {...extra} name={fieldName} label="" value={editValue} onChange={commit} onBlur={exitEdit} {...validationProps} onInput={handleInput} />;
       case "stepper":
-        return <StepperInput {...extra} name={fieldName} label="" value={editValue} onChange={update} onBlur={exitEdit} {...validationProps} onInput={onInputValidate} />;
+        return <StepperInput {...extra} name={fieldName} label="" value={editValue} onChange={commit} onBlur={exitEdit} {...validationProps} onInput={handleInput} />;
       case "select":
         return <Select variant="transparent" {...extra} name={fieldName} label="" value={editValue} onChange={commit} options={resolveEditOptions(col, data)} />;
       case "multiselect":
         return <MultiSelect {...extra} name={fieldName} label="" value={editValue || []} onChange={commit} options={resolveEditOptions(col, data)} />;
       case "date":
         return <DateInput {...extra} name={fieldName} label="" value={editValue} onChange={commit} />;
+      case "time":
+        return <TimeInput {...extra} name={fieldName} label="" value={editValue} onChange={commit} />;
+      case "datetime":
+        return (
+          <Flex direction="row" align="center" gap="xs" wrap="nowrap">
+            <DateInput {...extra} name={`${fieldName}-date`} label="" value={editValue?.date} onChange={(val) => {
+              const next = { ...editValue, date: val };
+              setEditValue(next);
+              if (onRowEdit) onRowEdit(row, col.field, next);
+            }} onBlur={maybeExitDatetimeEdit} />
+            <TimeInput {...(extra.timeProps || {})} name={`${fieldName}-time`} label="" value={editValue?.time} onChange={(val) => {
+              const next = { ...editValue, time: val };
+              setEditValue(next);
+              if (onRowEdit) onRowEdit(row, col.field, next);
+            }} onBlur={maybeExitDatetimeEdit} />
+          </Flex>
+        );
       case "toggle":
         return <Toggle {...extra} name={fieldName} label="" checked={!!editValue} onChange={commit} />;
       case "checkbox":
         return <Checkbox {...extra} name={fieldName} checked={!!editValue} onChange={commit} />;
       default:
-        return <Input {...extra} name={fieldName} label="" value={editValue ?? ""} onChange={update} onBlur={exitEdit} {...validationProps} onInput={onInputValidate} />;
+        return <Input {...extra} name={fieldName} label="" value={editValue ?? ""} onChange={commit} onBlur={exitEdit} {...validationProps} onInput={handleInput} />;
     }
   };
 
   const resolvedEditMode = editMode || (columns.some((col) => col.editable) ? "discrete" : null);
-  const useColumnRendering = selectable || !!resolvedEditMode || !renderRow;
+  const useColumnRendering = selectable || !!resolvedEditMode || editingRowId != null || showRowActionsColumn || !renderRow;
 
   // ---------------------------------------------------------------------------
   // Auto-width computation
@@ -968,8 +1148,9 @@ export const DataTable = ({
     [columns, data, autoWidth]
   );
 
-  const getHeaderWidth = (col) => col.width || autoWidths[col.field]?.width || "auto";
-  const getCellWidth = (col) => col.cellWidth || col.width || autoWidths[col.field]?.cellWidth || "auto";
+  const defaultWidth = scrollable ? "min" : "auto";
+  const getHeaderWidth = (col) => col.width || autoWidths[col.field]?.width || defaultWidth;
+  const getCellWidth = (col) => col.cellWidth || col.width || autoWidths[col.field]?.cellWidth || defaultWidth;
 
   // Per-cell error tracking for inline mode (multiple cells editable at once)
   const [inlineErrors, setInlineErrors] = useState({});
@@ -1006,28 +1187,45 @@ export const DataTable = ({
         }
       }
       : undefined;
+    const emitInput = (val) => {
+      if (onInputValidate) onInputValidate(val);
+      if (onRowEditInput) onRowEditInput(row, col.field, val);
+    };
 
     switch (type) {
       case "textarea":
-        return <TextArea {...extra} name={fieldName} label="" value={value ?? ""} onChange={fire} {...validationProps} onInput={onInputValidate} />;
+        return <TextArea {...extra} name={fieldName} label="" value={value ?? ""} onChange={fire} {...validationProps} onInput={emitInput} />;
       case "number":
-        return <NumberInput {...extra} name={fieldName} label="" value={value} onChange={fire} {...validationProps} onInput={onInputValidate} />;
+        return <NumberInput {...extra} name={fieldName} label="" value={value} onChange={fire} {...validationProps} onInput={emitInput} />;
       case "currency":
-        return <CurrencyInput currencyCode="USD" {...extra} name={fieldName} label="" value={value} onChange={fire} {...validationProps} onInput={onInputValidate} />;
+        return <CurrencyInput currencyCode="USD" {...extra} name={fieldName} label="" value={value} onChange={fire} {...validationProps} onInput={emitInput} />;
       case "stepper":
-        return <StepperInput {...extra} name={fieldName} label="" value={value} onChange={fire} {...validationProps} onInput={onInputValidate} />;
+        return <StepperInput {...extra} name={fieldName} label="" value={value} onChange={fire} {...validationProps} onInput={emitInput} />;
       case "select":
-        return <Select variant="transparent" {...extra} name={fieldName} label="" value={value} onChange={fire} options={resolveEditOptions(col, data)} />;
+        return <Select {...extra} name={fieldName} label="" value={value} onChange={fire} options={resolveEditOptions(col, data)} />;
       case "multiselect":
         return <MultiSelect {...extra} name={fieldName} label="" value={value || []} onChange={fire} options={resolveEditOptions(col, data)} />;
       case "date":
         return <DateInput {...extra} name={fieldName} label="" value={value} onChange={fire} />;
+      case "time":
+        return <TimeInput {...extra} name={fieldName} label="" value={value} onChange={fire} />;
+      case "datetime":
+        return (
+          <Flex direction="row" align="center" gap="xs" wrap="nowrap">
+            <DateInput {...extra} name={`${fieldName}-date`} label="" value={value?.date} onChange={(val) => {
+              fire({ ...value, date: val });
+            }} />
+            <TimeInput {...(extra.timeProps || {})} name={`${fieldName}-time`} label="" value={value?.time} onChange={(val) => {
+              fire({ ...value, time: val });
+            }} />
+          </Flex>
+        );
       case "toggle":
         return <Toggle {...extra} name={fieldName} label="" checked={!!value} onChange={fire} />;
       case "checkbox":
         return <Checkbox {...extra} name={fieldName} checked={!!value} onChange={fire} />;
       default:
-        return <Input {...extra} name={fieldName} label="" value={value ?? ""} onChange={fire} {...validationProps} onInput={onInputValidate} />;
+        return <Input {...extra} name={fieldName} label="" value={value ?? ""} onChange={fire} {...validationProps} onInput={emitInput} />;
     }
   };
 
@@ -1039,28 +1237,75 @@ export const DataTable = ({
       return renderInlineControl(col, row);
     }
 
+    // Full-row edit: controlled via editingRowId prop
+    if (editingRowId != null && rowId === editingRowId && col.editable) {
+      return renderInlineControl(col, row);
+    }
+
     // Discrete mode: click-to-edit
     const isEditing =
       editingCell?.rowId === rowId && editingCell?.field === col.field;
 
     if (isEditing && col.editable) return renderEditControl(col, row);
 
+    // -----------------------------------------------------------------------
+    // Truncation logic — applied before rendering content
+    // -----------------------------------------------------------------------
+    const rawValue = row[col.field];
+    const rawStr = String(rawValue ?? "");
+
+    if (col.truncate && rawStr.length > 0) {
+      // Simple truncation: single line with tooltip on hover
+      if (col.truncate === true) {
+        const content = col.renderCell ? col.renderCell(rawValue, row) : rawStr;
+        if (col.editable) {
+          return (
+            <Text truncate={{ tooltipText: rawStr }}>
+              <Link variant="dark" onClick={() => startEditing(rowId, col.field, rawValue)}>
+                {content || "--"}
+              </Link>
+            </Text>
+          );
+        }
+        return <Text truncate={{ tooltipText: rawStr }}>{content}</Text>;
+      }
+
+      // Object truncation with maxLength: character-limited with tooltip
+      const maxLen = col.truncate.maxLength || 100;
+      if (rawStr.length > maxLen) {
+        const truncatedStr = rawStr.slice(0, maxLen) + "…";
+        const truncatedContent = col.renderCell ? col.renderCell(truncatedStr, row) : truncatedStr;
+        if (col.editable) {
+          return (
+            <Link variant="dark" onClick={() => startEditing(rowId, col.field, rawValue)}>
+              {truncatedContent || "--"}
+            </Link>
+          );
+        }
+        return <Text truncate={{ tooltipText: rawStr }}>{truncatedContent || "--"}</Text>;
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Default rendering (no truncation or text is short enough)
+    // -----------------------------------------------------------------------
     const content = col.renderCell
-      ? col.renderCell(row[col.field], row)
-      : row[col.field] ?? "";
+      ? col.renderCell(rawValue, row)
+      : rawValue;
+    const isEmpty = content == null || content === "";
 
     if (col.editable) {
       return (
         <Link
           variant="dark"
-          onClick={() => startEditing(rowId, col.field, row[col.field])}
+          onClick={() => startEditing(rowId, col.field, rawValue)}
         >
-          {content || "\u2014"}
+          {isEmpty ? "--" : content}
         </Link>
       );
     }
 
-    return content;
+    return isEmpty ? "--" : content;
   };
 
   // ---------------------------------------------------------------------------
@@ -1286,6 +1531,7 @@ export const DataTable = ({
                   </TableHeader>
                 );
               })}
+              {showRowActionsColumn && <TableHeader width="min" />}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -1314,6 +1560,7 @@ export const DataTable = ({
                       )}
                     </TableCell>
                   ))}
+                  {showRowActionsColumn && <TableCell width="min" />}
                 </TableRow>
               ) : useColumnRendering ? (
                 <TableRow key={item.row[rowIdField] ?? idx}>
@@ -1330,15 +1577,37 @@ export const DataTable = ({
                   {columns.map((col) => {
                     const rowId = item.row[rowIdField];
                     const isDiscreteEditing = resolvedEditMode === "discrete" && editingCell?.rowId === rowId && editingCell?.field === col.field;
-                    const isShowingInput = isDiscreteEditing || (resolvedEditMode === "inline" && col.editable);
+                    const isRowEditing = editingRowId != null && rowId === editingRowId && col.editable;
+                    const isShowingInput = isDiscreteEditing || isRowEditing || (resolvedEditMode === "inline" && col.editable);
                     // Input components don't respect cell text-align — skip align when showing inputs
                     const cellAlign = isShowingInput ? undefined : col.align;
                     return (
-                      <TableCell key={col.field} width={isDiscreteEditing ? "auto" : getCellWidth(col)} align={cellAlign}>
+                      <TableCell key={col.field} width={(isDiscreteEditing || isRowEditing) ? "auto" : getCellWidth(col)} align={cellAlign}>
                         {renderCellContent(item.row, col)}
                       </TableCell>
                     );
                   })}
+                  {showRowActionsColumn && (
+                    <TableCell width="min">
+                      <Flex direction="row" align="center" gap="xs" wrap="nowrap">
+                        {(() => {
+                          const resolvedRowActions = typeof rowActions === "function" ? rowActions(item.row) : rowActions;
+                          const actions = Array.isArray(resolvedRowActions) ? resolvedRowActions : [];
+                          return actions.map((action, i) => (
+                          <Button
+                            key={i}
+                            variant={action.variant || "transparent"}
+                            size="extra-small"
+                            onClick={() => action.onClick(item.row)}
+                          >
+                            {action.icon && <Icon name={action.icon} size="sm" />}
+                            {action.label && ` ${action.label}`}
+                          </Button>
+                          ));
+                        })()}
+                      </Flex>
+                    </TableCell>
+                  )}
                 </TableRow>
               ) : (
                 renderRow(item.row)
