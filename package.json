@@ -1,6 +1,6 @@
 {
   "name": "hubspot-datatable",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Filterable, sortable, paginated DataTable for HubSpot UI Extensions",
   "license": "MIT",
   "main": "./dist/index.js",
