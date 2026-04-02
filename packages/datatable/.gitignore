@@ -1,0 +1,5 @@
+node_modules/
+.env
+.hs/
+dist/
+CLAUDE.md

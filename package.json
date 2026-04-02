@@ -1,0 +1,12 @@
+{
+  "name": "hs-ui",
+  "private": true,
+  "description": "Monorepo for @hs-ui HubSpot UI Extension components",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev": "npm run dev --workspaces --if-present"
+  }
+}

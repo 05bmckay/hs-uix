@@ -1,0 +1,54 @@
+{
+  "name": "@hs-uix/datatable",
+  "version": "0.4.0",
+  "description": "Filterable, sortable, paginated DataTable for HubSpot UI Extensions",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "index.d.ts",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/05bmckay/hs-uix.git",
+    "directory": "packages/datatable"
+  },
+  "homepage": "https://github.com/05bmckay/hs-uix/tree/main/packages/datatable#readme",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepublishOnly": "tsup",
+    "release:patch": "npm version patch && npm publish --access public && git push origin main --tags",
+    "release:minor": "npm version minor && npm publish --access public && git push origin main --tags",
+    "release:major": "npm version major && npm publish --access public && git push origin main --tags"
+  },
+  "peerDependencies": {
+    "@hubspot/ui-extensions": ">=0.12.0",
+    "react": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@hubspot/ui-extensions": "latest",
+    "react": "^18.0.0",
+    "tsup": "^8.0.0"
+  },
+  "keywords": [
+    "hubspot",
+    "ui-extensions",
+    "datatable",
+    "table",
+    "crm"
+  ],
+  "dependencies": {
+    "fuse.js": "^7.1.0"
+  }
+}
