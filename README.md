@@ -223,7 +223,7 @@ const FILTERS = [
 
 ### Row selection with bulk actions
 
-![Row Selection](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/row-selection.png)
+![Row Selection with Action Bar and Per-Row Actions](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/action-bar-per-row-actions.png)
 
 Add checkboxes with a select-all header (selects current page). When rows are selected, a compact action bar appears above the table showing the selected count, a "Select all" button, "Deselect all", and any custom action buttons you define.
 
@@ -301,6 +301,8 @@ Server-side selection example:
 
 ### Row actions and full-row "Edit/Done" flow
 
+![Full-Row Editing](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/full-row-editing.png)
+
 Use `rowActions` to append an actions column on the right. You can pass a static action list or a row-aware function.
 
 ```jsx
@@ -365,6 +367,23 @@ const columns = [
 - `truncate: true` uses single-line truncation with full text in tooltip.
 - `truncate: { maxLength }` truncates by character count with `...` and tooltip.
 - Truncation is skipped while a cell is actively being edited.
+
+---
+
+### Scrollable wide tables
+
+![Scrollable Wide Table](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/scrollable-wide-table.png)
+
+When you have many columns, set `scrollable={true}` to allow horizontal overflow instead of squishing columns. Columns without explicit widths fall back to `"min"` width, keeping each column compact and letting the table scroll.
+
+```jsx
+<DataTable
+  data={data}
+  columns={manyColumns}
+  scrollable={true}
+  pageSize={10}
+/>
+```
 
 ---
 
