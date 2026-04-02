@@ -3,3 +3,5 @@ node_modules/
 .hs/
 dist/
 CLAUDE.md
+.claude/
+.vscode/
