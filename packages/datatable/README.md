@@ -43,7 +43,8 @@ That's a searchable, sortable, paginated table with auto-sized columns in 5 line
 - Customizable record label (`recordLabel`) that flows into row count, selection bar, loading, and empty states
 - Configurable row count display with custom text formatting and bold option
 - Configurable table appearance (`bordered`, `flush`, `scrollable`)
-- Footer rows computed from filtered data
+- Column-level footer for totals rows — static labels or functions computed from filtered data
+- Works with `useAssociations` for live CRM data (contacts, deals, tickets, etc.)
 - Server-side mode with loading/error states, search debounce, controlled state, and a unified `onParamsChange` callback
 - Built-in empty state when no results match
 
@@ -112,11 +113,11 @@ hubspot.extend(() => (
 
 ![Active Filters](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/fully-featured-table-active-filters.png)
 
-When more than 2 filters are defined, the first 2 appear inline and the rest are tucked behind a **Filters** button with a funnel icon. Active filters display as removable chips with a "Clear all" option by default. You can hide badges via `showFilterBadges={false}` and keep reset with `showClearFiltersButton={true}`. The footer receives the filtered data so totals stay accurate.
+When more than 2 filters are defined, the first 2 appear inline and the rest are tucked behind a **Filters** button with a funnel icon. Active filters display as removable chips with a "Clear all" option by default. You can hide badges via `showFilterBadges={false}` and keep reset with `showClearFiltersButton={true}`. Footer totals are declared directly on the column — a static string or a function that receives the filtered data.
 
 ```jsx
 import React from "react";
-import { Text, StatusTag, Tag, TableRow, TableHeader, hubspot } from "@hubspot/ui-extensions";
+import { Text, StatusTag, Tag, hubspot } from "@hubspot/ui-extensions";
 import { DataTable } from "hubspot-datatable";
 
 const DEALS = [
@@ -132,13 +133,14 @@ const formatCurrency = (val) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(val);
 
 const COLUMNS = [
-  { field: "company", label: "Company", sortable: true,
+  { field: "company", label: "Company", sortable: true, footer: "Total",
     renderCell: (val) => <Text format={{ fontWeight: "demibold" }}>{val}</Text> },
   { field: "status", label: "Status", sortable: true,
     renderCell: (val) => <StatusTag variant={STATUS_COLORS[val]}>{val}</StatusTag> },
   { field: "segment", label: "Segment", sortable: true,
     renderCell: (val) => <Tag variant="default">{val}</Tag> },
   { field: "amount", label: "Amount", sortable: true, align: "right",
+    footer: (rows) => formatCurrency(rows.reduce((sum, r) => sum + r.amount, 0)),
     renderCell: (val) => formatCurrency(val) },
   { field: "closeDate", label: "Close Date", sortable: true,
     renderCell: (val) => new Date(val).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) },
@@ -181,17 +183,6 @@ hubspot.extend(() => (
     filters={FILTERS}
     pageSize={5}
     defaultSort={{ amount: "descending" }}
-    footer={(filteredData) => (
-      <TableRow>
-        <TableHeader>Total</TableHeader>
-        <TableHeader />
-        <TableHeader />
-        <TableHeader align="right">
-          {formatCurrency(filteredData.reduce((sum, r) => sum + r.amount, 0))}
-        </TableHeader>
-        <TableHeader />
-      </TableRow>
-    )}
   />
 ));
 ```
@@ -626,6 +617,79 @@ Use `rowCountText` when you want full control over the row count label.
 - `totalMatching`: total rows matching the current query/filter state
 
 In server-side mode, `totalMatching` maps to `totalCount` (or `data.length` if `totalCount` is not provided).
+
+---
+
+### useAssociations
+
+![useAssociations + DataTable](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/datatable/assets/useAssociations.png)
+
+Connect live CRM data to a DataTable in two lines. The `useAssociations` hook from `@hubspot/ui-extensions/crm` fetches associated records from the current CRM record — pass the results straight into DataTable.
+
+```jsx
+import { Text, StatusTag, hubspot } from "@hubspot/ui-extensions";
+import { useAssociations } from "@hubspot/ui-extensions/crm";
+import { DataTable } from "hubspot-datatable";
+
+const fmt = (val) =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(val);
+
+const STAGE_COLORS = {
+  appointmentscheduled: "info", qualifiedtobuy: "info", presentationscheduled: "warning",
+  decisionmakerboughtin: "warning", contractsent: "warning", closedwon: "success", closedlost: "danger",
+};
+
+hubspot.extend(() => <AssociatedDeals />);
+
+function AssociatedDeals() {
+  const { results, isLoading } = useAssociations({
+    toObjectType: "0-3",
+    properties: ["dealname", "dealstage", "amount", "closedate"],
+  });
+
+  if (isLoading) return <Text>Loading...</Text>;
+
+  const deals = results.map((a) => ({
+    id: a.toObjectId,
+    dealname: a.properties.dealname,
+    dealstage: a.properties.dealstage,
+    amount: Number(a.properties.amount) || 0,
+    closedate: a.properties.closedate,
+  }));
+
+  return (
+    <DataTable
+      data={deals}
+      columns={[
+        { field: "dealname", label: "Deal Name", sortable: true, footer: "Total" },
+        {
+          field: "dealstage", label: "Stage", sortable: true,
+          renderCell: (val) => <StatusTag variant={STAGE_COLORS[val] || "default"}>{val}</StatusTag>,
+        },
+        {
+          field: "amount", label: "Amount", sortable: true, align: "right",
+          footer: (rows) => fmt(rows.reduce((s, r) => s + r.amount, 0)),
+          renderCell: (val) => fmt(val),
+        },
+        {
+          field: "closedate", label: "Close Date", sortable: true,
+          renderCell: (val) => val ? new Date(Number(val)).toLocaleDateString() : "—",
+        },
+      ]}
+      searchFields={["dealname"]}
+      recordLabel={{ singular: "Deal", plural: "Deals" }}
+      defaultSort={{ amount: "descending" }}
+    />
+  );
+}
+```
+
+**Tips:**
+
+- **Object type IDs**: `0-1` Contacts, `0-2` Companies, `0-3` Deals, `0-5` Tickets.
+- **Timestamps**: HubSpot returns dates as millisecond epoch strings — use `new Date(Number(val))`, not `new Date(val)`.
+- **Column-level `footer`**: Static strings or `(rows) => ReactNode` functions. DataTable handles alignment automatically.
+- **Stable references**: Define filter configs with `filterFn` at the module level. HubSpot's remote renderer releases inline function references between renders.
 
 ---
 

@@ -16,8 +16,22 @@
  *     filters={FILTER_CONFIG}
  *     pageSize={10}
  *     defaultSort={{ date: "descending" }}
- *     footer={(filteredData) => <TableRow>...</TableRow>}
  *   />
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * FOOTER / TOTALS ROW:
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ *   // Column-level footer (preferred) — auto-generates the row
+ *   columns={[
+ *     { field: "name",   label: "Name",   footer: "Total" },
+ *     { field: "status", label: "Status" },
+ *     { field: "amount", label: "Amount", align: "right",
+ *       footer: (rows) => formatCurrency(rows.reduce((s, r) => s + r.amount, 0)) },
+ *   ]}
+ *
+ *   // Render-function footer (full control) — you build the entire row
+ *   footer={(filteredData) => <TableRow>...</TableRow>}
  *
  * ═══════════════════════════════════════════════════════════════════════════
  * SERVER-SIDE — parent owns state, component renders UI + calls back:

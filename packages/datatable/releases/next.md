@@ -4,6 +4,7 @@ Changes queued for the next version bump.
 
 ## Added
 
+- **Column-level `footer`** — declare footer content directly on column definitions instead of manually building `<TableRow>`/`<TableHeader>` markup. Accepts a static `ReactNode` (e.g. `"Total"`) or a function `(rows) => ReactNode` that receives filtered data. DataTable auto-generates the footer row with correct alignment, accounting for selectable checkbox and row action columns. The existing `footer` render-function prop still works for full custom control.
 - Filter toolbar visibility controls:
   - `showFilterBadges` (default `true`) to show/hide active filter chips.
   - `showClearFiltersButton` (default `true`) to show/hide the "Clear all" filter reset action.
