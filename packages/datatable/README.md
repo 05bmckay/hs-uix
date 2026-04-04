@@ -6,7 +6,7 @@
 
 A drop-in table component for HubSpot UI Extensions. Define your columns, pass your data, and you get search, filtering, sorting, pagination, inline editing, row grouping, and auto-sized columns out of the box.
 
-![Full-Featured DataTable](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/fully-featured-table.png)
+![Full-Featured DataTable](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/datatable/assets/fully-featured-table.png)
 
 ## Why DataTable?
 
@@ -111,7 +111,7 @@ hubspot.extend(() => (
 
 ### Filters, sorting, and footer totals
 
-![Active Filters](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/fully-featured-table-active-filters.png)
+![Active Filters](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/datatable/assets/fully-featured-table-active-filters.png)
 
 When more than 2 filters are defined, the first 2 appear inline and the rest are tucked behind a **Filters** button with a funnel icon. Active filters display as removable chips with a "Clear all" option by default. You can hide badges via `showFilterBadges={false}` and keep reset with `showClearFiltersButton={true}`. Footer totals are declared directly on the column — a static string or a function that receives the filtered data.
 
@@ -227,7 +227,7 @@ const FILTERS = [
 
 ### Row selection with bulk actions
 
-![Row Selection with Action Bar and Per-Row Actions](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/action-bar-per-row-actions.png)
+![Row Selection with Action Bar and Per-Row Actions](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/datatable/assets/action-bar-per-row-actions.png)
 
 Add checkboxes with a select-all header (selects current page). When rows are selected, a compact action bar appears above the table showing the selected count, a "Select all" button, "Deselect all", and any custom action buttons you define.
 
@@ -305,7 +305,7 @@ Server-side selection example:
 
 ### Row actions and full-row "Edit/Done" flow
 
-![Full-Row Editing](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/full-row-editing.png)
+![Full-Row Editing](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/datatable/assets/full-row-editing.png)
 
 Use `rowActions` to append an actions column on the right. You can pass a static action list or a row-aware function.
 
@@ -376,7 +376,7 @@ const columns = [
 
 ### Scrollable wide tables
 
-![Scrollable Wide Table](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/scrollable-wide-table.png)
+![Scrollable Wide Table](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/datatable/assets/scrollable-wide-table.png)
 
 When you have many columns, set `scrollable={true}` to allow horizontal overflow instead of squishing columns. Columns without explicit widths fall back to `"min"` width, keeping each column compact and letting the table scroll.
 
@@ -393,8 +393,8 @@ When you have many columns, set `scrollable={true}` to allow horizontal overflow
 
 ### Inline editing — discrete mode
 
-![Discrete Editing - Select](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/inline-editing-discreet.png)
-![Discrete Editing - Text](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/inline-editing-discreet2.png)
+![Discrete Editing - Select](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/datatable/assets/inline-editing-discreet.png)
+![Discrete Editing - Text](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/datatable/assets/inline-editing-discreet2.png)
 
 In discrete mode (the default), editable cells appear as dark links. Click to open the input. The cell reverts to display when you click away, keeping the last committed value. Select/date/toggle-type inputs commit and close instantly on change. Text-like inputs commit via HubSpot `onChange` (typically blur/submit), and can stream live input through `onRowEditInput`.
 
@@ -464,7 +464,7 @@ function EditableTable() {
 
 ### Inline editing — inline mode
 
-![Inline Edit Mode](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/inline-editing-regular.png)
+![Inline Edit Mode](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/datatable/assets/inline-editing-regular.png)
 
 In inline mode, all editable cells always show their input controls. This mode is also used for full-row editing when `editingRowId` is set. Set `editMode="inline"` to enable always-visible inputs.
 
@@ -502,7 +502,7 @@ Use `editProps` to pass additional props to the edit component (e.g., `{ currenc
 
 ### Row grouping with aggregations
 
-![Row Grouping](https://raw.githubusercontent.com/05bmckay/hubspot-datatable/main/assets/row-grouping.png)
+![Row Grouping](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/datatable/assets/row-grouping.png)
 
 Groups are collapsible. Click a group header to expand or collapse it. You can define aggregation functions per column, and groups start expanded by default.
 
