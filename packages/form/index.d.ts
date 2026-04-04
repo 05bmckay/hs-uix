@@ -54,6 +54,14 @@ export interface FormBuilderValidationContext {
   signal?: AbortSignal;
 }
 
+export type FormBuilderValidatorResult = true | string;
+
+export type FormBuilderValidator = (
+  value: unknown,
+  allValues: Record<string, unknown>,
+  context?: FormBuilderValidationContext
+) => FormBuilderValidatorResult | Promise<FormBuilderValidatorResult>;
+
 export interface FormBuilderDependsOnConfig {
   field: string;
   display?: "grouped" | "inline";
@@ -128,11 +136,9 @@ export interface FormBuilderField {
   defaultValue?: unknown;
 
   // Validation (validate may return a Promise for async validation)
-  validate?: (
-    value: unknown,
-    allValues: Record<string, unknown>,
-    context?: FormBuilderValidationContext
-  ) => true | string | Promise<true | string>;
+  validate?: FormBuilderValidator;
+  validators?: FormBuilderValidator[];
+  useDefaultValidators?: boolean;
   validateDebounce?: number;
   pattern?: RegExp;
   patternMessage?: string;

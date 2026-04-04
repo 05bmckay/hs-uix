@@ -84,6 +84,143 @@ const isValueEmpty = (value, field) => {
   return false;
 };
 
+const isPromise = (value) => value && typeof value.then === "function";
+
+const normalizeValidatorResult = (result) => {
+  if (result === true || result === undefined || result === null || result === false) return null;
+  return String(result);
+};
+
+const isDateValueObject = (value) =>
+  isPlainObject(value) &&
+  Number.isInteger(value.year) &&
+  Number.isInteger(value.month) &&
+  Number.isInteger(value.date);
+
+const isTimeValueObject = (value) =>
+  isPlainObject(value) &&
+  Number.isInteger(value.hours) &&
+  Number.isInteger(value.minutes);
+
+const compareDateValues = (a, b) => {
+  if (a.year !== b.year) return a.year - b.year;
+  if (a.month !== b.month) return a.month - b.month;
+  return a.date - b.date;
+};
+
+const compareTimeValues = (a, b) => {
+  if (a.hours !== b.hours) return a.hours - b.hours;
+  return a.minutes - b.minutes;
+};
+
+const runDefaultFieldValidator = (value, field, allValues) => {
+  const errorPrefix = field.label || field.name;
+
+  switch (field.type) {
+    case "text":
+    case "password":
+    case "textarea":
+      if (typeof value !== "string") return `${errorPrefix} must be text`;
+      break;
+    case "number":
+    case "stepper":
+    case "currency":
+      if (typeof value !== "number" || Number.isNaN(value)) return `${errorPrefix} must be a number`;
+      break;
+    case "toggle":
+    case "checkbox":
+      if (typeof value !== "boolean") return `${errorPrefix} must be true or false`;
+      break;
+    case "select":
+    case "radioGroup": {
+      const options = resolveOptions(field, allValues);
+      if (options.length > 0 && !options.some((o) => Object.is(o.value, value))) {
+        return `${errorPrefix} has an invalid selection`;
+      }
+      break;
+    }
+    case "multiselect":
+    case "checkboxGroup": {
+      if (!Array.isArray(value)) return `${errorPrefix} must be a list`;
+      const options = resolveOptions(field, allValues);
+      if (options.length > 0) {
+        const validValues = new Set(options.map((o) => o.value));
+        const hasInvalid = value.some((item) => !validValues.has(item));
+        if (hasInvalid) return `${errorPrefix} has an invalid selection`;
+      }
+      break;
+    }
+    case "date":
+      if (!isDateValueObject(value)) return `${errorPrefix} has an invalid date`;
+      break;
+    case "time":
+      if (!isTimeValueObject(value)) return `${errorPrefix} has an invalid time`;
+      break;
+    case "datetime": {
+      // Backward-compatible with historic date-only values while preferring object shape.
+      if (isDateValueObject(value)) break;
+      if (!isPlainObject(value)) return `${errorPrefix} has an invalid date/time`;
+      const hasDate = value.date !== undefined;
+      const hasTime = value.time !== undefined;
+      if (!hasDate && !hasTime) return `${errorPrefix} has an invalid date/time`;
+      if (hasDate && !isDateValueObject(value.date)) return `${errorPrefix} has an invalid date`;
+      if (hasTime && !isTimeValueObject(value.time)) return `${errorPrefix} has an invalid time`;
+      break;
+    }
+    case "repeater":
+      if (!Array.isArray(value)) return `${errorPrefix} has invalid rows`;
+      break;
+    default:
+      break;
+  }
+
+  return null;
+};
+
+const runCustomSyncValidators = (value, field, allValues) => {
+  const validators = Array.isArray(field.validators) ? field.validators : [];
+  for (const validator of validators) {
+    const result = validator(value, allValues);
+    if (isPromise(result)) continue;
+    const err = normalizeValidatorResult(result);
+    if (err) return err;
+  }
+
+  if (field.validate) {
+    const result = field.validate(value, allValues);
+    if (!isPromise(result)) {
+      const err = normalizeValidatorResult(result);
+      if (err) return err;
+    }
+  }
+
+  return null;
+};
+
+const collectAsyncValidatorPromises = (value, field, allValues, context) => {
+  const promises = [];
+  const validators = Array.isArray(field.validators) ? field.validators : [];
+  for (const validator of validators) {
+    try {
+      const result = validator(value, allValues, context);
+      if (isPromise(result)) promises.push(result);
+    } catch (err) {
+      promises.push(Promise.reject(err));
+    }
+  }
+
+  if (field.validate) {
+    try {
+      const result = field.validate(value, allValues, context);
+      if (isPromise(result)) promises.push(result);
+    } catch (err) {
+      promises.push(Promise.reject(err));
+    }
+  }
+
+  return promises;
+};
+
 const runValidators = (value, field, allValues, fieldTypes) => {
   // Display and CRM data fields have no validation
   if (field.type === "display" || field.type === "crmPropertyList" || field.type === "crmAssociationPropertyList") return null;
@@ -102,14 +239,20 @@ const runValidators = (value, field, allValues, fieldTypes) => {
   // Skip further validation if empty and not required
   if (empty) return null;
 
-  // 2. Pattern (text/textarea/password only)
+  // 2. Built-in type/shape validators
+  if (field.useDefaultValidators !== false) {
+    const typeError = runDefaultFieldValidator(value, field, allValues);
+    if (typeError) return typeError;
+  }
+
+  // 3. Pattern (text/textarea/password only)
   if (field.pattern && typeof value === "string") {
     if (!field.pattern.test(value)) {
       return field.patternMessage || "Invalid format";
     }
   }
 
-  // 3. Min/Max length (text/textarea)
+  // 4. Min/Max length (text/textarea)
   if (typeof value === "string") {
     if (field.minLength != null && value.length < field.minLength) {
       return `Must be at least ${field.minLength} characters`;
@@ -119,7 +262,7 @@ const runValidators = (value, field, allValues, fieldTypes) => {
     }
   }
 
-  // 4. Min/Max value (number/stepper/currency)
+  // 5. Min/Max value (number/stepper/currency/date/time)
   if (typeof value === "number") {
     if (field.min != null && value < field.min) {
       return `Must be at least ${field.min}`;
@@ -129,13 +272,27 @@ const runValidators = (value, field, allValues, fieldTypes) => {
     }
   }
 
-  // 5. Custom validate (sync only — async handled separately)
-  if (field.validate) {
-    const result = field.validate(value, allValues);
-    // If result is a Promise, skip it here (async validation handles it)
-    if (result && typeof result.then === "function") return null;
-    if (result !== true && result) return result;
+  if (field.type === "date" && isDateValueObject(value)) {
+    if (field.min && isDateValueObject(field.min) && compareDateValues(value, field.min) < 0) {
+      return field.minValidationMessage || "Date is too early";
+    }
+    if (field.max && isDateValueObject(field.max) && compareDateValues(value, field.max) > 0) {
+      return field.maxValidationMessage || "Date is too late";
+    }
   }
+
+  if (field.type === "time" && isTimeValueObject(value)) {
+    if (field.min && isTimeValueObject(field.min) && compareTimeValues(value, field.min) < 0) {
+      return field.minValidationMessage || "Time is too early";
+    }
+    if (field.max && isTimeValueObject(field.max) && compareTimeValues(value, field.max) > 0) {
+      return field.maxValidationMessage || "Time is too late";
+    }
+  }
+
+  // 6. Custom validate (sync only — async handled separately)
+  const customError = runCustomSyncValidators(value, field, allValues);
+  if (customError) return customError;
 
   return null;
 };
@@ -716,7 +873,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   const runAsyncValidation = useCallback(
     (name, value) => {
       const field = fieldByName.get(name);
-      if (!field || !field.validate || field.type === "repeater") return;
+      if (!field || field.type === "repeater") return;
 
       const val = value != null ? value : formValues[name];
       const syncError = runValidators(val, field, formValues, fieldTypes);
@@ -739,17 +896,26 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
       if (controller) asyncAbortRef.current.set(name, controller);
 
-      let result;
+      let asyncPromises;
       try {
-        result = field.validate(val, formValues, controller ? { signal: controller.signal } : undefined);
+        asyncPromises = collectAsyncValidatorPromises(
+          val,
+          field,
+          formValues,
+          controller ? { signal: controller.signal } : undefined
+        );
       } catch (err) {
         updateErrors({ [name]: err?.message || "Validation failed" });
         return;
       }
-      if (!result || typeof result.then !== "function") return;
 
-      const validationPromise = result.then(
-        (asyncResult) => {
+      if (asyncPromises.length === 0) {
+        asyncAbortRef.current.delete(name);
+        return;
+      }
+
+      const validationPromise = Promise.all(asyncPromises).then(
+        (results) => {
           if (asyncValidationVersionRef.current.get(name) !== version) return;
           asyncValidationRef.current.delete(name);
           asyncAbortRef.current.delete(name);
@@ -758,7 +924,14 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
             delete next[name];
             return next;
           });
-          const err = asyncResult !== true && asyncResult ? asyncResult : null;
+          let err = null;
+          for (const result of results) {
+            const normalized = normalizeValidatorResult(result);
+            if (normalized) {
+              err = normalized;
+              break;
+            }
+          }
           updateErrors({ [name]: err });
         },
         (rejection) => {
@@ -784,7 +957,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   const triggerAsyncValidation = useCallback(
     (name, value) => {
       const field = fieldByName.get(name);
-      if (!field || !field.validate || field.type === "repeater") return;
+      if (!field || field.type === "repeater") return;
 
       const debounceMs = field.validateDebounce;
       if (debounceMs && debounceMs > 0) {

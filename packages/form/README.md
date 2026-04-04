@@ -2,6 +2,8 @@
 
 Declarative, config-driven FormBuilder for HubSpot UI Extensions. Define fields as data, get a complete form with validation, layout, multi-step wizards, and full HubSpot component integration.
 
+![Basic Form](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/form/assets/basic-form.png)
+
 ```bash
 npm install @hs-uix/form
 ```
@@ -92,6 +94,8 @@ With `columnWidth={200}`, a 400px card shows 2 columns; a 600px page shows 3.
 
 ### Explicit Layout
 
+![Explicit Layout](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/form/assets/explicit-layout-weighted.png)
+
 Define exact row structure with the `layout` prop. Each inner array is a row.
 
 ```jsx
@@ -129,23 +133,34 @@ When no layout props are set (`columns` defaults to 1), consecutive fields with 
 ## Validation
 
 Built-in validators run in order, first failure wins:
+- Required check (`required`)
+- Default type/shape checks (enabled by default via `useDefaultValidators`)
+- Pattern + length/range checks (`pattern`, `minLength`, `maxLength`, `min`, `max`)
+- Custom validators (`validators`, then `validate`)
 
 ```jsx
 {
   name: "email",
   type: "text",
   label: "Email",
-  required: true,                                    // 1. Required check
-  pattern: /^[^\s@]+@[^\s@]+$/,                     // 2. Regex pattern
+  required: true,                                    // 1) required
+  pattern: /^[^\s@]+@[^\s@]+$/,                     // 2) built-in pattern
   patternMessage: "Enter a valid email",
-  minLength: 5,                                      // 3. String length
+  minLength: 5,                                      // 3) built-in length
   maxLength: 100,
-  validate: (value, allValues) => {                  // 4. Custom function
+  validators: [                                      // 4) custom sync validators
+    (value) => value.endsWith("@example.com") ? true : "Use your company email",
+  ],
+  validate: async (value, allValues, { signal }) => { // 5) custom async validator
+    const exists = await checkEmailExists(value, { signal });
+    if (exists) return "Email already in use";
     if (value === allValues.confirmEmail) return true;
     return "Emails must match";
   },
 }
 ```
+
+Set `useDefaultValidators={false}` to run only your custom validators for a field.
 
 ### Validation Timing
 
@@ -228,6 +243,8 @@ const fields = [
 ```
 
 ## Dependent Properties
+
+![Dependent & Cascading](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/form/assets/dependent-cascading.gif)
 
 Dependent fields are grouped in a HubSpot Tile container below their parent:
 
@@ -320,6 +337,8 @@ formRef.current.setFieldError("email", "Taken");        // programmatic error
 ```
 
 ## Display Options
+
+![Display Options](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/form/assets/display-options.png)
 
 ### Boolean Fields
 
@@ -473,6 +492,8 @@ For any HubSpot component prop not exposed as a first-class field config, use `f
 
 ## Sections (Accordion Grouping)
 
+![Sections & Groups](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/form/assets/section-and-groups.png)
+
 Group fields into collapsible accordion sections:
 
 ```jsx
@@ -518,6 +539,8 @@ Render-only fields with no form value, no validation, and not included in submit
 
 ## Read-Only Mode
 
+![Read-Only, Auto-Save & Dirty](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/form/assets/readonly-autosave-dirty.png)
+
 Lock the entire form with an optional warning message:
 
 ```jsx
@@ -532,6 +555,8 @@ Lock the entire form with an optional warning message:
 Sets all fields to `readOnly`, hides submit/cancel buttons, and shows a warning Alert. The ref API still works.
 
 ## Async Validation
+
+![Async Validation & Side Effects](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/form/assets/async-validation-side-effects.png)
 
 `validate` can return a Promise. The field shows a loading indicator while validation runs:
 
@@ -627,6 +652,8 @@ Change handlers on field definitions that can update other fields:
 
 ## Repeater Fields
 
+![Repeater Fields](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/form/assets/repeater-fields.png)
+
 Add/remove rows for dynamic lists:
 
 ```jsx
@@ -641,6 +668,8 @@ Add/remove rows for dynamic lists:
 Repeater sub-fields now validate on blur/onChange like top-level fields. Optional row reordering is available via `repeaterProps.reorderable` (with customizable move controls).
 
 ## Custom Field Types
+
+![Custom Field Types](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/form/assets/custom-field-types.png)
 
 Register custom renderers with full FormBuilder integration:
 
