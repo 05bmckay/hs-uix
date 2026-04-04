@@ -19,11 +19,19 @@ export type FormBuilderFieldType =
   | "toggle"
   | "checkbox"
   | "checkboxGroup"
-  | "radioGroup";
+  | "radioGroup"
+  | "display"
+  | "repeater"
+  | "crmPropertyList"
+  | "crmAssociationPropertyList"
+  | (string & {}); // custom field types via fieldTypes plugin
 
 export interface FormBuilderOption {
   label: string;
   value: string | number | boolean;
+  description?: string;
+  initialIsChecked?: boolean;
+  readonly?: boolean;
 }
 
 export interface FormBuilderDateValue {
@@ -43,6 +51,13 @@ export interface FormBuilderDateTimeValue {
 }
 
 // ---------------------------------------------------------------------------
+// Layout types
+// ---------------------------------------------------------------------------
+
+export type FormBuilderLayoutEntry = string | { field: string; flex?: number };
+export type FormBuilderLayout = FormBuilderLayoutEntry[][];
+
+// ---------------------------------------------------------------------------
 // Field definition
 // ---------------------------------------------------------------------------
 
@@ -51,22 +66,31 @@ export interface FormBuilderField {
   type: FormBuilderFieldType;
   label: string;
 
-  // Common optional props
+  // Common optional props (passed to most HubSpot components)
   description?: string;
   placeholder?: string;
   tooltip?: string;
-  required?: boolean;
+  required?: boolean | ((values: Record<string, unknown>) => boolean);
   readOnly?: boolean;
   defaultValue?: unknown;
 
-  // Validation
-  validate?: (value: unknown, allValues: Record<string, unknown>) => true | string;
+  // Validation (validate may return a Promise for async validation)
+  validate?: (
+    value: unknown,
+    allValues: Record<string, unknown>
+  ) => true | string | Promise<true | string>;
+  validateDebounce?: number;
   pattern?: RegExp;
   patternMessage?: string;
   minLength?: number;
   maxLength?: number;
-  min?: number | FormBuilderDateValue;
-  max?: number | FormBuilderDateValue;
+  min?: number | FormBuilderDateValue | FormBuilderTimeValue;
+  max?: number | FormBuilderDateValue | FormBuilderTimeValue;
+  minValidationMessage?: string;
+  maxValidationMessage?: string;
+
+  // Field-level loading indicator
+  loading?: boolean;
 
   // Conditional visibility
   visible?: (values: Record<string, unknown>) => boolean;
@@ -78,41 +102,119 @@ export interface FormBuilderField {
 
   // Layout
   width?: "full" | "half";
+  colSpan?: number;
+
+  // Field grouping (non-collapsible divider groups)
+  group?: string;
+
+  // Debounce onChange callback (ms) — useful for search-as-you-type fields
+  debounce?: number;
 
   // Pass-through to underlying HubSpot component
   fieldProps?: Record<string, unknown>;
+
+  // CrmPropertyList props (type: "crmPropertyList")
+  properties?: string[];
+  direction?: "column" | "row";
+  objectId?: string;
+  objectTypeId?: string;
+
+  // CrmAssociationPropertyList props (type: "crmAssociationPropertyList")
+  associationLabels?: string[];
+  filters?: Array<{ operator: string; property: string; value: string }>;
+  sort?: Array<{ columnName: string; direction: 1 | -1 }>;
 
   // Select / MultiSelect / ToggleGroup
   options?:
     | FormBuilderOption[]
     | ((values: Record<string, unknown>) => FormBuilderOption[]);
 
+  // Select / Checkbox / ToggleGroup
+  variant?: "input" | "transparent" | "default" | "small" | "sm";
+
   // Currency
   currency?: string;
 
   // TextArea
   rows?: number;
+  cols?: number;
   resize?: "vertical" | "horizontal" | "both" | "none";
 
   // Number / Stepper / Currency
   precision?: number;
   formatStyle?: "decimal" | "percentage";
+
+  // Stepper
   stepSize?: number;
+  minValueReachedTooltip?: string;
+  maxValueReachedTooltip?: string;
 
   // Toggle
   size?: "xs" | "sm" | "md";
   labelDisplay?: "inline" | "top" | "hidden";
+  textChecked?: string;
+  textUnchecked?: string;
 
-  // Date
-  format?: string;
+  // Checkbox
+  inline?: boolean;
 
-  // Custom render escape hatch
+  // Date / Time
+  format?: "short" | "long" | "medium" | "standard" | "YYYY-MM-DD" | "L" | "LL" | "ll";
+  timezone?: "userTz" | "portalTz";
+  clearButtonLabel?: string;
+  todayButtonLabel?: string;
+
+  // Time
+  interval?: number;
+
+  // Field-level side effects (cross-field updates)
+  onFieldChange?: (
+    value: unknown,
+    allValues: Record<string, unknown>,
+    helpers: {
+      setFieldValue: (name: string, value: unknown) => void;
+      setFieldError: (name: string, message: string) => void;
+    }
+  ) => void;
+
+  // Repeater field
+  fields?: FormBuilderField[];
+
+  // Custom render escape hatch (for display fields, only allValues is provided)
   render?: (props: {
+    value?: unknown;
+    onChange?: (v: unknown) => void;
+    error?: boolean;
+    allValues: Record<string, unknown>;
+  }) => ReactNode;
+}
+
+// ---------------------------------------------------------------------------
+// Custom field type plugin
+// ---------------------------------------------------------------------------
+
+export interface FieldTypePlugin {
+  render: (props: {
     value: unknown;
     onChange: (v: unknown) => void;
     error: boolean;
+    field: FormBuilderField;
     allValues: Record<string, unknown>;
   }) => ReactNode;
+  getEmptyValue?: () => unknown;
+  isEmpty?: (value: unknown) => boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Section definition (accordion grouping)
+// ---------------------------------------------------------------------------
+
+export interface FormBuilderSection {
+  id: string;
+  label: string;
+  fields: string[];
+  defaultOpen?: boolean;
+  info?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -144,6 +246,7 @@ export interface FormBuilderRef {
   isDirty: () => boolean;
   setFieldValue: (name: string, value: unknown) => void;
   setFieldError: (name: string, message: string) => void;
+  setErrors: (errors: Record<string, string>) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -155,8 +258,21 @@ export interface FormBuilderProps {
   fields: FormBuilderField[];
   onSubmit: (
     values: Record<string, unknown>,
-    helpers: { reset: () => void }
-  ) => void | Promise<void>;
+    helpers: { reset: () => void; rawValues: Record<string, unknown> }
+  ) => void | Promise<unknown>;
+
+  // Submit lifecycle
+  transformValues?: (values: Record<string, unknown>) => Record<string, unknown>;
+  onBeforeSubmit?: (values: Record<string, unknown>) => boolean | Promise<boolean>;
+  onSubmitSuccess?: (
+    result: unknown,
+    helpers: { reset: () => void; values: Record<string, unknown> }
+  ) => void;
+  onSubmitError?: (
+    error: unknown,
+    helpers: { values: Record<string, unknown> }
+  ) => void;
+  resetOnSuccess?: boolean;
 
   // Initial / controlled values
   initialValues?: Record<string, unknown>;
@@ -191,15 +307,28 @@ export interface FormBuilderProps {
   loading?: boolean;
   disabled?: boolean;
 
-  // Appearance
+  // Appearance / layout
+  columns?: number;
+  columnWidth?: number;
+  layout?: FormBuilderLayout;
+  sections?: FormBuilderSection[];
   gap?: string;
   showRequiredIndicator?: boolean;
   noFormWrapper?: boolean;
   autoComplete?: string;
+  fieldTypes?: Record<string, FieldTypePlugin>;
 
   // States
   error?: string | boolean;
   success?: string;
+  readOnly?: boolean;
+  readOnlyMessage?: string;
+
+  // Auto-save
+  autoSave?: {
+    debounce?: number;
+    onAutoSave: (values: Record<string, unknown>) => void;
+  };
 
   // Events
   onDirtyChange?: (isDirty: boolean) => void;
@@ -209,3 +338,17 @@ export interface FormBuilderProps {
 }
 
 export declare function FormBuilder(props: FormBuilderProps): ReactElement | null;
+
+// ---------------------------------------------------------------------------
+// CRM Integration utilities
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps CRM property values (from useCrmProperties) to form initial values.
+ * `properties` is the flat { propertyName: value } object.
+ * `mapping` is { formFieldName: "crmPropertyName" }.
+ */
+export declare function useFormPrefill(
+  properties: Record<string, unknown> | undefined,
+  mapping: Record<string, string>
+): Record<string, unknown>;

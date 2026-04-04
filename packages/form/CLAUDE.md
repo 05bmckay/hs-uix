@@ -42,23 +42,30 @@ FormBuilder is a single exported component in `src/FormBuilder.jsx`. It takes a 
 - **Uncontrolled (default)**: Component owns form values via `initialValues`
 - **Controlled**: Parent owns values via `values` + `onChange`
 
+### Exports
+
+- `FormBuilder` — the main component (default)
+- `useFormPrefill` — hook to map CRM property values to form initial values
+
 ### Internal Code Organization
 
 The component follows a strict section order, separated by `// ---` comment banners:
 
-1. **Props destructuring** — grouped by concern (core, values, validation, multi-step, buttons, appearance, states, events)
-2. **Internal state** — `internalValues`, `internalErrors`, `internalStep`, `internalLoading`, `touchedFields`
+1. **Props destructuring** — grouped by concern (core, submit lifecycle, values, validation, multi-step, buttons, appearance, states, events)
+2. **Internal state** — `internalValues`, `internalErrors`, `internalStep`, `internalLoading`, `touchedFields`, `validatingFields`
 3. **State resolution** — controlled vs uncontrolled (`formValues = values != null ? values : internalValues`)
 4. **Dirty tracking** — JSON.stringify snapshot comparison with `initialSnapshot` ref
-5. **Visible fields computation** — `useMemo` filtering by `visible` predicate and current step
-6. **Validation engine** — `validateField`, `validateVisibleFields`, `updateErrors`
-7. **Event handlers** — `handleFieldChange`, `handleFieldInput`, `handleFieldBlur`, `handleSubmit`, `handleNext`, `handleBack`, `handleGoTo`
-8. **Ref API** — `useImperativeHandle` exposing `submit`, `validate`, `reset`, `getValues`, `isDirty`, `setFieldValue`, `setFieldError`
-9. **Field rendering** — `renderField(field)` dispatches to correct HubSpot component by `type`
-10. **Dependent properties grouping** — `renderFieldsWithGroups` handles Tile-wrapped dependent field groups
-11. **Layout rendering** — `renderFieldLayout` handles half-width pairing + dependent properties
-12. **Buttons rendering** — multi-step (Back/Next/Submit) or single-step layout
-13. **Main render** — Form wrapper → Flex column → StepIndicator → Alerts → Fields → Buttons
+5. **Auto-save** — debounced effect watching `formValues` + `isDirty`
+6. **Visible fields computation** — `useMemo` filtering by `visible` predicate and current step
+7. **Validation engine** — `validateField`, `validateVisibleFields`, `updateErrors`
+8. **Async validation engine** — `runAsyncValidation`, `triggerAsyncValidation` with debounce support
+9. **Event handlers** — `handleFieldChange`, `handleDebouncedFieldChange`, `handleFieldInput`, `handleFieldBlur`, `handleSubmit`, `handleNext`, `handleBack`, `handleGoTo`
+10. **Ref API** — `useImperativeHandle` exposing `submit`, `validate`, `reset`, `getValues`, `isDirty`, `setFieldValue`, `setFieldError`, `setErrors`
+11. **Field rendering** — `renderField(field)` dispatches to correct HubSpot component by `type`, with plugin/CRM component support
+12. **Layout rendering** — `renderFieldSubset`, `renderFieldLayout` dispatches to four modes + sections + field group dividers
+13. **Sections rendering** — `renderSections` wraps field groups in `Accordion` components
+14. **Buttons rendering** — multi-step (Back/Next/Submit) or single-step layout, hidden in readOnly mode
+15. **Main render** — Form wrapper → Flex column → StepIndicator → ReadOnly Alert → Alerts → Fields → Buttons
 
 ### Controlled vs Uncontrolled Pattern
 
@@ -90,18 +97,26 @@ This applies to: `values`/`internalValues`, `step`/`internalStep`, `loading`/`in
 | `checkbox` | `Checkbox` |
 | `checkboxGroup` | `ToggleGroup toggleType="checkboxList"` |
 | `radioGroup` | `ToggleGroup toggleType="radioButtonList"` |
+| `display` | Custom render (no form value) |
+| `repeater` | Sub-field rows with add/remove |
+| `crmPropertyList` | `CrmPropertyList` from `@hubspot/ui-extensions/crm` |
+| `crmAssociationPropertyList` | `CrmAssociationPropertyList` from `@hubspot/ui-extensions/crm` |
+| Custom types | Via `fieldTypes` plugin registry |
 
 ### Validation Engine
 
 Built-in validators run in order, first failure wins:
 
-1. **Required** — empty check → `"{label} is required"`
+1. **Required** — empty check (supports `required` as function) → `"{label} is required"`
 2. **Pattern** — regex test → `patternMessage` or `"Invalid format"`
 3. **Min/Max length** — string length check
 4. **Min/Max value** — numeric range check
-5. **Custom** — `validate(value, allValues)` function
+5. **Custom sync** — `validate(value, allValues)` returning `true | string`
+6. **Custom async** — `validate` returning `Promise<true | string>` (runs after sync passes, with optional `validateDebounce`)
 
-Validation timing: `validateOnChange` (onInput), `validateOnBlur` (default), `validateOnSubmit` (always)
+Custom field types can provide `isEmpty` for custom empty checks.
+
+Validation timing: `validateOnChange` (onInput), `validateOnBlur` (default + async trigger), `validateOnSubmit` (always, waits for pending async)
 
 ### Dependent Properties
 
@@ -116,15 +131,17 @@ When `steps` prop is provided: `StepIndicator` at top, only current step's field
 - **Single file**: Keep FormBuilder in one file. Don't split into sub-components.
 - **Section banners**: Use `// ---------------------------------------------------------------------------` banners to separate logical sections.
 - **Inline comments on props**: Each prop gets a short `// description` comment on the same line.
-- **No external dependencies**: Only `react` and `@hubspot/ui-extensions`. No lodash, no utility libraries.
-- **Peer deps, not bundled**: React and @hubspot/ui-extensions are always externals.
+- **No external dependencies**: Only `react`, `@hubspot/ui-extensions`, and `@hubspot/ui-extensions/crm`. No lodash, no utility libraries.
+- **Peer deps, not bundled**: React and @hubspot/ui-extensions (including /crm subpath) are always externals.
 - **`"files": ["dist", "index.d.ts", "README.md"]`** in package.json controls what ships to npm.
 
 ## UI Conventions
 
-- All components from `@hubspot/ui-extensions` — no HTML elements, no CSS.
+- All components from `@hubspot/ui-extensions` and `@hubspot/ui-extensions/crm` — no HTML elements, no CSS.
 - Form fields in `Flex direction="column" gap="sm"` (FRM-06).
-- Half-width fields use `Flex direction="row" gap="sm"` with `Box flex={1}` wrappers.
+- Layout uses four modes: `layout` prop (explicit rows), `columnWidth` (AutoGrid responsive), `columns` (Flex+Box grid with colSpan), legacy (half-width pairing).
+- Multi-column grid rows use `Flex direction="row"` with `Box flex={colSpan}` wrappers; partial rows get an empty `Box` spacer.
+- AutoGrid mode uses `<AutoGrid columnWidth={n} flexible>` for responsive column collapse.
 - Dependent properties use `Tile` with demibold `Text` header and `Icon name="info"` tooltip.
 - One primary button per form (BTN-01). Submit at bottom (FRM-03).
 - `LoadingButton` for submit to prevent double-submit (FRM-05).
