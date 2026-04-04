@@ -196,6 +196,21 @@ const [values, setValues] = useState({});
 />
 ```
 
+Validation errors can also be controlled:
+
+```jsx
+const [errors, setErrors] = useState({});
+
+<FormBuilder
+  fields={fields}
+  values={values}
+  errors={errors}
+  onValidationChange={setErrors}
+  onChange={setValues}
+  onSubmit={save}
+/>
+```
+
 ## Conditional Visibility
 
 Fields can show/hide based on other field values:
@@ -229,6 +244,22 @@ const fields = [
     visible: (values) => values.dealType === "recurring",
   },
 ];
+```
+
+You can also use `dependsOnConfig` as a single object:
+
+```jsx
+{
+  name: "contractLength",
+  type: "number",
+  label: "Contract length (months)",
+  dependsOnConfig: {
+    field: "dealType",
+    display: "grouped",
+    label: "Contract details",
+    message: (parentLabel) => `These properties depend on ${parentLabel}`,
+  },
+}
 ```
 
 ## Cascading Options
@@ -382,6 +413,8 @@ formRef.current.setFieldError("email", "Taken");        // programmatic error
 
 Use `submitPosition="none"` with the ref API for custom button placement.
 
+`labels` provides a single i18n object for button text, and `renderButtons` can fully replace the default button row.
+
 ## Form-Level Alerts
 
 ```jsx
@@ -390,6 +423,20 @@ Use `submitPosition="none"` with the ref API for custom button placement.
   onSubmit={save}
   error="Something went wrong. Please try again."
   success="Record saved successfully!"
+/>
+```
+
+For centralized alert config:
+
+```jsx
+<FormBuilder
+  fields={fields}
+  onSubmit={save}
+  alerts={{
+    addAlert: actions.addAlert,
+    errorTitle: "Save failed",
+    successTitle: "Saved",
+  }}
 />
 ```
 
@@ -422,7 +469,7 @@ For fields that need custom rendering:
 
 ## fieldProps Pass-Through
 
-For any HubSpot component prop not exposed as a first-class field config, use `fieldProps`:
+For any HubSpot component prop not exposed as a first-class field config, use `fieldProps`. For wrapper-level attributes (like `aria-*` on the `<Form>`), use `formProps`.
 
 ```jsx
 {
@@ -502,15 +549,15 @@ Sets all fields to `readOnly`, hides submit/cancel buttons, and shows a warning 
   name: "email",
   type: "text",
   label: "Email",
-  validate: async (value) => {
-    const exists = await checkEmailExists(value);
+  validate: async (value, allValues, { signal }) => {
+    const exists = await checkEmailExists(value, { signal });
     return exists ? "Email already in use" : true;
   },
   validateDebounce: 500, // debounce async calls (ms)
 }
 ```
 
-Async validators run after sync validators pass. Submit waits for all pending async validations.
+Async validators run after sync validators pass. Pending requests are versioned and prior requests are aborted when supported (`signal`).
 
 ## Conditional Required
 
@@ -599,6 +646,8 @@ Add/remove rows for dynamic lists:
   ],
   min: 1, max: 5 }
 ```
+
+Repeater sub-fields now validate on blur/onChange like top-level fields. Optional row reordering is available via `repeaterProps.reorderable` (with customizable move controls).
 
 ## Custom Field Types
 
@@ -705,6 +754,7 @@ try {
 | `initialValues` | `Record<string, unknown>` | `{}` | Starting values (uncontrolled) |
 | `values` | `Record<string, unknown>` | - | Controlled values |
 | `onChange` | `(values) => void` | - | Change callback (controlled) |
+| `errors` | `Record<string, string>` | - | Controlled validation errors |
 | `onFieldChange` | `(name, value, allValues) => void` | - | Per-field change |
 | `validateOnChange` | `boolean` | `false` | Validate on keystroke |
 | `validateOnBlur` | `boolean` | `true` | Validate on blur |
@@ -723,6 +773,8 @@ try {
 | `submitPosition` | `"bottom" \| "none"` | `"bottom"` | Button placement |
 | `loading` | `boolean` | - | Controlled loading state |
 | `disabled` | `boolean` | `false` | Disable entire form |
+| `labels` | `{ submit?, cancel?, back?, next? }` | - | Button label i18n object |
+| `renderButtons` | `(context) => ReactNode` | - | Custom button-row renderer |
 | `columns` | `number` | `1` | Fixed column count (Flex+Box grid) |
 | `columnWidth` | `number` | - | AutoGrid responsive column width (px) |
 | `layout` | `FormBuilderLayout` | - | Explicit row layout |
@@ -730,10 +782,16 @@ try {
 | `showRequiredIndicator` | `boolean` | `true` | Show * on required fields |
 | `noFormWrapper` | `boolean` | `false` | Skip `<Form>` wrapper |
 | `autoComplete` | `string` | - | Form autoComplete attribute |
+| `formProps` | `Record<string, unknown>` | - | Pass-through props to `<Form>` |
 | `sections` | `FormBuilderSection[]` | - | Accordion field grouping |
 | `fieldTypes` | `Record<string, FieldTypePlugin>` | - | Custom field type registry |
 | `readOnly` | `boolean` | `false` | Lock all fields |
 | `readOnlyMessage` | `string` | - | Warning alert in read-only mode |
+| `readOnlyTitle` | `string` | - | Read-only alert title |
+| `errorTitle` | `string` | - | Error alert title |
+| `successTitle` | `string` | - | Success alert title |
+| `addAlert` | `(alert) => void` | - | Popup alert callback |
+| `alerts` | `{ addAlert?, readOnlyTitle?, errorTitle?, successTitle? }` | - | Grouped alert config |
 | `error` | `string \| boolean` | - | Form-level error alert |
 | `success` | `string` | - | Form-level success alert |
 | `transformValues` | `(values) => values` | - | Reshape values before submit |
@@ -757,18 +815,21 @@ try {
 | `tooltip` | `string` | Most | Tooltip next to label |
 | `required` | `boolean \| (values) => boolean` | All | Required validation (supports conditional) |
 | `readOnly` | `boolean` | All | Prevent editing |
+| `disabled` | `boolean` | All | Disable this field |
 | `defaultValue` | `unknown` | All | Default value |
 | `colSpan` | `number` | All | Columns to span (with `columns` prop) |
 | `width` | `"full" \| "half"` | All | Legacy layout (when no `columns` set) |
 | `visible` | `(values) => boolean` | All | Conditional visibility |
 | `dependsOn` | `string` | All | Parent field name for grouping |
-| `validate` | `(value, allValues) => true \| string \| Promise` | All | Custom validation (sync or async) |
+| `dependsOnConfig` | `{ field, display?, label?, message? }` | All | Grouped dependent config alias |
+| `validate` | `(value, allValues, context?) => true \| string \| Promise` | All | Custom validation (sync or async) |
 | `validateDebounce` | `number` | All | Debounce async validation (ms) |
 | `debounce` | `number` | All | Debounce onChange callback (ms) |
 | `loading` | `boolean` | All | Field-level loading indicator |
 | `group` | `string` | All | Divider-based field grouping |
 | `onFieldChange` | `(value, allValues, helpers) => void` | All | Cross-field side effects |
 | `fields` | `FormBuilderField[]` | repeater | Sub-field definitions |
+| `repeaterProps` | `RepeaterProps` | repeater | Repeater controls (labels, custom add/remove, reorder) |
 | `pattern` | `RegExp` | text, textarea, password | Regex validation |
 | `patternMessage` | `string` | text, textarea, password | Custom pattern error |
 | `minLength` / `maxLength` | `number` | text, textarea | String length limits |

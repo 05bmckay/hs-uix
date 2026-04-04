@@ -50,6 +50,58 @@ export interface FormBuilderDateTimeValue {
   time?: FormBuilderTimeValue;
 }
 
+export interface FormBuilderValidationContext {
+  signal?: AbortSignal;
+}
+
+export interface FormBuilderDependsOnConfig {
+  field: string;
+  display?: "grouped" | "inline";
+  label?: string;
+  message?: string | ((parentLabel: string) => string);
+}
+
+export interface FormBuilderRepeaterProps {
+  addLabel?: string;
+  removeLabel?: string;
+  renderAdd?: (props: { onClick: () => void; count: number }) => ReactNode;
+  renderRemove?: (props: { index: number; onClick: () => void }) => ReactNode;
+  reorderable?: boolean;
+  moveUpLabel?: string;
+  moveDownLabel?: string;
+  renderMoveUp?: (props: { index: number; onClick: () => void }) => ReactNode;
+  renderMoveDown?: (props: { index: number; onClick: () => void }) => ReactNode;
+}
+
+export interface FormBuilderLabels {
+  submit?: string;
+  cancel?: string;
+  back?: string;
+  next?: string;
+}
+
+export interface FormBuilderAlertConfig {
+  addAlert?: (alert: { type: string; title?: string; message?: string }) => void;
+  readOnlyTitle?: string;
+  errorTitle?: string;
+  successTitle?: string;
+}
+
+export interface FormBuilderButtonsRenderContext {
+  isMultiStep: boolean;
+  isFirstStep: boolean;
+  isLastStep: boolean;
+  currentStep: number;
+  totalSteps: number;
+  disabled: boolean;
+  loading: boolean;
+  labels: Required<FormBuilderLabels>;
+  onBack: () => void;
+  onNext: () => void;
+  onCancel?: () => void;
+  onSubmit: (e?: unknown) => Promise<void>;
+}
+
 // ---------------------------------------------------------------------------
 // Layout types
 // ---------------------------------------------------------------------------
@@ -72,12 +124,14 @@ export interface FormBuilderField {
   tooltip?: string;
   required?: boolean | ((values: Record<string, unknown>) => boolean);
   readOnly?: boolean;
+  disabled?: boolean;
   defaultValue?: unknown;
 
   // Validation (validate may return a Promise for async validation)
   validate?: (
     value: unknown,
-    allValues: Record<string, unknown>
+    allValues: Record<string, unknown>,
+    context?: FormBuilderValidationContext
   ) => true | string | Promise<true | string>;
   validateDebounce?: number;
   pattern?: RegExp;
@@ -97,8 +151,10 @@ export interface FormBuilderField {
 
   // Dependent properties grouping
   dependsOn?: string;
+  dependsOnDisplay?: "grouped" | "inline";
   dependsOnLabel?: string;
   dependsOnMessage?: string | ((parentLabel: string) => string);
+  dependsOnConfig?: FormBuilderDependsOnConfig;
 
   // Layout
   width?: "full" | "half";
@@ -179,6 +235,11 @@ export interface FormBuilderField {
 
   // Repeater field
   fields?: FormBuilderField[];
+  repeaterProps?: FormBuilderRepeaterProps;
+  addLabel?: string;
+  removeLabel?: string;
+  renderAdd?: (props: { onClick: () => void; count: number }) => ReactNode;
+  renderRemove?: (props: { index: number; onClick: () => void }) => ReactNode;
 
   // Custom render escape hatch (for display fields, only allValues is provided)
   render?: (props: {
@@ -278,6 +339,7 @@ export interface FormBuilderProps {
   initialValues?: Record<string, unknown>;
   values?: Record<string, unknown>;
   onChange?: (values: Record<string, unknown>) => void;
+  errors?: Record<string, string>;
   onFieldChange?: (
     name: string,
     value: unknown,
@@ -306,16 +368,22 @@ export interface FormBuilderProps {
   submitPosition?: "bottom" | "none";
   loading?: boolean;
   disabled?: boolean;
+  backLabel?: string;
+  nextLabel?: string;
+  labels?: FormBuilderLabels;
+  renderButtons?: (context: FormBuilderButtonsRenderContext) => ReactNode;
 
   // Appearance / layout
   columns?: number;
   columnWidth?: number;
+  maxColumns?: number;
   layout?: FormBuilderLayout;
   sections?: FormBuilderSection[];
   gap?: string;
   showRequiredIndicator?: boolean;
   noFormWrapper?: boolean;
   autoComplete?: string;
+  formProps?: Record<string, unknown>;
   fieldTypes?: Record<string, FieldTypePlugin>;
 
   // States
@@ -323,6 +391,11 @@ export interface FormBuilderProps {
   success?: string;
   readOnly?: boolean;
   readOnlyMessage?: string;
+  readOnlyTitle?: string;
+  errorTitle?: string;
+  successTitle?: string;
+  addAlert?: (alert: { type: string; title?: string; message?: string }) => void;
+  alerts?: FormBuilderAlertConfig;
 
   // Auto-save
   autoSave?: {

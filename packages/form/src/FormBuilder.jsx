@@ -150,6 +150,68 @@ const resolveOptions = (field, allValues) => {
   return field.options || [];
 };
 
+const getDependsOnName = (field) =>
+  (field.dependsOnConfig && field.dependsOnConfig.field) || field.dependsOn;
+
+const getDependsOnDisplay = (field) =>
+  (field.dependsOnConfig && field.dependsOnConfig.display) || field.dependsOnDisplay;
+
+const getDependsOnLabel = (field) =>
+  (field.dependsOnConfig && field.dependsOnConfig.label) || field.dependsOnLabel;
+
+const getDependsOnMessage = (field) =>
+  (field.dependsOnConfig && field.dependsOnConfig.message) || field.dependsOnMessage;
+
+const getRepeaterErrorKey = (fieldName, rowIdx, subFieldName) =>
+  `${fieldName}[${rowIdx}].${subFieldName}`;
+
+const isPlainObject = (value) =>
+  Object.prototype.toString.call(value) === "[object Object]";
+
+const deepEqual = (a, b) => {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== typeof b) return false;
+  if (a == null || b == null) return false;
+
+  if (Array.isArray(a)) {
+    if (!Array.isArray(b) || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!deepEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+
+  if (a instanceof Date && b instanceof Date) {
+    return a.getTime() === b.getTime();
+  }
+
+  if (isPlainObject(a) && isPlainObject(b)) {
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    if (aKeys.length !== bKeys.length) return false;
+    for (const key of aKeys) {
+      if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
+      if (!deepEqual(a[key], b[key])) return false;
+    }
+    return true;
+  }
+
+  return false;
+};
+
+const deepClone = (value) => {
+  if (Array.isArray(value)) return value.map(deepClone);
+  if (value instanceof Date) return new Date(value.getTime());
+  if (isPlainObject(value)) {
+    const next = {};
+    for (const key of Object.keys(value)) {
+      next[key] = deepClone(value[key]);
+    }
+    return next;
+  }
+  return value;
+};
+
 // ---------------------------------------------------------------------------
 // CRM Integration utilities
 // ---------------------------------------------------------------------------
@@ -236,25 +298,32 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
   // Buttons / actions
   const {
-    submitLabel = "Submit",        // submit button text
+    submitLabel,                   // submit button text
     submitVariant = "primary",     // submit button variant
     showCancel = false,            // show cancel button
-    cancelLabel = "Cancel",        // cancel button text
+    cancelLabel,                   // cancel button text
     onCancel,                      // () => void
     submitPosition = "bottom",     // "bottom" | "none"
     loading: controlledLoading,    // controlled loading state
     disabled = false,              // disable entire form
+    backLabel,                     // multi-step back button text
+    nextLabel,                     // multi-step next button text
+    labels,                        // { submit, cancel, back, next } — i18n label object
+    renderButtons: renderButtonsProp, // custom action row renderer
   } = props;
 
   // Appearance / layout
   const {
     columns = 1,                   // number of grid columns (1 = full-width stack)
     columnWidth,                   // AutoGrid columnWidth — responsive layout (overrides columns)
+    maxColumns,                    // cap number of columns per row in AutoGrid mode
     layout,                        // explicit row layout array (overrides columns + columnWidth)
     sections,                      // FormBuilderSection[] — accordion field grouping
     gap = "sm",                    // gap between fields
     showRequiredIndicator = true,  // show * on required fields
     noFormWrapper = false,         // skip HubSpot <Form> wrapper
+    autoComplete,                  // form autoComplete attribute
+    formProps,                     // pass-through props for Form wrapper
     fieldTypes,                    // Record<string, FieldTypePlugin> — custom field type registry
   } = props;
 
@@ -264,6 +333,12 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     success: formSuccess, // string — form-level success alert
     readOnly: formReadOnly = false, // boolean — lock all fields
     readOnlyMessage,    // string — warning alert when readOnly
+    readOnlyTitle: readOnlyTitleProp, // string — read-only alert title (default "Read Only")
+    errorTitle: errorTitleProp,       // string — error alert title (default "Error")
+    successTitle: successTitleProp,   // string — success alert title (default "Success")
+    addAlert: addAlertProp,           // actions.addAlert — use popup banners instead of inline alerts
+    alerts,           // { addAlert, readOnlyTitle, errorTitle, successTitle }
+    errors: controlledErrors, // controlled validation errors
   } = props;
 
   // Events
@@ -271,6 +346,45 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     onDirtyChange,  // (isDirty: boolean) => void
     autoSave,       // { debounce: number, onAutoSave: (values) => void }
   } = props;
+
+  const submitButtonLabel = submitLabel ?? labels?.submit ?? "Submit";
+  const cancelButtonLabel = cancelLabel ?? labels?.cancel ?? "Cancel";
+  const backButtonLabel = backLabel ?? labels?.back ?? "Back";
+  const nextButtonLabel = nextLabel ?? labels?.next ?? "Next";
+
+  const addAlert = addAlertProp || alerts?.addAlert;
+  const readOnlyTitle = readOnlyTitleProp || alerts?.readOnlyTitle || "Read Only";
+  const errorTitle = errorTitleProp || alerts?.errorTitle || "Error";
+  const successTitle = successTitleProp || alerts?.successTitle || "Success";
+
+  // -- Popup alerts via addAlert --------------------------------------------
+
+  const prevErrorRef = useRef(formError);
+  const prevSuccessRef = useRef(formSuccess);
+
+  useEffect(() => {
+    if (!addAlert) return;
+    if (formError && formError !== prevErrorRef.current) {
+      addAlert({
+        type: "danger",
+        title: errorTitle,
+        message: typeof formError === "string" ? formError : undefined,
+      });
+    }
+    prevErrorRef.current = formError;
+  }, [addAlert, formError, errorTitle]);
+
+  useEffect(() => {
+    if (!addAlert) return;
+    if (formSuccess && formSuccess !== prevSuccessRef.current) {
+      addAlert({
+        type: "success",
+        title: successTitle,
+        message: formSuccess,
+      });
+    }
+    prevSuccessRef.current = formSuccess;
+  }, [addAlert, formSuccess, successTitle]);
 
   // -- Internal state -------------------------------------------------------
 
@@ -297,38 +411,124 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   const [internalErrors, setInternalErrors] = useState({});    // { fieldName: "message" }
   const [internalStep, setInternalStep] = useState(0);
   const [internalLoading, setInternalLoading] = useState(false);
-  const [touchedFields, setTouchedFields] = useState({});      // { fieldName: true }
   const [validatingFields, setValidatingFields] = useState({}); // { fieldName: true } — async validation in-flight
 
   // Track pending async validations (Map<fieldName, Promise>)
   const asyncValidationRef = useRef(new Map());
+  const asyncAbortRef = useRef(new Map());
+  const asyncValidationVersionRef = useRef(new Map());
   // Track debounce timers (Map<fieldName, timeoutId>)
   const debounceTimersRef = useRef(new Map());
+  const inputDebounceRef = useRef(new Map());
+  const rowKeyRef = useRef(new WeakMap());
+  const rowKeyCounterRef = useRef(0);
 
   // Track initial snapshot for dirty detection
   const initialSnapshot = useRef(null);
   if (initialSnapshot.current === null) {
-    initialSnapshot.current = JSON.stringify(computeInitialValues());
+    initialSnapshot.current = deepClone(computeInitialValues());
   }
 
   // -- State resolution (controlled vs uncontrolled) ------------------------
 
   const formValues = values != null ? values : internalValues;
+  const formErrors = controlledErrors != null ? controlledErrors : internalErrors;
   const currentStep = controlledStep != null ? controlledStep : internalStep;
   const isLoading = controlledLoading != null ? controlledLoading : internalLoading;
   const isMultiStep = Array.isArray(steps) && steps.length > 0;
+  const formValuesRef = useRef(formValues);
+  const formErrorsRef = useRef(formErrors);
+  const draftValuesRef = useRef(null);
+  formValuesRef.current = formValues;
+  formErrorsRef.current = formErrors;
+
+  const fieldByName = useMemo(() => {
+    const map = new Map();
+    for (const field of fields) map.set(field.name, field);
+    return map;
+  }, [fields]);
+
+  const isDev =
+    typeof process === "undefined" ||
+    !process.env ||
+    process.env.NODE_ENV !== "production";
+  const configWarningsRef = useRef(new Set());
+
+  const warnConfig = useCallback((message) => {
+    if (!isDev) return;
+    if (configWarningsRef.current.has(message)) return;
+    configWarningsRef.current.add(message);
+    if (typeof console !== "undefined" && console.warn) {
+      console.warn(`[FormBuilder] ${message}`);
+    }
+  }, [isDev]);
+
+  const replaceErrors = useCallback(
+    (nextErrors) => {
+      if (controlledErrors == null) setInternalErrors(nextErrors);
+      if (onValidationChange) onValidationChange(nextErrors);
+    },
+    [controlledErrors, onValidationChange]
+  );
+
+  const updateErrors = useCallback(
+    (newErrors) => {
+      const mergeErrors = (base) => {
+        const merged = { ...base, ...newErrors };
+        for (const key of Object.keys(newErrors)) {
+          if (newErrors[key] === null || newErrors[key] === undefined) {
+            delete merged[key];
+          }
+        }
+        return merged;
+      };
+
+      if (controlledErrors != null) {
+        const merged = mergeErrors(formErrorsRef.current || {});
+        if (onValidationChange) onValidationChange(merged);
+        return;
+      }
+
+      setInternalErrors((prev) => {
+        const merged = mergeErrors(prev);
+        if (onValidationChange) onValidationChange(merged);
+        return merged;
+      });
+    },
+    [controlledErrors, onValidationChange]
+  );
+
+  const getFieldEmptyValue = useCallback(
+    (field) => {
+      const plugin = fieldTypes && fieldTypes[field.type];
+      return plugin && plugin.getEmptyValue ? plugin.getEmptyValue() : getEmptyValue(field);
+    },
+    [fieldTypes]
+  );
+
+  const getRowKey = useCallback((fieldName, row, index) => {
+    if (!row || typeof row !== "object") return `${fieldName}-idx-${index}`;
+    if (!rowKeyRef.current.has(row)) {
+      rowKeyCounterRef.current += 1;
+      rowKeyRef.current.set(row, `${fieldName}-row-${rowKeyCounterRef.current}`);
+    }
+    return rowKeyRef.current.get(row);
+  }, []);
 
   // Clean up debounce timers on unmount
   useEffect(() => {
     return () => {
       for (const timer of debounceTimersRef.current.values()) clearTimeout(timer);
+      for (const timer of inputDebounceRef.current.values()) clearTimeout(timer);
+      for (const controller of asyncAbortRef.current.values()) controller.abort();
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
   }, []);
 
   // -- Dirty tracking -------------------------------------------------------
 
   const isDirty = useMemo(() => {
-    return JSON.stringify(formValues) !== initialSnapshot.current;
+    return !deepEqual(formValues, initialSnapshot.current);
   }, [formValues]);
 
   const prevDirtyRef = useRef(false);
@@ -342,25 +542,36 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   // -- Auto-save --------------------------------------------------------------
 
   const autoSaveTimerRef = useRef(null);
+  const autoSaveRef = useRef(autoSave);
+  autoSaveRef.current = autoSave;
+  const prevAutoSaveValues = useRef(deepClone(formValues));
   useEffect(() => {
-    if (!autoSave || !autoSave.onAutoSave || !isDirty) return;
+    const cfg = autoSaveRef.current;
+    if (!cfg || !cfg.onAutoSave || !isDirty) return;
+    // Skip if values haven't actually changed
+    if (deepEqual(prevAutoSaveValues.current, formValues)) return;
+    prevAutoSaveValues.current = deepClone(formValues);
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = setTimeout(() => {
       autoSaveTimerRef.current = null;
-      autoSave.onAutoSave(formValues);
-    }, autoSave.debounce || 1000);
+      autoSaveRef.current.onAutoSave(formValues);
+    }, cfg.debounce || 1000);
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-  }, [formValues, isDirty, autoSave]);
+  }, [formValues, isDirty]);
 
   // -- Visible fields computation -------------------------------------------
 
-  const visibleFields = useMemo(() => {
-    let filtered = fields.filter((f) => {
+  const allVisibleFields = useMemo(() => {
+    return fields.filter((f) => {
       if (f.visible && !f.visible(formValues)) return false;
       return true;
     });
+  }, [fields, formValues]);
+
+  const visibleFields = useMemo(() => {
+    let filtered = allVisibleFields;
 
     // In multi-step mode, further filter to current step's fields
     if (isMultiStep && steps[currentStep] && steps[currentStep].fields) {
@@ -369,19 +580,115 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     }
 
     return filtered;
-  }, [fields, formValues, isMultiStep, steps, currentStep]);
+  }, [allVisibleFields, isMultiStep, steps, currentStep]);
+
+  useEffect(() => {
+    const nameSet = new Set(fields.map((f) => f.name));
+    if (nameSet.size !== fields.length) {
+      warnConfig("Duplicate field names detected. Field names must be unique.");
+    }
+
+    for (const field of fields) {
+      const parentName = getDependsOnName(field);
+      if (parentName && !nameSet.has(parentName)) {
+        warnConfig(`Field "${field.name}" depends on missing field "${parentName}".`);
+      }
+    }
+
+    if (steps) {
+      for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        if (!step.fields) continue;
+        for (const fieldName of step.fields) {
+          if (!nameSet.has(fieldName)) {
+            warnConfig(`Step ${i + 1} references missing field "${fieldName}".`);
+          }
+        }
+      }
+    }
+
+    if (layout) {
+      for (const row of layout) {
+        for (const entry of row) {
+          const fieldName = typeof entry === "string" ? entry : entry.field;
+          if (!nameSet.has(fieldName)) {
+            warnConfig(`Layout references missing field "${fieldName}".`);
+          }
+        }
+      }
+    }
+
+    if (sections) {
+      for (const section of sections) {
+        for (const fieldName of section.fields || []) {
+          if (!nameSet.has(fieldName)) {
+            warnConfig(`Section "${section.id}" references missing field "${fieldName}".`);
+          }
+        }
+      }
+    }
+  }, [fields, steps, layout, sections, warnConfig]);
 
   // -- Validation engine ----------------------------------------------------
 
+  const validateRepeaterField = useCallback(
+    (field, value, allValues) => {
+      const errors = {};
+      const rows = Array.isArray(value) ? value : [];
+      const subFields = field.fields || [];
+      let firstSubError = null;
+
+      if (resolveRequired(field, allValues) && rows.length === 0) {
+        const requiredError = `${field.label} is required`;
+        errors[field.name] = requiredError;
+        return { errors, hasErrors: true };
+      }
+
+      if (typeof field.min === "number" && rows.length < field.min) {
+        errors[field.name] = `Must have at least ${field.min} ${field.min === 1 ? "row" : "rows"}`;
+      } else if (typeof field.max === "number" && rows.length > field.max) {
+        errors[field.name] = `Must have no more than ${field.max} ${field.max === 1 ? "row" : "rows"}`;
+      }
+
+      rows.forEach((row, rowIdx) => {
+        const rowValues = { ...allValues, [field.name]: rows };
+        subFields.forEach((subField) => {
+          if (subField.visible && !subField.visible(rowValues)) return;
+          const err = runValidators(row?.[subField.name], subField, rowValues, fieldTypes);
+          if (!err) return;
+          const key = getRepeaterErrorKey(field.name, rowIdx, subField.name);
+          errors[key] = err;
+          if (!firstSubError) firstSubError = { row: rowIdx + 1, message: err };
+        });
+      });
+
+      if (!errors[field.name] && firstSubError) {
+        errors[field.name] = `Row ${firstSubError.row}: ${firstSubError.message}`;
+      }
+
+      return { errors, hasErrors: Object.keys(errors).length > 0 };
+    },
+    [fieldTypes]
+  );
+
   const validateField = useCallback(
     (name, value) => {
-      const field = fields.find((f) => f.name === name);
+      const field = fieldByName.get(name);
       if (!field) return null;
-      // Only validate visible fields
       if (field.visible && !field.visible(formValues)) return null;
+
+      if (field.type === "repeater") {
+        const repeaterResult = validateRepeaterField(
+          field,
+          value != null ? value : formValues[name],
+          formValues
+        );
+        return repeaterResult.errors[name] || null;
+      }
+
       return runValidators(value != null ? value : formValues[name], field, formValues, fieldTypes);
     },
-    [fields, formValues, fieldTypes]
+    [fieldByName, formValues, validateRepeaterField, fieldTypes]
   );
 
   const validateVisibleFields = useCallback(
@@ -389,59 +696,71 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       const toValidate = fieldSubset || visibleFields;
       const errors = {};
       let hasErrors = false;
+
       for (const field of toValidate) {
+        if (field.type === "repeater") {
+          const repeaterResult = validateRepeaterField(field, formValues[field.name], formValues);
+          if (repeaterResult.hasErrors) {
+            Object.assign(errors, repeaterResult.errors);
+            hasErrors = true;
+          }
+          continue;
+        }
+
         const err = runValidators(formValues[field.name], field, formValues, fieldTypes);
         if (err) {
           errors[field.name] = err;
           hasErrors = true;
         }
       }
+
       return { errors, hasErrors };
     },
-    [visibleFields, formValues]
-  );
-
-  const updateErrors = useCallback(
-    (newErrors) => {
-      setInternalErrors((prev) => {
-        const merged = { ...prev, ...newErrors };
-        // Clear errors for fields that are now valid
-        for (const key of Object.keys(merged)) {
-          if (newErrors[key] === null || newErrors[key] === undefined) {
-            delete merged[key];
-          }
-        }
-        if (onValidationChange) onValidationChange(merged);
-        return merged;
-      });
-    },
-    [onValidationChange]
+    [visibleFields, formValues, validateRepeaterField, fieldTypes]
   );
 
   // -- Async validation engine ------------------------------------------------
 
-  // Run async validation for a field (after sync validators pass)
   const runAsyncValidation = useCallback(
     (name, value) => {
-      const field = fields.find((f) => f.name === name);
-      if (!field || !field.validate) return;
+      const field = fieldByName.get(name);
+      if (!field || !field.validate || field.type === "repeater") return;
 
       const val = value != null ? value : formValues[name];
-
-      // Run sync validators first — if they fail, skip async
       const syncError = runValidators(val, field, formValues, fieldTypes);
+
+      const prevController = asyncAbortRef.current.get(name);
+      if (prevController) prevController.abort();
+      asyncAbortRef.current.delete(name);
+
+      setValidatingFields((prev) => {
+        if (!prev[name]) return prev;
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+
       if (syncError) return;
 
-      // Check if validate returns a Promise
-      const result = field.validate(val, formValues);
-      if (!result || typeof result.then !== "function") return; // sync result, already handled
+      const version = (asyncValidationVersionRef.current.get(name) || 0) + 1;
+      asyncValidationVersionRef.current.set(name, version);
+      const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+      if (controller) asyncAbortRef.current.set(name, controller);
 
-      // Track the async validation
+      let result;
+      try {
+        result = field.validate(val, formValues, controller ? { signal: controller.signal } : undefined);
+      } catch (err) {
+        updateErrors({ [name]: err?.message || "Validation failed" });
+        return;
+      }
+      if (!result || typeof result.then !== "function") return;
+
       const validationPromise = result.then(
         (asyncResult) => {
-          // Only apply if this is still the latest validation for this field
-          if (asyncValidationRef.current.get(name) !== validationPromise) return;
+          if (asyncValidationVersionRef.current.get(name) !== version) return;
           asyncValidationRef.current.delete(name);
+          asyncAbortRef.current.delete(name);
           setValidatingFields((prev) => {
             const next = { ...prev };
             delete next[name];
@@ -451,13 +770,15 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
           updateErrors({ [name]: err });
         },
         (rejection) => {
-          if (asyncValidationRef.current.get(name) !== validationPromise) return;
+          if (asyncValidationVersionRef.current.get(name) !== version) return;
           asyncValidationRef.current.delete(name);
+          asyncAbortRef.current.delete(name);
           setValidatingFields((prev) => {
             const next = { ...prev };
             delete next[name];
             return next;
           });
+          if (rejection && rejection.name === "AbortError") return;
           updateErrors({ [name]: rejection?.message || "Validation failed" });
         }
       );
@@ -465,18 +786,16 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       asyncValidationRef.current.set(name, validationPromise);
       setValidatingFields((prev) => ({ ...prev, [name]: true }));
     },
-    [fields, formValues, updateErrors]
+    [fieldByName, formValues, fieldTypes, updateErrors]
   );
 
-  // Trigger async validation, with optional debounce
   const triggerAsyncValidation = useCallback(
     (name, value) => {
-      const field = fields.find((f) => f.name === name);
-      if (!field || !field.validate) return;
+      const field = fieldByName.get(name);
+      if (!field || !field.validate || field.type === "repeater") return;
 
       const debounceMs = field.validateDebounce;
       if (debounceMs && debounceMs > 0) {
-        // Clear existing debounce timer
         const existing = debounceTimersRef.current.get(name);
         if (existing) clearTimeout(existing);
         const timer = setTimeout(() => {
@@ -488,59 +807,110 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         runAsyncValidation(name, value);
       }
     },
-    [fields, runAsyncValidation]
+    [fieldByName, runAsyncValidation]
   );
 
   // -- Event handlers -------------------------------------------------------
 
-  // Helper: set a field value without triggering validation (used by field-level side effects)
-  const setFieldValueSilent = useCallback(
-    (name, value) => {
+  const commitValues = useCallback(
+    (nextValues) => {
+      formValuesRef.current = nextValues;
       if (values != null) {
-        if (onChange) onChange({ ...formValues, [name]: value });
+        if (onChange) onChange(nextValues);
       } else {
-        setInternalValues((prev) => ({ ...prev, [name]: value }));
+        setInternalValues(nextValues);
       }
     },
-    [values, onChange, formValues]
+    [values, onChange]
+  );
+
+  const setFieldValueSilent = useCallback(
+    (name, value) => {
+      const base = draftValuesRef.current || formValuesRef.current || {};
+      const nextValues = { ...base, [name]: value };
+      draftValuesRef.current = nextValues;
+      commitValues(nextValues);
+    },
+    [commitValues]
   );
 
   const handleFieldChange = useCallback(
     (name, value) => {
-      const newValues = { ...formValues, [name]: value };
+      const newValues = { ...formValuesRef.current, [name]: value };
+      const queue = [name];
+      const visited = new Set();
+      const clearedErrors = {};
 
-      if (values != null) {
-        // Controlled mode — notify parent
-        if (onChange) onChange(newValues);
-      } else {
-        // Uncontrolled mode — update internal state
-        setInternalValues(newValues);
+      while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current || visited.has(current)) continue;
+        visited.add(current);
+
+        fields.forEach((dep) => {
+          const parentName = getDependsOnName(dep);
+          if (parentName !== current || dep.name === current) return;
+          if (!dep.options) return;
+
+          const depOptions = resolveOptions(dep, newValues);
+          const depValue = newValues[dep.name];
+          if (depValue == null || depValue === "") return;
+          const validValues = new Set(depOptions.map((o) => o.value));
+
+          let nextDepValue = depValue;
+          let changed = false;
+          if (Array.isArray(depValue)) {
+            const filtered = depValue.filter((v) => validValues.has(v));
+            if (filtered.length !== depValue.length) {
+              nextDepValue = filtered;
+              changed = true;
+            }
+          } else if (!validValues.has(depValue)) {
+            nextDepValue = getFieldEmptyValue(dep);
+            changed = true;
+          }
+
+          if (changed) {
+            newValues[dep.name] = nextDepValue;
+            queue.push(dep.name);
+            if (formErrorsRef.current[dep.name] != null) {
+              clearedErrors[dep.name] = null;
+            }
+          }
+        });
       }
+
+      if (formErrorsRef.current[name] != null) {
+        clearedErrors[name] = null;
+      }
+      for (const key of Object.keys(formErrorsRef.current)) {
+        if (key.startsWith(`${name}[`)) {
+          clearedErrors[key] = null;
+        }
+      }
+
+      draftValuesRef.current = newValues;
+      commitValues(newValues);
 
       if (onFieldChange) onFieldChange(name, value, newValues);
+      if (Object.keys(clearedErrors).length > 0) updateErrors(clearedErrors);
 
-      // Clear error on change if field was touched
-      if (internalErrors[name]) {
-        updateErrors({ [name]: null });
-      }
-
-      // Field-level side effects (cross-field updates)
-      const field = fields.find((f) => f.name === name);
+      const field = fieldByName.get(name);
       if (field && field.onFieldChange) {
         field.onFieldChange(value, newValues, {
           setFieldValue: setFieldValueSilent,
           setFieldError: (fieldName, message) => updateErrors({ [fieldName]: message }),
         });
       }
+
+      draftValuesRef.current = null;
     },
-    [formValues, values, onChange, onFieldChange, internalErrors, updateErrors, fields, setFieldValueSilent]
+    [fields, getFieldEmptyValue, commitValues, onFieldChange, updateErrors, fieldByName, setFieldValueSilent]
   );
 
   // Debounced field change — delays onFieldChange/onChange for fields with `debounce` prop
-  const inputDebounceRef = useRef(new Map());
   const handleDebouncedFieldChange = useCallback(
     (name, value) => {
-      const field = fields.find((f) => f.name === name);
+      const field = fieldByName.get(name);
       const debounceMs = field && field.debounce;
 
       if (debounceMs && debounceMs > 0) {
@@ -555,30 +925,26 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         handleFieldChange(name, value);
       }
     },
-    [fields, handleFieldChange]
+    [fieldByName, handleFieldChange]
   );
 
   const handleFieldInput = useCallback(
     (name, value) => {
-      if (validateOnChange) {
-        const err = validateField(name, value);
-        updateErrors({ [name]: err });
-      }
+      if (!validateOnChange) return;
+      const err = validateField(name, value);
+      updateErrors({ [name]: err });
     },
     [validateOnChange, validateField, updateErrors]
   );
 
   const handleFieldBlur = useCallback(
     (name, value) => {
-      setTouchedFields((prev) => ({ ...prev, [name]: true }));
-      if (validateOnBlur) {
-        const err = validateField(name, value != null ? value : formValues[name]);
-        updateErrors({ [name]: err });
-
-        // Trigger async validation if sync passed
-        if (!err) {
-          triggerAsyncValidation(name, value != null ? value : formValues[name]);
-        }
+      if (!validateOnBlur) return;
+      const resolvedValue = value != null ? value : formValues[name];
+      const err = validateField(name, resolvedValue);
+      updateErrors({ [name]: err });
+      if (!err) {
+        triggerAsyncValidation(name, resolvedValue);
       }
     },
     [validateOnBlur, validateField, updateErrors, formValues, triggerAsyncValidation]
@@ -590,21 +956,16 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
       // Validate all visible fields (sync)
       if (validateOnSubmit) {
-        // In multi-step mode at submit, validate ALL fields (not just current step)
-        const allVisible = fields.filter((f) => !f.visible || f.visible(formValues));
-        const { errors, hasErrors } = validateVisibleFields(allVisible);
+        const { errors, hasErrors } = validateVisibleFields(allVisibleFields);
         if (hasErrors) {
-          setInternalErrors(errors);
-          if (onValidationChange) onValidationChange(errors);
+          replaceErrors(errors);
           return;
         }
 
         // Wait for any pending async validations
         if (asyncValidationRef.current.size > 0) {
           await Promise.all(asyncValidationRef.current.values());
-          // Re-check errors after async validations complete
-          const currentErrors = { ...internalErrors };
-          const hasAsyncErrors = Object.keys(currentErrors).length > 0;
+          const hasAsyncErrors = Object.keys(formErrorsRef.current).length > 0;
           if (hasAsyncErrors) return;
         }
       }
@@ -612,15 +973,15 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       const reset = () => {
         const fresh = computeInitialValues();
         if (values == null) setInternalValues(fresh);
-        setInternalErrors({});
-        setTouchedFields({});
-        initialSnapshot.current = JSON.stringify(fresh);
+        replaceErrors({});
+        initialSnapshot.current = deepClone(fresh);
+        prevAutoSaveValues.current = deepClone(fresh);
       };
 
       // Exclude display fields from submitted values
       const rawValues = {};
       for (const key of Object.keys(formValues)) {
-        const f = fields.find((fd) => fd.name === key);
+        const f = fieldByName.get(key);
         if (f && (f.type === "display" || f.type === "crmPropertyList" || f.type === "crmAssociationPropertyList")) continue;
         rawValues[key] = formValues[key];
       }
@@ -651,7 +1012,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         if (controlledLoading == null) setInternalLoading(false);
       }
     },
-    [validateOnSubmit, fields, formValues, validateVisibleFields, onValidationChange, onSubmit, values, controlledLoading, internalErrors, transformValues, onBeforeSubmit, onSubmitSuccess, onSubmitError, resetOnSuccess]
+    [validateOnSubmit, allVisibleFields, validateVisibleFields, replaceErrors, onSubmit, values, controlledLoading, transformValues, onBeforeSubmit, onSubmitSuccess, onSubmitError, resetOnSuccess, formValues, fieldByName]
   );
 
   // Multi-step navigation
@@ -659,13 +1020,11 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     if (!isMultiStep) return;
 
     if (validateStepOnNext && steps[currentStep] && steps[currentStep].fields) {
-      const stepFields = fields.filter(
-        (f) => steps[currentStep].fields.includes(f.name) && (!f.visible || f.visible(formValues))
-      );
+      const stepFieldNames = new Set(steps[currentStep].fields);
+      const stepFields = allVisibleFields.filter((f) => stepFieldNames.has(f.name));
       const { errors, hasErrors } = validateVisibleFields(stepFields);
       if (hasErrors) {
-        setInternalErrors((prev) => ({ ...prev, ...errors }));
-        if (onValidationChange) onValidationChange({ ...internalErrors, ...errors });
+        replaceErrors({ ...formErrorsRef.current, ...errors });
         return;
       }
     }
@@ -674,7 +1033,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     if (steps[currentStep] && steps[currentStep].validate) {
       const result = steps[currentStep].validate(formValues);
       if (result !== true && result) {
-        setInternalErrors((prev) => ({ ...prev, ...result }));
+        replaceErrors({ ...formErrorsRef.current, ...result });
         return;
       }
     }
@@ -685,7 +1044,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     } else {
       setInternalStep(nextStep);
     }
-  }, [isMultiStep, validateStepOnNext, steps, currentStep, fields, formValues, validateVisibleFields, onValidationChange, internalErrors, controlledStep, onStepChange]);
+  }, [isMultiStep, validateStepOnNext, steps, currentStep, formValues, validateVisibleFields, controlledStep, onStepChange, replaceErrors, allVisibleFields]);
 
   const handleBack = useCallback(() => {
     if (!isMultiStep) return;
@@ -715,36 +1074,66 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   useImperativeHandle(ref, () => ({
     submit: handleSubmit,
     validate: () => {
-      const allVisible = fields.filter((f) => !f.visible || f.visible(formValues));
-      const { errors, hasErrors } = validateVisibleFields(allVisible);
-      setInternalErrors(errors);
+      const { errors, hasErrors } = validateVisibleFields(allVisibleFields);
+      replaceErrors(errors);
       return { valid: !hasErrors, errors };
     },
     reset: () => {
       const fresh = computeInitialValues();
       if (values == null) setInternalValues(fresh);
-      setInternalErrors({});
-      setTouchedFields({});
-      initialSnapshot.current = JSON.stringify(fresh);
+      replaceErrors({});
+      initialSnapshot.current = deepClone(fresh);
+      prevAutoSaveValues.current = deepClone(fresh);
     },
     getValues: () => formValues,
     isDirty: () => isDirty,
     setFieldValue: (name, value) => handleFieldChange(name, value),
     setFieldError: (name, message) => updateErrors({ [name]: message }),
     setErrors: (errors) => {
-      setInternalErrors(errors);
-      if (onValidationChange) onValidationChange(errors);
+      replaceErrors(errors);
     },
   }));
 
   // -- Field rendering ------------------------------------------------------
 
+  const setRepeaterSubFieldError = useCallback(
+    (fieldName, rowIdx, subFieldName, errorMessage) => {
+      const key = getRepeaterErrorKey(fieldName, rowIdx, subFieldName);
+      const merged = { ...formErrorsRef.current };
+      if (errorMessage) {
+        merged[key] = errorMessage;
+      } else {
+        delete merged[key];
+      }
+
+      const subErrors = Object.keys(merged)
+        .filter((k) => k.startsWith(`${fieldName}[`))
+        .map((k) => {
+          const match = k.match(/\[(\d+)\]\./);
+          const row = match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+          return { key: k, row };
+        })
+        .sort((a, b) => a.row - b.row);
+
+      if (subErrors.length > 0) {
+        const first = subErrors[0];
+        merged[fieldName] = `Row ${first.row + 1}: ${merged[first.key]}`;
+      } else if (!merged[fieldName] || merged[fieldName].startsWith("Row ")) {
+        delete merged[fieldName];
+      }
+
+      replaceErrors(merged);
+    },
+    [replaceErrors]
+  );
+
   const renderField = (field) => {
     const fieldValue = formValues[field.name];
-    const fieldError = internalErrors[field.name] || null;
+    const fieldError = formErrors[field.name] || null;
     const hasError = !!fieldError;
     const isRequired = showRequiredIndicator && resolveRequired(field, formValues);
-    const isReadOnly = field.readOnly || disabled || formReadOnly;
+    const isReadOnly = field.readOnly || formReadOnly;
+    const isDisabled = disabled || field.disabled || formReadOnly;
 
     // Route onChange through debounce if field has debounce prop
     const fieldOnChange = field.debounce
@@ -816,6 +1205,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       tooltip: field.tooltip,
       required: isRequired,
       readOnly: isReadOnly,
+      disabled: isDisabled,
       error: hasError,
       validationMessage: fieldError || undefined,
       ...(field.loading || validatingFields[field.name] ? { loading: true } : {}),
@@ -952,6 +1342,9 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
                 onChange={(v) => {
                   handleFieldChange(field.name, { ...fieldValue, date: v, time: timeVal });
                 }}
+                onBlur={(v) => {
+                  handleFieldBlur(field.name, { ...fieldValue, date: v, time: timeVal });
+                }}
               />
             </Box>
             <Box flex={1}>
@@ -961,12 +1354,16 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
                 description={field.description}
                 tooltip={field.tooltip}
                 readOnly={isReadOnly}
+                disabled={isDisabled}
                 error={hasError}
                 value={timeVal}
                 interval={field.interval}
                 timezone={field.timezone}
                 onChange={(v) => {
                   handleFieldChange(field.name, { ...fieldValue, date: dateVal, time: v });
+                }}
+                onBlur={(v) => {
+                  handleFieldBlur(field.name, { ...fieldValue, date: dateVal, time: v });
                 }}
               />
             </Box>
@@ -1006,6 +1403,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
             textChecked={field.textChecked}
             textUnchecked={field.textUnchecked}
             readonly={isReadOnly}
+            disabled={isDisabled}
             onChange={fieldOnChange}
             {...(field.fieldProps || {})}
           />
@@ -1018,6 +1416,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
             checked={!!fieldValue}
             description={field.description}
             readOnly={isReadOnly}
+            disabled={isDisabled}
             inline={field.inline}
             variant={field.variant}
             onChange={fieldOnChange}
@@ -1056,15 +1455,34 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       case "repeater": {
         const rows = Array.isArray(fieldValue) ? fieldValue : [];
         const subFields = field.fields || [];
-        const minRows = field.min || 0;
-        const maxRows = field.max || Infinity;
-        const canAdd = rows.length < maxRows && !isReadOnly;
-        const canRemove = rows.length > minRows && !isReadOnly;
+        const minRows = typeof field.min === "number" ? field.min : 0;
+        const maxRows = typeof field.max === "number" ? field.max : Infinity;
+        const repeaterProps = field.repeaterProps || {};
+        const renderAddControl = repeaterProps.renderAdd || field.renderAdd;
+        const renderRemoveControl = repeaterProps.renderRemove || field.renderRemove;
+        const renderMoveUpControl = repeaterProps.renderMoveUp;
+        const renderMoveDownControl = repeaterProps.renderMoveDown;
+        const addLabel = repeaterProps.addLabel || field.addLabel || "Add";
+        const removeLabel = repeaterProps.removeLabel || field.removeLabel || "Remove";
+        const moveUpLabel = repeaterProps.moveUpLabel || "Up";
+        const moveDownLabel = repeaterProps.moveDownLabel || "Down";
+        const canEditRows = !isReadOnly && !isDisabled;
+        const canAdd = rows.length < maxRows && canEditRows;
+        const canRemove = rows.length > minRows && canEditRows;
+        const canReorder = !!repeaterProps.reorderable && canEditRows;
+        const repeaterHasNestedErrors = Object.keys(formErrors).some((k) =>
+          k.startsWith(`${field.name}[`)
+        );
+        const firstNestedErrorKey = Object.keys(formErrors).find((k) =>
+          k.startsWith(`${field.name}[`)
+        );
+        const repeaterErrorMessage = fieldError || (firstNestedErrorKey ? formErrors[firstNestedErrorKey] : null);
+        const repeaterHasError = !!fieldError || repeaterHasNestedErrors;
 
         const addRow = () => {
           const emptyRow = {};
           for (const sf of subFields) {
-            emptyRow[sf.name] = sf.defaultValue !== undefined ? sf.defaultValue : getEmptyValue(sf);
+            emptyRow[sf.name] = sf.defaultValue !== undefined ? sf.defaultValue : getFieldEmptyValue(sf);
           }
           handleFieldChange(field.name, [...rows, emptyRow]);
         };
@@ -1073,11 +1491,36 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
           handleFieldChange(field.name, rows.filter((_, i) => i !== idx));
         };
 
-        const updateRow = (idx, subName, subValue) => {
+        const moveRow = (fromIndex, toIndex) => {
+          if (toIndex < 0 || toIndex >= rows.length || toIndex === fromIndex) return;
+          const updated = [...rows];
+          const [moved] = updated.splice(fromIndex, 1);
+          updated.splice(toIndex, 0, moved);
+          handleFieldChange(field.name, updated);
+        };
+
+        const validateSubField = (rowIdx, subField, subValue, nextRows) => {
+          const rowValues = { ...formValues, [field.name]: nextRows };
+          const err = runValidators(subValue, subField, rowValues, fieldTypes);
+          setRepeaterSubFieldError(field.name, rowIdx, subField.name, err);
+        };
+
+        const handleSubFieldChange = (rowIdx, subField, subValue) => {
           const updated = rows.map((row, i) =>
-            i === idx ? { ...row, [subName]: subValue } : row
+            i === rowIdx ? { ...row, [subField.name]: subValue } : row
           );
           handleFieldChange(field.name, updated);
+          if (validateOnChange) {
+            validateSubField(rowIdx, subField, subValue, updated);
+          }
+        };
+
+        const handleSubFieldBlur = (rowIdx, subField, subValue) => {
+          if (!validateOnBlur) return;
+          const nextRows = rows.map((row, i) =>
+            i === rowIdx ? { ...row, [subField.name]: subValue } : row
+          );
+          validateSubField(rowIdx, subField, subValue, nextRows);
         };
 
         return (
@@ -1091,54 +1534,112 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
               <Text variant="microcopy">{field.description}</Text>
             )}
             {rows.map((row, rowIdx) => (
-              <Flex key={rowIdx} direction="row" gap="xs" align="end">
+              <Flex key={getRowKey(field.name, row, rowIdx)} direction="row" gap="xs" align="end">
                 {subFields.map((sf) => {
                   const sfValue = row[sf.name];
                   const sfLabel = rowIdx === 0 ? sf.label : undefined;
-                  const sfOptions = resolveOptions(sf, formValues);
+                  const sfOptions = resolveOptions(sf, { ...formValues, [field.name]: rows });
+                  const sfError = formErrors[getRepeaterErrorKey(field.name, rowIdx, sf.name)] || null;
                   const sfProps = {
                     name: `${field.name}-${rowIdx}-${sf.name}`,
                     label: sfLabel,
                     placeholder: sf.placeholder,
-                    readOnly: isReadOnly,
+                    readOnly: sf.readOnly || isReadOnly,
+                    disabled: sf.disabled || isDisabled,
+                    error: !!sfError,
+                    validationMessage: sfError || undefined,
                     ...(sf.fieldProps || {}),
                   };
 
                   let sfElement;
                   switch (sf.type) {
                     case "select":
-                      sfElement = <Select {...sfProps} value={sfValue} options={sfOptions} onChange={(v) => updateRow(rowIdx, sf.name, v)} />;
+                      sfElement = (
+                        <Select
+                          {...sfProps}
+                          value={sfValue}
+                          options={sfOptions}
+                          onChange={(v) => handleSubFieldChange(rowIdx, sf, v)}
+                          onBlur={(v) => handleSubFieldBlur(rowIdx, sf, v)}
+                        />
+                      );
                       break;
                     case "number":
-                      sfElement = <NumberInput {...sfProps} value={sfValue} onChange={(v) => updateRow(rowIdx, sf.name, v)} />;
+                      sfElement = (
+                        <NumberInput
+                          {...sfProps}
+                          value={sfValue}
+                          onChange={(v) => handleSubFieldChange(rowIdx, sf, v)}
+                          onBlur={(v) => handleSubFieldBlur(rowIdx, sf, v)}
+                        />
+                      );
                       break;
                     case "checkbox":
-                      sfElement = <Checkbox {...sfProps} checked={!!sfValue} onChange={(v) => updateRow(rowIdx, sf.name, v)}>{sf.label}</Checkbox>;
+                      sfElement = (
+                        <Checkbox
+                          {...sfProps}
+                          checked={!!sfValue}
+                          onChange={(v) => handleSubFieldChange(rowIdx, sf, v)}
+                          onBlur={(v) => handleSubFieldBlur(rowIdx, sf, v)}
+                        >
+                          {sf.label}
+                        </Checkbox>
+                      );
                       break;
                     default:
-                      sfElement = <Input {...sfProps} value={sfValue || ""} onChange={(v) => updateRow(rowIdx, sf.name, v)} />;
+                      sfElement = (
+                        <Input
+                          {...sfProps}
+                          value={sfValue || ""}
+                          onChange={(v) => handleSubFieldChange(rowIdx, sf, v)}
+                          onBlur={(v) => handleSubFieldBlur(rowIdx, sf, v)}
+                        />
+                      );
                   }
 
                   return <Box key={sf.name} flex={1}>{sfElement}</Box>;
                 })}
-                {canRemove && (
-                  <Button
-                    variant="secondary"
-                    size="xs"
-                    onClick={() => removeRow(rowIdx)}
-                  >
-                    Remove
-                  </Button>
-                )}
+                <Inline gap="xs">
+                  {canReorder && rowIdx > 0 && (
+                    renderMoveUpControl
+                      ? renderMoveUpControl({ index: rowIdx, onClick: () => moveRow(rowIdx, rowIdx - 1) })
+                      : <Button variant="secondary" size="sm" onClick={() => moveRow(rowIdx, rowIdx - 1)}>
+                        {moveUpLabel}
+                      </Button>
+                  )}
+                  {canReorder && rowIdx < rows.length - 1 && (
+                    renderMoveDownControl
+                      ? renderMoveDownControl({ index: rowIdx, onClick: () => moveRow(rowIdx, rowIdx + 1) })
+                      : <Button variant="secondary" size="sm" onClick={() => moveRow(rowIdx, rowIdx + 1)}>
+                        {moveDownLabel}
+                      </Button>
+                  )}
+                  {canRemove && (
+                    renderRemoveControl
+                      ? renderRemoveControl({ index: rowIdx, onClick: () => removeRow(rowIdx) })
+                      : <Button
+                        variant="secondary"
+                        size="md"
+                        onClick={() => removeRow(rowIdx)}
+                      >
+                        {removeLabel}
+                      </Button>
+                  )}
+                </Inline>
               </Flex>
             ))}
             {canAdd && (
-              <Button variant="secondary" size="sm" onClick={addRow}>
-                + Add
-              </Button>
+              renderAddControl
+                ? renderAddControl({ onClick: addRow, count: rows.length })
+                : <Link onClick={addRow}>
+                  <Flex direction="row" align="center" gap="flush">
+                    <Icon name="add" />
+                    <Text format={{ fontWeight: "demibold" }}>{addLabel}</Text>
+                  </Flex>
+                </Link>
             )}
-            {hasError && (
-              <Text variant="microcopy">{fieldError}</Text>
+            {repeaterHasError && repeaterErrorMessage && (
+              <Text variant="microcopy">{repeaterErrorMessage}</Text>
             )}
           </Flex>
         );
@@ -1166,20 +1667,27 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     return 1;
   };
 
-  // Helper: find visible dependents for a parent field
+  // Helper: find visible dependents for a parent field (only grouped, not inline)
   const getDependents = (parentField) =>
-    visibleFields.filter((f) => f.dependsOn === parentField.name && f.name !== parentField.name);
+    visibleFields.filter(
+      (f) =>
+        getDependsOnName(f) === parentField.name &&
+        f.name !== parentField.name &&
+        getDependsOnDisplay(f) === "grouped"
+    );
 
-  // Helper: check if a field is a dependent of another visible field
+  // Helper: check if a field is a grouped dependent of another visible field
   const isDependent = (field) =>
-    field.dependsOn && visibleFields.some((f) => f.name === field.dependsOn && f.name !== field.name);
+    getDependsOnName(field) &&
+    getDependsOnDisplay(field) === "grouped" &&
+    visibleFields.some((f) => f.name === getDependsOnName(field) && f.name !== field.name);
 
   // Helper: render dependent properties Tile group
   const renderDependentGroup = (parentField, dependents) => {
-    const firstWithLabel = dependents.find((f) => f.dependsOnLabel) || dependents[0];
-    const firstWithMessage = dependents.find((f) => f.dependsOnMessage) || dependents[0];
-    const groupLabel = firstWithLabel.dependsOnLabel || "Dependent properties";
-    const rawMessage = firstWithMessage.dependsOnMessage;
+    const firstWithLabel = dependents.find((f) => getDependsOnLabel(f)) || dependents[0];
+    const firstWithMessage = dependents.find((f) => getDependsOnMessage(f)) || dependents[0];
+    const groupLabel = getDependsOnLabel(firstWithLabel) || "Dependent properties";
+    const rawMessage = getDependsOnMessage(firstWithMessage);
     const tooltipMessage = typeof rawMessage === "function"
       ? rawMessage(parentField.label)
       : rawMessage || "";
@@ -1197,9 +1705,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
               )}
             </Text>
           </Flex>
-          {dependents.map((dep) => (
-            <React.Fragment key={dep.name}>{renderField(dep)}</React.Fragment>
-          ))}
+          {renderFieldSubset(dependents)}
         </Flex>
       </Tile>
     );
@@ -1338,7 +1844,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         field.width === "half" &&
         i + 1 < fieldList.length &&
         fieldList[i + 1].width === "half" &&
-        !field.dependsOn
+        !getDependsOnName(field)
       ) {
         rows.push({ type: "pair", fields: [fieldList[i], fieldList[i + 1]] });
         i += 2;
@@ -1386,13 +1892,20 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
     const flushBatch = () => {
       if (batch.length === 0) return;
-      elements.push(
-        <AutoGrid key={`ag-${batch[0].name}`} columnWidth={columnWidth} flexible gap={gap}>
-          {batch.map((f) => (
-            <React.Fragment key={f.name}>{renderField(f)}</React.Fragment>
-          ))}
-        </AutoGrid>
-      );
+      // Chunk into rows of maxColumns when set
+      const chunks = maxColumns
+        ? Array.from({ length: Math.ceil(batch.length / maxColumns) }, (_, i) =>
+          batch.slice(i * maxColumns, i * maxColumns + maxColumns))
+        : [batch];
+      for (const chunk of chunks) {
+        elements.push(
+          <AutoGrid key={`ag-${chunk[0].name}`} columnWidth={columnWidth} flexible gap={gap}>
+            {chunk.map((f) => (
+              <React.Fragment key={f.name}>{renderField(f)}</React.Fragment>
+            ))}
+          </AutoGrid>
+        );
+      }
       batch = [];
     };
 
@@ -1518,9 +2031,9 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       // If section has info tooltip, wrap with icon
       if (sec.info) {
         elements.push(
-          <Flex key={sec.id} direction="row" align="start" gap="flush">
+          <Flex key={sec.id} direction="row" align="start" justify="start" gap="flush">
             <Box flex={1}>{accordion}</Box>
-            <Link overlay={<Tooltip>{sec.info}</Tooltip>}>
+            <Link variant="dark" overlay={<Tooltip>{sec.info}</Tooltip>}>
               <Icon name="info" size="sm" screenReaderText={sec.info} />
             </Link>
           </Flex>
@@ -1565,18 +2078,41 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
     const isLastStep = !isMultiStep || currentStep === steps.length - 1;
     const isFirstStep = !isMultiStep || currentStep === 0;
+    const buttonContext = {
+      isMultiStep,
+      isFirstStep,
+      isLastStep,
+      currentStep,
+      totalSteps: isMultiStep ? steps.length : 1,
+      disabled,
+      loading: isLoading,
+      labels: {
+        submit: submitButtonLabel,
+        cancel: cancelButtonLabel,
+        back: backButtonLabel,
+        next: nextButtonLabel,
+      },
+      onBack: handleBack,
+      onNext: handleNext,
+      onCancel,
+      onSubmit: handleSubmit,
+    };
+
+    if (renderButtonsProp) {
+      return renderButtonsProp(buttonContext);
+    }
 
     if (isMultiStep) {
       return (
         <Flex direction="row" justify="between" align="center">
           {!isFirstStep ? (
             <Button variant="secondary" onClick={handleBack} disabled={disabled}>
-              Back
+              {backButtonLabel}
             </Button>
           ) : (
             showCancel ? (
               <Button variant="secondary" onClick={onCancel} disabled={disabled}>
-                {cancelLabel}
+                {cancelButtonLabel}
               </Button>
             ) : (
               <Text>{" "}</Text>
@@ -1593,11 +2129,11 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
                 onClick={handleSubmit}
                 disabled={disabled}
               >
-                {submitLabel}
+                {submitButtonLabel}
               </LoadingButton>
             ) : (
               <Button variant="primary" onClick={handleNext} disabled={disabled}>
-                Next
+                {nextButtonLabel}
               </Button>
             )}
           </Inline>
@@ -1610,7 +2146,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       <Flex direction="row" justify={showCancel ? "between" : "start"} gap="sm">
         {showCancel && (
           <Button variant="secondary" onClick={onCancel} disabled={disabled}>
-            {cancelLabel}
+            {cancelButtonLabel}
           </Button>
         )}
         <LoadingButton
@@ -1620,7 +2156,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
           onClick={noFormWrapper ? handleSubmit : undefined}
           disabled={disabled}
         >
-          {submitLabel}
+          {submitButtonLabel}
         </LoadingButton>
       </Flex>
     );
@@ -1640,19 +2176,19 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
       {/* Read-only warning */}
       {formReadOnly && readOnlyMessage && (
-        <Alert title="Read Only" variant="warning">
+        <Alert title={readOnlyTitle} variant="warning">
           {readOnlyMessage}
         </Alert>
       )}
 
-      {/* Form-level alerts */}
-      {formError && (
-        <Alert title="Error" variant="danger">
+      {/* Form-level alerts (inline only when addAlert is not provided) */}
+      {!addAlert && formError && (
+        <Alert title={errorTitle} variant="danger">
           {typeof formError === "string" ? formError : undefined}
         </Alert>
       )}
-      {formSuccess && (
-        <Alert title="Success" variant="success">
+      {!addAlert && formSuccess && (
+        <Alert title={successTitle} variant="success">
           {formSuccess}
         </Alert>
       )}
@@ -1680,7 +2216,11 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   }
 
   return (
-    <Form onSubmit={handleSubmit} autoComplete={props.autoComplete}>
+    <Form
+      {...(formProps || {})}
+      onSubmit={handleSubmit}
+      autoComplete={autoComplete}
+    >
       {formContent}
     </Form>
   );
