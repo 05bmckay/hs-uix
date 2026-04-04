@@ -150,10 +150,6 @@ export interface FormBuilderField {
   visible?: (values: Record<string, unknown>) => boolean;
 
   // Dependent properties grouping
-  dependsOn?: string;
-  dependsOnDisplay?: "grouped" | "inline";
-  dependsOnLabel?: string;
-  dependsOnMessage?: string | ((parentLabel: string) => string);
   dependsOnConfig?: FormBuilderDependsOnConfig;
 
   // Layout
@@ -236,10 +232,6 @@ export interface FormBuilderField {
   // Repeater field
   fields?: FormBuilderField[];
   repeaterProps?: FormBuilderRepeaterProps;
-  addLabel?: string;
-  removeLabel?: string;
-  renderAdd?: (props: { onClick: () => void; count: number }) => ReactNode;
-  renderRemove?: (props: { index: number; onClick: () => void }) => ReactNode;
 
   // Custom render escape hatch (for display fields, only allValues is provided)
   render?: (props: {
@@ -360,16 +352,12 @@ export interface FormBuilderProps {
   validateStepOnNext?: boolean;
 
   // Buttons / actions
-  submitLabel?: string;
   submitVariant?: "primary" | "secondary";
   showCancel?: boolean;
-  cancelLabel?: string;
   onCancel?: () => void;
   submitPosition?: "bottom" | "none";
   loading?: boolean;
   disabled?: boolean;
-  backLabel?: string;
-  nextLabel?: string;
   labels?: FormBuilderLabels;
   renderButtons?: (context: FormBuilderButtonsRenderContext) => ReactNode;
 
@@ -391,10 +379,6 @@ export interface FormBuilderProps {
   success?: string;
   readOnly?: boolean;
   readOnlyMessage?: string;
-  readOnlyTitle?: string;
-  errorTitle?: string;
-  successTitle?: string;
-  addAlert?: (alert: { type: string; title?: string; message?: string }) => void;
   alerts?: FormBuilderAlertConfig;
 
   // Auto-save

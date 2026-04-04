@@ -151,16 +151,16 @@ const resolveOptions = (field, allValues) => {
 };
 
 const getDependsOnName = (field) =>
-  (field.dependsOnConfig && field.dependsOnConfig.field) || field.dependsOn;
+  field.dependsOnConfig && field.dependsOnConfig.field;
 
 const getDependsOnDisplay = (field) =>
-  (field.dependsOnConfig && field.dependsOnConfig.display) || field.dependsOnDisplay;
+  (field.dependsOnConfig && field.dependsOnConfig.display) || "grouped";
 
 const getDependsOnLabel = (field) =>
-  (field.dependsOnConfig && field.dependsOnConfig.label) || field.dependsOnLabel;
+  field.dependsOnConfig && field.dependsOnConfig.label;
 
 const getDependsOnMessage = (field) =>
-  (field.dependsOnConfig && field.dependsOnConfig.message) || field.dependsOnMessage;
+  field.dependsOnConfig && field.dependsOnConfig.message;
 
 const getRepeaterErrorKey = (fieldName, rowIdx, subFieldName) =>
   `${fieldName}[${rowIdx}].${subFieldName}`;
@@ -298,17 +298,13 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
   // Buttons / actions
   const {
-    submitLabel,                   // submit button text
+    labels,                        // { submit, cancel, back, next } — i18n label object
     submitVariant = "primary",     // submit button variant
     showCancel = false,            // show cancel button
-    cancelLabel,                   // cancel button text
     onCancel,                      // () => void
     submitPosition = "bottom",     // "bottom" | "none"
     loading: controlledLoading,    // controlled loading state
     disabled = false,              // disable entire form
-    backLabel,                     // multi-step back button text
-    nextLabel,                     // multi-step next button text
-    labels,                        // { submit, cancel, back, next } — i18n label object
     renderButtons: renderButtonsProp, // custom action row renderer
   } = props;
 
@@ -333,10 +329,6 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     success: formSuccess, // string — form-level success alert
     readOnly: formReadOnly = false, // boolean — lock all fields
     readOnlyMessage,    // string — warning alert when readOnly
-    readOnlyTitle: readOnlyTitleProp, // string — read-only alert title (default "Read Only")
-    errorTitle: errorTitleProp,       // string — error alert title (default "Error")
-    successTitle: successTitleProp,   // string — success alert title (default "Success")
-    addAlert: addAlertProp,           // actions.addAlert — use popup banners instead of inline alerts
     alerts,           // { addAlert, readOnlyTitle, errorTitle, successTitle }
     errors: controlledErrors, // controlled validation errors
   } = props;
@@ -347,15 +339,15 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     autoSave,       // { debounce: number, onAutoSave: (values) => void }
   } = props;
 
-  const submitButtonLabel = submitLabel ?? labels?.submit ?? "Submit";
-  const cancelButtonLabel = cancelLabel ?? labels?.cancel ?? "Cancel";
-  const backButtonLabel = backLabel ?? labels?.back ?? "Back";
-  const nextButtonLabel = nextLabel ?? labels?.next ?? "Next";
+  const submitButtonLabel = labels?.submit || "Submit";
+  const cancelButtonLabel = labels?.cancel || "Cancel";
+  const backButtonLabel = labels?.back || "Back";
+  const nextButtonLabel = labels?.next || "Next";
 
-  const addAlert = addAlertProp || alerts?.addAlert;
-  const readOnlyTitle = readOnlyTitleProp || alerts?.readOnlyTitle || "Read Only";
-  const errorTitle = errorTitleProp || alerts?.errorTitle || "Error";
-  const successTitle = successTitleProp || alerts?.successTitle || "Success";
+  const addAlert = alerts?.addAlert;
+  const readOnlyTitle = alerts?.readOnlyTitle || "Read Only";
+  const errorTitle = alerts?.errorTitle || "Error";
+  const successTitle = alerts?.successTitle || "Success";
 
   // -- Popup alerts via addAlert --------------------------------------------
 
@@ -1458,12 +1450,12 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         const minRows = typeof field.min === "number" ? field.min : 0;
         const maxRows = typeof field.max === "number" ? field.max : Infinity;
         const repeaterProps = field.repeaterProps || {};
-        const renderAddControl = repeaterProps.renderAdd || field.renderAdd;
-        const renderRemoveControl = repeaterProps.renderRemove || field.renderRemove;
+        const renderAddControl = repeaterProps.renderAdd;
+        const renderRemoveControl = repeaterProps.renderRemove;
         const renderMoveUpControl = repeaterProps.renderMoveUp;
         const renderMoveDownControl = repeaterProps.renderMoveDown;
-        const addLabel = repeaterProps.addLabel || field.addLabel || "Add";
-        const removeLabel = repeaterProps.removeLabel || field.removeLabel || "Remove";
+        const addLabel = repeaterProps.addLabel || "Add";
+        const removeLabel = repeaterProps.removeLabel || "Remove";
         const moveUpLabel = repeaterProps.moveUpLabel || "Up";
         const moveDownLabel = repeaterProps.moveDownLabel || "Down";
         const canEditRows = !isReadOnly && !isDisabled;

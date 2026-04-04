@@ -229,7 +229,7 @@ const fields = [
 
 ## Dependent Properties
 
-Fields with `dependsOn` are grouped in a HubSpot Tile container below their parent:
+Dependent fields are grouped in a HubSpot Tile container below their parent:
 
 ```jsx
 const fields = [
@@ -238,28 +238,15 @@ const fields = [
     name: "contractLength",
     type: "number",
     label: "Contract length (months)",
-    dependsOn: "dealType",
-    dependsOnLabel: "Contract details",
-    dependsOnMessage: (parentLabel) => `These properties depend on ${parentLabel}`,
+    dependsOnConfig: {
+      field: "dealType",
+      display: "grouped",
+      label: "Contract details",
+      message: (parentLabel) => `These properties depend on ${parentLabel}`,
+    },
     visible: (values) => values.dealType === "recurring",
   },
 ];
-```
-
-You can also use `dependsOnConfig` as a single object:
-
-```jsx
-{
-  name: "contractLength",
-  type: "number",
-  label: "Contract length (months)",
-  dependsOnConfig: {
-    field: "dealType",
-    display: "grouped",
-    label: "Contract details",
-    message: (parentLabel) => `These properties depend on ${parentLabel}`,
-  },
-}
 ```
 
 ## Cascading Options
@@ -400,10 +387,14 @@ formRef.current.setFieldError("email", "Taken");        // programmatic error
 <FormBuilder
   fields={fields}
   onSubmit={save}
-  submitLabel="Save record"
+  labels={{
+    submit: "Save record",
+    cancel: "Discard",
+    back: "Previous",
+    next: "Continue",
+  }}
   submitVariant="primary"
   showCancel={true}
-  cancelLabel="Discard"
   onCancel={() => actions.closeOverlay()}
   loading={isSaving}        // controlled loading state
   disabled={!canEdit}       // disables entire form
@@ -765,10 +756,8 @@ try {
 | `onStepChange` | `(step) => void` | - | Step change callback |
 | `showStepIndicator` | `boolean` | `true` | Show StepIndicator |
 | `validateStepOnNext` | `boolean` | `true` | Validate before Next |
-| `submitLabel` | `string` | `"Submit"` | Submit button text |
 | `submitVariant` | `"primary" \| "secondary"` | `"primary"` | Button variant |
 | `showCancel` | `boolean` | `false` | Show cancel button |
-| `cancelLabel` | `string` | `"Cancel"` | Cancel text |
 | `onCancel` | `() => void` | - | Cancel callback |
 | `submitPosition` | `"bottom" \| "none"` | `"bottom"` | Button placement |
 | `loading` | `boolean` | - | Controlled loading state |
@@ -787,10 +776,6 @@ try {
 | `fieldTypes` | `Record<string, FieldTypePlugin>` | - | Custom field type registry |
 | `readOnly` | `boolean` | `false` | Lock all fields |
 | `readOnlyMessage` | `string` | - | Warning alert in read-only mode |
-| `readOnlyTitle` | `string` | - | Read-only alert title |
-| `errorTitle` | `string` | - | Error alert title |
-| `successTitle` | `string` | - | Success alert title |
-| `addAlert` | `(alert) => void` | - | Popup alert callback |
 | `alerts` | `{ addAlert?, readOnlyTitle?, errorTitle?, successTitle? }` | - | Grouped alert config |
 | `error` | `string \| boolean` | - | Form-level error alert |
 | `success` | `string` | - | Form-level success alert |
@@ -820,7 +805,6 @@ try {
 | `colSpan` | `number` | All | Columns to span (with `columns` prop) |
 | `width` | `"full" \| "half"` | All | Legacy layout (when no `columns` set) |
 | `visible` | `(values) => boolean` | All | Conditional visibility |
-| `dependsOn` | `string` | All | Parent field name for grouping |
 | `dependsOnConfig` | `{ field, display?, label?, message? }` | All | Grouped dependent config alias |
 | `validate` | `(value, allValues, context?) => true \| string \| Promise` | All | Custom validation (sync or async) |
 | `validateDebounce` | `number` | All | Debounce async validation (ms) |
