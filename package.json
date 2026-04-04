@@ -1,12 +1,69 @@
 {
   "name": "hs-uix",
-  "private": true,
-  "description": "Monorepo for @hs-uix HubSpot UI Extension components",
+  "version": "1.0.0",
+  "description": "Production-ready UI components for HubSpot UI Extensions — DataTable, FormBuilder, and more",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./datatable": {
+      "types": "./datatable.d.ts",
+      "import": "./dist/datatable.mjs",
+      "require": "./dist/datatable.js"
+    },
+    "./form": {
+      "types": "./form.d.ts",
+      "import": "./dist/form.mjs",
+      "require": "./dist/form.js"
+    }
+  },
+  "files": [
+    "dist",
+    "index.d.ts",
+    "datatable.d.ts",
+    "form.d.ts",
+    "README.md"
+  ],
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces",
-    "dev": "npm run dev --workspaces --if-present"
-  }
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepublishOnly": "tsup",
+    "release:patch": "npm version patch && npm publish && git push origin main --tags",
+    "release:minor": "npm version minor && npm publish && git push origin main --tags",
+    "release:major": "npm version major && npm publish && git push origin main --tags"
+  },
+  "peerDependencies": {
+    "@hubspot/ui-extensions": ">=0.12.0",
+    "react": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@hubspot/ui-extensions": "latest",
+    "react": "^18.0.0",
+    "tsup": "^8.0.0"
+  },
+  "dependencies": {
+    "fuse.js": "^7.1.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/05bmckay/hs-uix.git"
+  },
+  "homepage": "https://github.com/05bmckay/hs-uix#readme",
+  "keywords": [
+    "hubspot",
+    "ui-extensions",
+    "datatable",
+    "formbuilder",
+    "crm",
+    "hs-uix"
+  ]
 }

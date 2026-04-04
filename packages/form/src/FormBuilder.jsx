@@ -157,10 +157,11 @@ const resolveOptions = (field, allValues) => {
 /**
  * Maps CRM property values to form initial values.
  * `properties` is the flat { propertyName: value } object from useCrmProperties.
- * `mapping` is { formFieldName: "crmPropertyName" }.
  *
- * Usage:
- *   const { properties } = useCrmProperties(["firstname", "lastname"]);
+ * Without mapping (direct pass-through — field names match CRM property names):
+ *   const initialValues = useFormPrefill(properties);
+ *
+ * With mapping (field names differ from CRM property names):
  *   const initialValues = useFormPrefill(properties, {
  *     firstName: "firstname",
  *     lastName: "lastname",
@@ -168,7 +169,18 @@ const resolveOptions = (field, allValues) => {
  */
 export const useFormPrefill = (properties, mapping) => {
   return useMemo(() => {
-    if (!properties || !mapping) return {};
+    if (!properties) return {};
+
+    // No mapping — direct pass-through (field names === CRM property names)
+    if (!mapping) {
+      const result = {};
+      for (const [key, value] of Object.entries(properties)) {
+        if (value !== undefined) result[key] = value;
+      }
+      return result;
+    }
+
+    // Explicit mapping — { formFieldName: "crmPropertyName" }
     const result = {};
     for (const [formField, crmProp] of Object.entries(mapping)) {
       if (properties[crmProp] !== undefined) {

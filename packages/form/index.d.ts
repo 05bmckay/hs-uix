@@ -346,9 +346,10 @@ export declare function FormBuilder(props: FormBuilderProps): ReactElement | nul
 /**
  * Maps CRM property values (from useCrmProperties) to form initial values.
  * `properties` is the flat { propertyName: value } object.
- * `mapping` is { formFieldName: "crmPropertyName" }.
+ * Without `mapping`: direct pass-through (field names === CRM property names).
+ * With `mapping`: maps { formFieldName: "crmPropertyName" }.
  */
 export declare function useFormPrefill(
   properties: Record<string, unknown> | undefined,
-  mapping: Record<string, string>
+  mapping?: Record<string, string>
 ): Record<string, unknown>;
