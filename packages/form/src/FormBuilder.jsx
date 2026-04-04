@@ -85,6 +85,7 @@ const isValueEmpty = (value, field) => {
 };
 
 const isPromise = (value) => value && typeof value.then === "function";
+const isAsyncFunction = (fn) => fn && fn.constructor && fn.constructor.name === "AsyncFunction";
 
 const normalizeValidatorResult = (result) => {
   if (result === true || result === undefined || result === null || result === false) return null;
@@ -180,17 +181,26 @@ const runDefaultFieldValidator = (value, field, allValues) => {
 const runCustomSyncValidators = (value, field, allValues) => {
   const validators = Array.isArray(field.validators) ? field.validators : [];
   for (const validator of validators) {
-    const result = validator(value, allValues);
-    if (isPromise(result)) continue;
-    const err = normalizeValidatorResult(result);
-    if (err) return err;
-  }
-
-  if (field.validate) {
-    const result = field.validate(value, allValues);
-    if (!isPromise(result)) {
+    if (isAsyncFunction(validator)) continue;
+    try {
+      const result = validator(value, allValues);
+      if (isPromise(result)) continue;
       const err = normalizeValidatorResult(result);
       if (err) return err;
+    } catch (err) {
+      return err?.message || "Validation failed";
+    }
+  }
+
+  if (field.validate && !isAsyncFunction(field.validate)) {
+    try {
+      const result = field.validate(value, allValues);
+      if (!isPromise(result)) {
+        const err = normalizeValidatorResult(result);
+        if (err) return err;
+      }
+    } catch (err) {
+      return err?.message || "Validation failed";
     }
   }
 
@@ -221,7 +231,8 @@ const collectAsyncValidatorPromises = (value, field, allValues, context) => {
   return promises;
 };
 
-const runValidators = (value, field, allValues, fieldTypes) => {
+const runValidators = (value, field, allValues, fieldTypes, options = {}) => {
+  const includeCustomValidators = options.includeCustomValidators !== false;
   // Display and CRM data fields have no validation
   if (field.type === "display" || field.type === "crmPropertyList" || field.type === "crmAssociationPropertyList") return null;
 
@@ -291,8 +302,10 @@ const runValidators = (value, field, allValues, fieldTypes) => {
   }
 
   // 6. Custom validate (sync only — async handled separately)
-  const customError = runCustomSyncValidators(value, field, allValues);
-  if (customError) return customError;
+  if (includeCustomValidators) {
+    const customError = runCustomSyncValidators(value, field, allValues);
+    if (customError) return customError;
+  }
 
   return null;
 };
@@ -354,6 +367,15 @@ const deepEqual = (a, b) => {
   }
 
   return false;
+};
+
+const fieldSetHasErrors = (errors, fields) => {
+  if (!errors || !fields || fields.length === 0) return false;
+  const names = new Set(fields.map((field) => field.name));
+  return Object.keys(errors).some((errorKey) => {
+    const base = errorKey.split("[")[0];
+    return names.has(base);
+  });
 };
 
 const deepClone = (value) => {
@@ -873,10 +895,10 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   const runAsyncValidation = useCallback(
     (name, value) => {
       const field = fieldByName.get(name);
-      if (!field || field.type === "repeater") return;
+      if (!field || field.type === "repeater") return null;
 
       const val = value != null ? value : formValues[name];
-      const syncError = runValidators(val, field, formValues, fieldTypes);
+      const syncError = runValidators(val, field, formValues, fieldTypes, { includeCustomValidators: false });
 
       const prevController = asyncAbortRef.current.get(name);
       if (prevController) prevController.abort();
@@ -889,7 +911,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         return next;
       });
 
-      if (syncError) return;
+      if (syncError) return null;
 
       const version = (asyncValidationVersionRef.current.get(name) || 0) + 1;
       asyncValidationVersionRef.current.set(name, version);
@@ -906,12 +928,12 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         );
       } catch (err) {
         updateErrors({ [name]: err?.message || "Validation failed" });
-        return;
+        return null;
       }
 
       if (asyncPromises.length === 0) {
         asyncAbortRef.current.delete(name);
-        return;
+        return null;
       }
 
       const validationPromise = Promise.all(asyncPromises).then(
@@ -950,6 +972,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
       asyncValidationRef.current.set(name, validationPromise);
       setValidatingFields((prev) => ({ ...prev, [name]: true }));
+      return validationPromise;
     },
     [fieldByName, formValues, fieldTypes, updateErrors]
   );
@@ -1127,11 +1150,20 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
           return;
         }
 
-        // Wait for any pending async validations
-        if (asyncValidationRef.current.size > 0) {
-          await Promise.all(asyncValidationRef.current.values());
-          const hasAsyncErrors = Object.keys(formErrorsRef.current).length > 0;
-          if (hasAsyncErrors) return;
+        // Run async validators for visible fields, then wait for all pending validations.
+        const asyncSubmitValidations = allVisibleFields
+          .map((field) => runAsyncValidation(field.name, formValues[field.name]))
+          .filter(Boolean);
+
+        if (asyncSubmitValidations.length > 0 || asyncValidationRef.current.size > 0) {
+          const pendingValidations = [
+            ...new Set([
+              ...asyncSubmitValidations,
+              ...Array.from(asyncValidationRef.current.values()),
+            ]),
+          ];
+          await Promise.all(pendingValidations);
+          if (fieldSetHasErrors(formErrorsRef.current, allVisibleFields)) return;
         }
       }
 
@@ -1177,11 +1209,11 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         if (controlledLoading == null) setInternalLoading(false);
       }
     },
-    [validateOnSubmit, allVisibleFields, validateVisibleFields, replaceErrors, onSubmit, values, controlledLoading, transformValues, onBeforeSubmit, onSubmitSuccess, onSubmitError, resetOnSuccess, formValues, fieldByName]
+    [validateOnSubmit, allVisibleFields, validateVisibleFields, replaceErrors, onSubmit, values, controlledLoading, transformValues, onBeforeSubmit, onSubmitSuccess, onSubmitError, resetOnSuccess, formValues, fieldByName, runAsyncValidation]
   );
 
   // Multi-step navigation
-  const handleNext = useCallback(() => {
+  const handleNext = useCallback(async () => {
     if (!isMultiStep) return;
 
     if (validateStepOnNext && steps[currentStep] && steps[currentStep].fields) {
@@ -1191,6 +1223,21 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       if (hasErrors) {
         replaceErrors({ ...formErrorsRef.current, ...errors });
         return;
+      }
+
+      const asyncStepValidations = stepFields
+        .map((field) => runAsyncValidation(field.name, formValues[field.name]))
+        .filter(Boolean);
+
+      if (asyncStepValidations.length > 0 || asyncValidationRef.current.size > 0) {
+        const pendingValidations = [
+          ...new Set([
+            ...asyncStepValidations,
+            ...Array.from(asyncValidationRef.current.values()),
+          ]),
+        ];
+        await Promise.all(pendingValidations);
+        if (fieldSetHasErrors(formErrorsRef.current, stepFields)) return;
       }
     }
 
@@ -1209,7 +1256,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     } else {
       setInternalStep(nextStep);
     }
-  }, [isMultiStep, validateStepOnNext, steps, currentStep, formValues, validateVisibleFields, controlledStep, onStepChange, replaceErrors, allVisibleFields]);
+  }, [isMultiStep, validateStepOnNext, steps, currentStep, formValues, validateVisibleFields, controlledStep, onStepChange, replaceErrors, allVisibleFields, runAsyncValidation]);
 
   const handleBack = useCallback(() => {
     if (!isMultiStep) return;

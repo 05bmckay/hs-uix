@@ -161,6 +161,7 @@ Built-in validators run in order, first failure wins:
 ```
 
 Set `useDefaultValidators={false}` to run only your custom validators for a field.
+For async validators, prefer `async` functions so they run only in the async validation phase.
 
 ### Validation Timing
 
@@ -558,7 +559,7 @@ Sets all fields to `readOnly`, hides submit/cancel buttons, and shows a warning 
 
 ![Async Validation & Side Effects](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/form/assets/async-validation-side-effects.png)
 
-`validate` can return a Promise. The field shows a loading indicator while validation runs:
+`validate` and entries in `validators` can return a Promise. The field shows a loading indicator while validation runs:
 
 ```jsx
 {
@@ -574,6 +575,7 @@ Sets all fields to `readOnly`, hides submit/cancel buttons, and shows a warning 
 ```
 
 Async validators run after sync validators pass. Pending requests are versioned and prior requests are aborted when supported (`signal`).
+Validation gates (`submit`, `next step`) also trigger async validators for untouched visible fields before proceeding.
 
 ## Conditional Required
 
@@ -836,6 +838,8 @@ try {
 | `visible` | `(values) => boolean` | All | Conditional visibility |
 | `dependsOnConfig` | `{ field, display?, label?, message? }` | All | Grouped dependent config alias |
 | `validate` | `(value, allValues, context?) => true \| string \| Promise` | All | Custom validation (sync or async) |
+| `validators` | `Array<(value, allValues, context?) => true \| string \| Promise>` | All | Additional custom validators (run before `validate`) |
+| `useDefaultValidators` | `boolean` | All | Enable/disable built-in type/shape validation (default `true`) |
 | `validateDebounce` | `number` | All | Debounce async validation (ms) |
 | `debounce` | `number` | All | Debounce onChange callback (ms) |
 | `loading` | `boolean` | All | Field-level loading indicator |
