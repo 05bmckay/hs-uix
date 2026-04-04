@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/hs-uix)](https://www.npmjs.com/package/hs-uix)
 [![license](https://img.shields.io/npm/l/hs-uix)](./LICENSE)
 
-Production-ready UI components for [HubSpot UI Extensions](https://developers.hubspot.com/docs/platform/ui-extensions-overview). Built entirely on HubSpot's native primitives — no custom HTML, no CSS, no iframes.
+Production-ready UI components for [HubSpot UI Extensions](https://developers.hubspot.com/docs/apps/developer-platform/add-features/ui-extensions/overview). Built entirely on HubSpot's native primitives — no custom HTML, no CSS, no iframes.
 
 ## Components
 
