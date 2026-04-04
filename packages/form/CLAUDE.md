@@ -1,10 +1,10 @@
-# @hs-ui/form — FormBuilder
+# @hs-uix/form — FormBuilder
 
 ## Project Structure
 
 ```
-hs-ui-form/
-├── package.json        ← npm package config (@hs-ui/form)
+hs-uix-form/
+├── package.json        ← npm package config (@hs-uix/form)
 ├── tsup.config.js      ← build: JSX → ESM + CJS
 ├── src/
 │   ├── index.js        ← barrel export

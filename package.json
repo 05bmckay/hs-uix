@@ -1,7 +1,7 @@
 {
-  "name": "hs-ui",
+  "name": "hs-uix",
   "private": true,
-  "description": "Monorepo for @hs-ui HubSpot UI Extension components",
+  "description": "Monorepo for @hs-uix HubSpot UI Extension components",
   "workspaces": [
     "packages/*"
   ],

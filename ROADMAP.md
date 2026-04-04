@@ -185,7 +185,7 @@ Likely approach:
 ### Monorepo
 
 ```
-hs-ui/
+hs-uix/
 ├── package.json              ← npm workspaces root
 ├── packages/
 │   ├── datatable/            ← @hs-uix/datatable
@@ -196,7 +196,7 @@ hs-ui/
 ### Demo App (separate repo)
 
 ```
-hs-ui-demos/
+hs-uix-demos/
 ├── src/app/cards/
 │   ├── DemoApp.jsx           ← Tabs: DataTable | FormBuilder | Kanban | Feed
 │   └── package.json
@@ -214,13 +214,13 @@ cd packages/form && npm publish --access public --otp=CODE
 
 ```bash
 # Terminal 1 — watch all packages
-cd ~/Desktop/hs-ui && npm run dev
+cd ~/Desktop/hs-uix && npm run dev
 
 # Terminal 2 — run demo
-cd ~/Desktop/hs-ui-demos && hs project dev
+cd ~/Desktop/hs-uix-demos && hs project dev
 
 # Link setup (one-time after npm install)
-cd ~/Desktop/hs-ui/packages/datatable && npm link
-cd ~/Desktop/hs-ui/packages/form && npm link
-cd ~/Desktop/hs-ui-demos/src/app/cards && npm link @hs-uix/datatable @hs-uix/form
+cd ~/Desktop/hs-uix/packages/datatable && npm link
+cd ~/Desktop/hs-uix/packages/form && npm link
+cd ~/Desktop/hs-uix-demos/src/app/cards && npm link @hs-uix/datatable @hs-uix/form
 ```
