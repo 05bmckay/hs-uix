@@ -1118,24 +1118,30 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
   const handleFieldInput = useCallback(
     (name, value) => {
+      handleFieldChange(name, value);
       if (!validateOnChange) return;
       const err = validateField(name, value);
       updateErrors({ [name]: err });
     },
-    [validateOnChange, validateField, updateErrors]
+    [validateOnChange, validateField, updateErrors, handleFieldChange]
   );
 
   const handleFieldBlur = useCallback(
     (name, value) => {
-      if (!validateOnBlur) return;
       const resolvedValue = value != null ? value : formValuesRef.current[name];
+      // Sync value to form state if browser autofill populated the field without
+      // triggering onChange/onInput (e.g. browser autocomplete on non-first fields).
+      if (value != null && value !== formValuesRef.current[name]) {
+        handleFieldChange(name, value);
+      }
+      if (!validateOnBlur) return;
       const err = validateField(name, resolvedValue);
       updateErrors({ [name]: err });
       if (!err) {
         triggerAsyncValidation(name, resolvedValue);
       }
     },
-    [validateOnBlur, validateField, updateErrors, triggerAsyncValidation]
+    [validateOnBlur, validateField, updateErrors, triggerAsyncValidation, handleFieldChange]
   );
 
   const handleSubmit = useCallback(
