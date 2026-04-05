@@ -21,6 +21,13 @@ import { DataTable, FormBuilder } from "hs-uix";
 
 Requires `react` >= 18.0.0 and `@hubspot/ui-extensions` >= 0.12.0 as peer dependencies (already present in any HubSpot UI Extensions project).
 
+## Components
+
+| Component | Description | Docs |
+|-----------|-------------|------|
+| **DataTable** | Filterable, sortable, paginated table with auto-sized columns, inline editing, row grouping, and more | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/packages/datatable/README.md) |
+| **FormBuilder** | Declarative, config-driven form with validation, multi-step wizards, and 20+ field types | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/packages/form/README.md) |
+
 ---
 
 # DataTable
@@ -89,8 +96,6 @@ Two edit modes: **discrete** (click-to-edit, default) and **inline** (always-vis
 ![useAssociations + DataTable](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/datatable/assets/useAssociations.png)
 
 Connect live CRM data (contacts, deals, tickets, etc.) to a DataTable with `useAssociations` from `@hubspot/ui-extensions/crm`.
-
-> **Full documentation:** [DataTable README](https://github.com/05bmckay/hs-uix/blob/main/packages/datatable/README.md) — includes full API reference, all examples, server-side mode, and more.
 
 ---
 
@@ -166,8 +171,6 @@ const fields = [
 ### Read-Only Mode
 
 ![Read-Only Mode](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/form/assets/readonly-autosave-dirty.png)
-
-> **Full documentation:** [FormBuilder README](https://github.com/05bmckay/hs-uix/blob/main/packages/form/README.md) — includes full API reference, all field types, validation details, props tables, and more.
 
 ---
 
