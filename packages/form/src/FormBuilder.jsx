@@ -1128,14 +1128,14 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   const handleFieldBlur = useCallback(
     (name, value) => {
       if (!validateOnBlur) return;
-      const resolvedValue = value != null ? value : formValues[name];
+      const resolvedValue = value != null ? value : formValuesRef.current[name];
       const err = validateField(name, resolvedValue);
       updateErrors({ [name]: err });
       if (!err) {
         triggerAsyncValidation(name, resolvedValue);
       }
     },
-    [validateOnBlur, validateField, updateErrors, formValues, triggerAsyncValidation]
+    [validateOnBlur, validateField, updateErrors, triggerAsyncValidation]
   );
 
   const handleSubmit = useCallback(
