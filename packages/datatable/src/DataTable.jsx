@@ -475,11 +475,13 @@ export const DataTable = ({
   searchPlaceholder = "Search...",
   fuzzySearch = false,            // enable fuzzy matching via Fuse.js
   fuzzyOptions,                   // custom Fuse.js options (threshold, distance, etc.)
+  showSearch = true,              // show the SearchInput in the toolbar
 
   // Filters
   filters = [],
   showFilterBadges = true,       // show active filter chips/badges
   showClearFiltersButton = true, // show "Clear all" filters reset button
+  filterInlineLimit = 2,         // number of filters shown inline before overflow
 
   // Pagination
   pageSize = 10,
@@ -540,6 +542,7 @@ export const DataTable = ({
   selectionActions = [], // [{ label, onClick(selectedIds[]), icon?, variant? }]
   selectionResetKey,     // optional key to force clear uncontrolled selection memory
   resetSelectionOnQueryChange = true, // clear uncontrolled selection on search/filter/sort changes
+  showSelectionBar = true, // show the selection action bar when rows are selected
   recordLabel,           // { singular: "Contact", plural: "Contacts" } — defaults to Record/Records
 
   // -----------------------------------------------------------------------
@@ -555,11 +558,26 @@ export const DataTable = ({
   editingRowId,          // controlled — row ID currently in full-row edit mode
   onRowEdit,             // (row, field, newValue) => void
   onRowEditInput,        // optional live-input callback: (row, field, inputValue) => void
+  onEditStart,           // (row, field, currentValue) => void — fires when editing begins
+  onEditCancel,          // (row, field) => void — fires when editing is cancelled without commit
 
   // -----------------------------------------------------------------------
   // Auto-width
   // -----------------------------------------------------------------------
   autoWidth = true,      // auto-compute column widths from content analysis
+
+  // -----------------------------------------------------------------------
+  // Labels / i18n
+  // -----------------------------------------------------------------------
+  labels,                // override hardcoded UI strings for i18n
+
+  // -----------------------------------------------------------------------
+  // Render overrides (Phase 3 — full replacement escape hatches)
+  // -----------------------------------------------------------------------
+  renderSelectionBar,    // ({ selectedIds, selectedCount, displayCount, countLabel, onSelectAll, onDeselectAll, selectionActions }) => ReactNode
+  renderEmptyState,      // ({ title, message }) => ReactNode
+  renderLoadingState,    // ({ label }) => ReactNode
+  renderErrorState,      // ({ error, title, message }) => ReactNode
 }) => {
   // Build initial sort state
   const initialSortState = useMemo(() => {
@@ -923,7 +941,21 @@ export const DataTable = ({
   const countLabel = (n) => n === 1 ? singularLabel : pluralLabel;
   const resolvedEmptyTitle = emptyTitle || "No results found";
   const resolvedEmptyMessage = emptyMessage || `No ${pluralLabel} match your search or filter criteria.`;
-  const resolvedLoadingLabel = `Loading ${pluralLabel}...`;
+  // ---------------------------------------------------------------------------
+  // Resolved labels (from labels prop, with defaults)
+  // ---------------------------------------------------------------------------
+  const resolvedSelectedLabel = labels?.selected || ((count, label) => `${count}\u00a0${label}\u00a0selected`);
+  const resolvedSelectAllLabel = labels?.selectAll || ((count, label) => `Select all ${count} ${label}`);
+  const resolvedDeselectAllLabel = labels?.deselectAll || "Deselect all";
+  const resolvedFiltersButtonLabel = labels?.filtersButton || "Filters";
+  const resolvedClearAllLabel = labels?.clearAll || "Clear all";
+  const resolvedDateFromLabel = labels?.dateFrom || "From";
+  const resolvedDateToLabel = labels?.dateTo || "To";
+  const resolvedLoadingLabel = labels?.loading || `Loading ${pluralLabel}...`;
+  const resolvedErrorTitle = labels?.errorTitle || "Something went wrong.";
+  const resolvedErrorMessage = labels?.errorMessage || "An error occurred while loading data.";
+  const resolvedRetryMessage = labels?.retryMessage || "Please try again.";
+
   const recordCountLabel = rowCountText
     ? rowCountText(shownOnPageCount, displayCount)
     : displayCount === totalDataCount
@@ -1058,7 +1090,11 @@ export const DataTable = ({
     setEditingCell({ rowId, field });
     setEditValue(currentValue);
     setEditError(null);
-  }, []);
+    if (onEditStart) {
+      const row = data.find((r) => r[rowIdField] === rowId);
+      if (row) onEditStart(row, field, currentValue);
+    }
+  }, [onEditStart, data, rowIdField]);
 
   const commitEdit = useCallback((row, field, value) => {
     const col = columns.find((c) => c.field === field);
@@ -1082,6 +1118,7 @@ export const DataTable = ({
     const commit = (val) => commitEdit(row, col.field, val);
     const exitEdit = () => {
       if (editError) return;
+      if (onEditCancel) onEditCancel(row, col.field);
       setEditingCell(null);
       setEditValue(null);
     };
@@ -1354,7 +1391,7 @@ export const DataTable = ({
           <DateInput
             name={`filter-${filter.name}-from`}
             label=""
-            placeholder="From"
+            placeholder={resolvedDateFromLabel}
             format="medium"
             value={rangeVal.from}
             onChange={(val) =>
@@ -1366,7 +1403,7 @@ export const DataTable = ({
             size="sm"
             name={`filter-${filter.name}-to`}
             label=""
-            placeholder="To"
+            placeholder={resolvedDateToLabel}
             format="medium"
             value={rangeVal.to}
             onChange={(val) =>
@@ -1406,7 +1443,7 @@ export const DataTable = ({
           <Flex direction="column" gap="sm">
             {/* Row 1: Search + first 2 filters + Filters toggle */}
             <Flex direction="row" align="center" gap="sm" wrap="wrap">
-              {searchFields.length > 0 && (
+              {showSearch && searchFields.length > 0 && (
                 <SearchInput
                   name="datatable-search"
                   placeholder={searchPlaceholder}
@@ -1414,22 +1451,22 @@ export const DataTable = ({
                   onChange={handleSearchChange}
                 />
               )}
-              {filters.slice(0, 2).map(renderFilterControl)}
-              {filters.length > 2 && (
+              {filters.slice(0, filterInlineLimit).map(renderFilterControl)}
+              {filters.length > filterInlineLimit && (
                 <Button
                   variant="transparent"
                   size="small"
                   onClick={() => setShowMoreFilters((prev) => !prev)}
                 >
-                  <Icon name="filter" size="sm" /> Filters
+                  <Icon name="filter" size="sm" /> {resolvedFiltersButtonLabel}
                 </Button>
               )}
             </Flex>
 
             {/* Row 2: Additional filters (toggled) */}
-            {showMoreFilters && filters.length > 2 && (
+            {showMoreFilters && filters.length > filterInlineLimit && (
               <Flex direction="row" align="end" gap="sm" wrap="wrap">
-                {filters.slice(2).map(renderFilterControl)}
+                {filters.slice(filterInlineLimit).map(renderFilterControl)}
               </Flex>
             )}
 
@@ -1447,7 +1484,7 @@ export const DataTable = ({
                     size="extra-small"
                     onClick={() => handleFilterRemove("all")}
                   >
-                    Clear all
+                    {resolvedClearAllLabel}
                   </Button>
                 )}
               </Flex>
@@ -1456,7 +1493,7 @@ export const DataTable = ({
         </Box>
 
         {/* Right: Record count (up to 25%) */}
-        {showRowCount && displayCount > 0 && !(selectable && selectedIds.size > 0) && (
+        {showRowCount && displayCount > 0 && !(showSelectionBar && selectable && selectedIds.size > 0) && (
           <Box flex={1} alignSelf="end">
             <Flex direction="row" justify="end">
               <Text variant="microcopy" format={rowCountBold ? { fontWeight: "bold" } : undefined}>{recordCountLabel}</Text>
@@ -1466,17 +1503,25 @@ export const DataTable = ({
       </Flex>
 
       {/* Selection action bar */}
-      {selectable && selectedIds.size > 0 && (
-
+      {showSelectionBar && selectable && selectedIds.size > 0 && (
+        renderSelectionBar ? renderSelectionBar({
+          selectedIds,
+          selectedCount: selectedIds.size,
+          displayCount,
+          countLabel,
+          onSelectAll: handleSelectAllRows,
+          onDeselectAll: handleDeselectAll,
+          selectionActions,
+        }) : (
         <Flex direction="row" gap="sm">
           <Box flex={3}>
             <Flex direction="row" align="center" gap="sm" wrap="nowrap">
-              <Text inline={true} format={{ fontWeight: "demibold" }}>{selectedIds.size}&nbsp;{countLabel(selectedIds.size)}&nbsp;selected</Text>
+              <Text inline={true} format={{ fontWeight: "demibold" }}>{typeof resolvedSelectedLabel === "function" ? resolvedSelectedLabel(selectedIds.size, countLabel(selectedIds.size)) : resolvedSelectedLabel}</Text>
               <Button variant="transparent" size="extra-small" onClick={handleSelectAllRows}>
-                Select all {displayCount} {countLabel(displayCount)}
+                {typeof resolvedSelectAllLabel === "function" ? resolvedSelectAllLabel(displayCount, countLabel(displayCount)) : resolvedSelectAllLabel}
               </Button>
               <Button variant="transparent" size="extra-small" onClick={handleDeselectAll}>
-                Deselect all
+                {resolvedDeselectAllLabel}
               </Button>
               {selectionActions.map((action, i) => (
                 <Button
@@ -1498,22 +1543,32 @@ export const DataTable = ({
             </Box>
           )}
         </Flex>
-
+        )
       )}
 
       {/* Loading / error / table / empty state */}
       {loading ? (
+        renderLoadingState ? renderLoadingState({ label: resolvedLoadingLabel }) : (
         <LoadingSpinner label={resolvedLoadingLabel} layout="centered" />
+        )
       ) : error ? (
-        <ErrorState title={typeof error === "string" ? error : "Something went wrong."}>
-          <Text>{typeof error === "string" ? "Please try again." : "An error occurred while loading data."}</Text>
+        renderErrorState ? renderErrorState({
+          error,
+          title: typeof error === "string" ? error : resolvedErrorTitle,
+          message: typeof error === "string" ? resolvedRetryMessage : resolvedErrorMessage,
+        }) : (
+        <ErrorState title={typeof error === "string" ? error : resolvedErrorTitle}>
+          <Text>{typeof error === "string" ? resolvedRetryMessage : resolvedErrorMessage}</Text>
         </ErrorState>
+        )
       ) : displayRows.length === 0 ? (
+        renderEmptyState ? renderEmptyState({ title: resolvedEmptyTitle, message: resolvedEmptyMessage }) : (
         <Flex direction="column" align="center" justify="center">
           <EmptyState title={resolvedEmptyTitle} layout="vertical">
             <Text>{resolvedEmptyMessage}</Text>
           </EmptyState>
         </Flex>
+        )
       ) : (
         <Table
           bordered={bordered}

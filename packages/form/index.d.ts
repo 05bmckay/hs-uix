@@ -86,6 +86,15 @@ export interface FormBuilderLabels {
   cancel?: string;
   back?: string;
   next?: string;
+  required?: string | ((fieldLabel: string) => string); // validation: "{label} is required"
+  invalidFormat?: string; // validation: "Invalid format"
+  minLength?: string | ((min: number) => string); // validation: "Must be at least {n} characters"
+  maxLength?: string | ((max: number) => string); // validation: "Must be no more than {n} characters"
+  minValue?: string | ((min: number) => string); // validation: "Must be at least {n}"
+  maxValue?: string | ((max: number) => string); // validation: "Must be no more than {n}"
+  dependentProperties?: string; // heading for dependent field groups (default "Dependent properties")
+  repeaterAdd?: string; // default add button label for repeater fields (default "Add")
+  repeaterRemove?: string; // default remove button label for repeater fields (default "Remove")
 }
 
 export interface FormBuilderAlertConfig {
@@ -103,7 +112,7 @@ export interface FormBuilderButtonsRenderContext {
   totalSteps: number;
   disabled: boolean;
   loading: boolean;
-  labels: Required<FormBuilderLabels>;
+  labels: Required<Pick<FormBuilderLabels, "submit" | "cancel" | "back" | "next">>;
   onBack: () => void;
   onNext: () => void;
   onCancel?: () => void;
@@ -386,6 +395,11 @@ export interface FormBuilderProps {
   readOnly?: boolean;
   readOnlyMessage?: string;
   alerts?: FormBuilderAlertConfig;
+  showReadOnlyAlert?: boolean;
+  showInlineAlerts?: boolean;
+  renderReadOnlyAlert?: (context: { title: string; message: string }) => ReactNode; // custom readOnly alert renderer
+  renderFieldError?: (error: string, field: FormBuilderField) => ReactNode; // custom field error renderer
+  defaultCurrency?: string; // form-level default ISO 4217 currency code (default "USD")
 
   // Auto-save
   autoSave?: {

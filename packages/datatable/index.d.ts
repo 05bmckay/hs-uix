@@ -108,6 +108,45 @@ export interface DataTableSelectAllRequestPayload<Id = string | number> {
   totalCount: number;
 }
 
+export interface DataTableLabels {
+  selected?: string | ((count: number, countLabel: string) => string); // Selection bar: "{count} {label} selected"
+  selectAll?: string | ((totalCount: number, countLabel: string) => string); // Selection bar: "Select all {count} {label}"
+  deselectAll?: string; // Selection bar: "Deselect all"
+  filtersButton?: string; // Overflow filters toggle button: "Filters"
+  clearAll?: string; // Active filter chips reset: "Clear all"
+  dateFrom?: string; // Date range filter start placeholder: "From"
+  dateTo?: string; // Date range filter end placeholder: "To"
+  loading?: string; // Loading spinner label: "Loading {pluralLabel}..."
+  errorTitle?: string; // Error state heading: "Something went wrong."
+  errorMessage?: string; // Error state body (non-string error): "An error occurred while loading data."
+  retryMessage?: string; // Error state body (string error): "Please try again."
+}
+
+export interface DataTableSelectionBarRenderContext<Id = string | number> {
+  selectedIds: Set<Id>;
+  selectedCount: number;
+  displayCount: number;
+  countLabel: (n: number) => string;
+  onSelectAll: () => void;
+  onDeselectAll: () => void;
+  selectionActions: DataTableSelectionAction<Id>[];
+}
+
+export interface DataTableEmptyStateRenderContext {
+  title: string;
+  message: string;
+}
+
+export interface DataTableLoadingStateRenderContext {
+  label: string;
+}
+
+export interface DataTableErrorStateRenderContext {
+  error: string | boolean;
+  title: string;
+  message: string;
+}
+
 export interface DataTableProps<Row = Record<string, unknown>, Id = string | number> {
   data: Row[];
   columns: DataTableColumn<Row>[];
@@ -174,8 +213,21 @@ export interface DataTableProps<Row = Record<string, unknown>, Id = string | num
   editingRowId?: Id;
   onRowEdit?: (row: Row, field: string, newValue: unknown) => void;
   onRowEditInput?: (row: Row, field: string, inputValue: unknown) => void;
+  onEditStart?: (row: Row, field: string, currentValue: unknown) => void; // Fires when editing begins on a cell
+  onEditCancel?: (row: Row, field: string) => void; // Fires when editing is cancelled without commit
 
   autoWidth?: boolean;
+
+  showSearch?: boolean; // Show/hide the search input (default true)
+  showSelectionBar?: boolean; // Show/hide the selection action bar when rows are selected (default true)
+  filterInlineLimit?: number; // Max filters shown inline before overflow into "Filters" button (default 2)
+
+  labels?: DataTableLabels; // Override hardcoded UI strings for i18n
+
+  renderSelectionBar?: (context: DataTableSelectionBarRenderContext<Id>) => ReactNode; // Replace the default selection action bar
+  renderEmptyState?: (context: DataTableEmptyStateRenderContext) => ReactNode; // Replace the default empty state
+  renderLoadingState?: (context: DataTableLoadingStateRenderContext) => ReactNode; // Replace the default loading spinner
+  renderErrorState?: (context: DataTableErrorStateRenderContext) => ReactNode; // Replace the default error state
 }
 
 export declare function DataTable<Row = Record<string, unknown>, Id = string | number>(

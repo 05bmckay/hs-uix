@@ -233,6 +233,7 @@ const collectAsyncValidatorPromises = (value, field, allValues, context) => {
 
 const runValidators = (value, field, allValues, fieldTypes, options = {}) => {
   const includeCustomValidators = options.includeCustomValidators !== false;
+  const msg = options.messages || {};
   // Display and CRM data fields have no validation
   if (field.type === "display" || field.type === "crmPropertyList" || field.type === "crmAssociationPropertyList") return null;
 
@@ -244,7 +245,8 @@ const runValidators = (value, field, allValues, fieldTypes, options = {}) => {
     ? plugin.isEmpty(value)
     : isValueEmpty(value, field);
   if (isRequired && empty) {
-    return `${field.label} is required`;
+    const fn = msg.required || ((label) => `${label} is required`);
+    return typeof fn === "function" ? fn(field.label) : fn;
   }
 
   // Skip further validation if empty and not required
@@ -259,27 +261,31 @@ const runValidators = (value, field, allValues, fieldTypes, options = {}) => {
   // 3. Pattern (text/textarea/password only)
   if (field.pattern && typeof value === "string") {
     if (!field.pattern.test(value)) {
-      return field.patternMessage || "Invalid format";
+      return field.patternMessage || msg.invalidFormat || "Invalid format";
     }
   }
 
   // 4. Min/Max length (text/textarea)
   if (typeof value === "string") {
     if (field.minLength != null && value.length < field.minLength) {
-      return `Must be at least ${field.minLength} characters`;
+      const fn = msg.minLength || ((min) => `Must be at least ${min} characters`);
+      return typeof fn === "function" ? fn(field.minLength) : fn;
     }
     if (field.maxLength != null && value.length > field.maxLength) {
-      return `Must be no more than ${field.maxLength} characters`;
+      const fn = msg.maxLength || ((max) => `Must be no more than ${max} characters`);
+      return typeof fn === "function" ? fn(field.maxLength) : fn;
     }
   }
 
   // 5. Min/Max value (number/stepper/currency/date/time)
   if (typeof value === "number") {
     if (field.min != null && value < field.min) {
-      return `Must be at least ${field.min}`;
+      const fn = msg.minValue || ((min) => `Must be at least ${min}`);
+      return typeof fn === "function" ? fn(field.min) : fn;
     }
     if (field.max != null && value > field.max) {
-      return `Must be no more than ${field.max}`;
+      const fn = msg.maxValue || ((max) => `Must be no more than ${max}`);
+      return typeof fn === "function" ? fn(field.max) : fn;
     }
   }
 
@@ -510,6 +516,11 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     readOnlyMessage,    // string — warning alert when readOnly
     alerts,           // { addAlert, readOnlyTitle, errorTitle, successTitle }
     errors: controlledErrors, // controlled validation errors
+    showReadOnlyAlert = true,  // show warning Alert when readOnly is true
+    showInlineAlerts = true,   // show inline form-level error/success Alerts
+    renderReadOnlyAlert,       // (context: { title, message }) => ReactNode — custom readOnly alert renderer
+    renderFieldError,          // (error: string, field: object) => ReactNode — custom field error renderer
+    defaultCurrency = "USD",   // form-level default ISO 4217 currency code for currency fields
   } = props;
 
   // Events
@@ -518,10 +529,32 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     autoSave,       // { debounce: number, onAutoSave: (values) => void }
   } = props;
 
-  const submitButtonLabel = labels?.submit || "Submit";
+   const submitButtonLabel = labels?.submit || "Submit";
   const cancelButtonLabel = labels?.cancel || "Cancel";
   const backButtonLabel = labels?.back || "Back";
   const nextButtonLabel = labels?.next || "Next";
+
+  // Validation message overrides
+  const requiredMessage = labels?.required || ((label) => `${label} is required`);
+  const invalidFormatMessage = labels?.invalidFormat || "Invalid format";
+  const minLengthMessage = labels?.minLength || ((min) => `Must be at least ${min} characters`);
+  const maxLengthMessage = labels?.maxLength || ((max) => `Must be no more than ${max} characters`);
+  const minValueMessage = labels?.minValue || ((min) => `Must be at least ${min}`);
+  const maxValueMessage = labels?.maxValue || ((max) => `Must be no more than ${max}`);
+
+  // Dependent properties / repeater label overrides
+  const dependentPropertiesLabel = labels?.dependentProperties || "Dependent properties";
+  const repeaterAddLabel = labels?.repeaterAdd || "Add";
+  const repeaterRemoveLabel = labels?.repeaterRemove || "Remove";
+
+  const validationMessages = labels ? {
+    required: requiredMessage,
+    invalidFormat: invalidFormatMessage,
+    minLength: minLengthMessage,
+    maxLength: maxLengthMessage,
+    minValue: minValueMessage,
+    maxValue: maxValueMessage,
+  } : undefined;
 
   const addAlert = alerts?.addAlert;
   const readOnlyTitle = alerts?.readOnlyTitle || "Read Only";
@@ -825,7 +858,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         const rowValues = { ...allValues, [field.name]: rows };
         subFields.forEach((subField) => {
           if (subField.visible && !subField.visible(rowValues)) return;
-          const err = runValidators(row?.[subField.name], subField, rowValues, fieldTypes);
+          const err = runValidators(row?.[subField.name], subField, rowValues, fieldTypes, { messages: validationMessages });
           if (!err) return;
           const key = getRepeaterErrorKey(field.name, rowIdx, subField.name);
           errors[key] = err;
@@ -857,9 +890,9 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         return repeaterResult.errors[name] || null;
       }
 
-      return runValidators(value != null ? value : formValues[name], field, formValues, fieldTypes);
+      return runValidators(value != null ? value : formValues[name], field, formValues, fieldTypes, { messages: validationMessages });
     },
-    [fieldByName, formValues, validateRepeaterField, fieldTypes]
+    [fieldByName, formValues, validateRepeaterField, fieldTypes, validationMessages]
   );
 
   const validateVisibleFields = useCallback(
@@ -878,7 +911,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
           continue;
         }
 
-        const err = runValidators(formValues[field.name], field, formValues, fieldTypes);
+        const err = runValidators(formValues[field.name], field, formValues, fieldTypes, { messages: validationMessages });
         if (err) {
           errors[field.name] = err;
           hasErrors = true;
@@ -887,7 +920,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
       return { errors, hasErrors };
     },
-    [visibleFields, formValues, validateRepeaterField, fieldTypes]
+    [visibleFields, formValues, validateRepeaterField, fieldTypes, validationMessages]
   );
 
   // -- Async validation engine ------------------------------------------------
@@ -898,7 +931,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       if (!field || field.type === "repeater") return null;
 
       const val = value != null ? value : formValues[name];
-      const syncError = runValidators(val, field, formValues, fieldTypes, { includeCustomValidators: false });
+      const syncError = runValidators(val, field, formValues, fieldTypes, { includeCustomValidators: false, messages: validationMessages });
 
       const prevController = asyncAbortRef.current.get(name);
       if (prevController) prevController.abort();
@@ -1340,6 +1373,18 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   );
 
   const renderField = (field) => {
+    const fieldError = formErrors[field.name] || null;
+    const rendered = renderFieldInner(field);
+    if (!renderFieldError || !fieldError) return rendered;
+    return (
+      <>
+        {rendered}
+        {renderFieldError(fieldError, field)}
+      </>
+    );
+  };
+
+  const renderFieldInner = (field) => {
     const fieldValue = formValues[field.name];
     const fieldError = formErrors[field.name] || null;
     const hasError = !!fieldError;
@@ -1419,7 +1464,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       readOnly: isReadOnly,
       disabled: isDisabled,
       error: hasError,
-      validationMessage: fieldError || undefined,
+      validationMessage: renderFieldError ? undefined : (fieldError || undefined),
       ...(field.loading || validatingFields[field.name] ? { loading: true } : {}),
       ...(field.fieldProps || {}),
     };
@@ -1490,7 +1535,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         return (
           <CurrencyInput
             {...commonProps}
-            currency={field.currency || "USD"}
+            currency={field.currency || defaultCurrency}
             value={fieldValue}
             min={field.min}
             max={field.max}
@@ -1674,8 +1719,8 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         const renderRemoveControl = repeaterProps.renderRemove;
         const renderMoveUpControl = repeaterProps.renderMoveUp;
         const renderMoveDownControl = repeaterProps.renderMoveDown;
-        const addLabel = repeaterProps.addLabel || "Add";
-        const removeLabel = repeaterProps.removeLabel || "Remove";
+        const addLabel = repeaterProps.addLabel || repeaterAddLabel;
+        const removeLabel = repeaterProps.removeLabel || repeaterRemoveLabel;
         const moveUpLabel = repeaterProps.moveUpLabel || "Up";
         const moveDownLabel = repeaterProps.moveDownLabel || "Down";
         const canEditRows = !isReadOnly && !isDisabled;
@@ -1713,7 +1758,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
         const validateSubField = (rowIdx, subField, subValue, nextRows) => {
           const rowValues = { ...formValues, [field.name]: nextRows };
-          const err = runValidators(subValue, subField, rowValues, fieldTypes);
+          const err = runValidators(subValue, subField, rowValues, fieldTypes, { messages: validationMessages });
           setRepeaterSubFieldError(field.name, rowIdx, subField.name, err);
         };
 
@@ -1898,7 +1943,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   const renderDependentGroup = (parentField, dependents) => {
     const firstWithLabel = dependents.find((f) => getDependsOnLabel(f)) || dependents[0];
     const firstWithMessage = dependents.find((f) => getDependsOnMessage(f)) || dependents[0];
-    const groupLabel = getDependsOnLabel(firstWithLabel) || "Dependent properties";
+    const groupLabel = getDependsOnLabel(firstWithLabel) || dependentPropertiesLabel;
     const rawMessage = getDependsOnMessage(firstWithMessage);
     const tooltipMessage = typeof rawMessage === "function"
       ? rawMessage(parentField.label)
@@ -2387,19 +2432,21 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       )}
 
       {/* Read-only warning */}
-      {formReadOnly && readOnlyMessage && (
-        <Alert title={readOnlyTitle} variant="warning">
-          {readOnlyMessage}
-        </Alert>
+      {showReadOnlyAlert && formReadOnly && readOnlyMessage && (
+        renderReadOnlyAlert
+          ? renderReadOnlyAlert({ title: readOnlyTitle, message: readOnlyMessage })
+          : <Alert title={readOnlyTitle} variant="warning">
+              {readOnlyMessage}
+            </Alert>
       )}
 
       {/* Form-level alerts (inline only when addAlert is not provided) */}
-      {!addAlert && formError && (
+      {showInlineAlerts && !addAlert && formError && (
         <Alert title={errorTitle} variant="danger">
           {typeof formError === "string" ? formError : undefined}
         </Alert>
       )}
-      {!addAlert && formSuccess && (
+      {showInlineAlerts && !addAlert && formSuccess && (
         <Alert title={successTitle} variant="success">
           {formSuccess}
         </Alert>
