@@ -158,8 +158,6 @@ const runDefaultFieldValidator = (value, field, allValues) => {
       if (!isTimeValueObject(value)) return `${errorPrefix} has an invalid time`;
       break;
     case "datetime": {
-      // Backward-compatible with historic date-only values while preferring object shape.
-      if (isDateValueObject(value)) break;
       if (!isPlainObject(value)) return `${errorPrefix} has an invalid date/time`;
       const hasDate = value.date !== undefined;
       const hasTime = value.time !== undefined;
@@ -2089,52 +2087,23 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     return elements;
   };
 
-  // Legacy layout: pair consecutive half-width fields (columns=1 default)
-  const renderLegacyLayout = (fieldSubset) => {
+  // Single-column layout: render each field full-width (columns=1 default)
+  const renderSingleColumnLayout = (fieldSubset) => {
     const fieldList = fieldSubset || visibleFields;
-    const rows = [];
-    let i = 0;
-
-    while (i < fieldList.length) {
-      const field = fieldList[i];
-      if (
-        field.width === "half" &&
-        i + 1 < fieldList.length &&
-        fieldList[i + 1].width === "half" &&
-        !getDependsOnName(field)
-      ) {
-        rows.push({ type: "pair", fields: [fieldList[i], fieldList[i + 1]] });
-        i += 2;
-      } else {
-        rows.push({ type: "single", field });
-        i++;
-      }
-    }
-
     const elements = [];
     const processedDeps = new Set();
 
-    for (const row of rows) {
-      if (row.type === "pair") {
-        elements.push(
-          <Flex key={`pair-${row.fields[0].name}`} direction="row" gap="sm">
-            <Box flex={1}>{renderField(row.fields[0])}</Box>
-            <Box flex={1}>{renderField(row.fields[1])}</Box>
-          </Flex>
-        );
-      } else {
-        const field = row.field;
-        if (processedDeps.has(field.name)) continue;
+    for (const field of fieldList) {
+      if (processedDeps.has(field.name)) continue;
 
-        elements.push(
-          <React.Fragment key={field.name}>{renderField(field)}</React.Fragment>
-        );
+      elements.push(
+        <React.Fragment key={field.name}>{renderField(field)}</React.Fragment>
+      );
 
-        const dependents = getDependents(field);
-        if (dependents.length > 0) {
-          for (const dep of dependents) processedDeps.add(dep.name);
-          elements.push(renderDependentGroup(field, dependents));
-        }
+      const dependents = getDependents(field);
+      if (dependents.length > 0) {
+        for (const dep of dependents) processedDeps.add(dep.name);
+        elements.push(renderDependentGroup(field, dependents));
       }
     }
 
@@ -2245,7 +2214,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     if (layout && fieldSubset === visibleFields) return renderExplicitLayout();
     if (columnWidth) return renderAutoGridLayout(fieldSubset);
     if (columns > 1) return renderGridLayout(fieldSubset);
-    return renderLegacyLayout(fieldSubset);
+    return renderSingleColumnLayout(fieldSubset);
   };
 
   // -- Sections rendering (Accordion grouping) --------------------------------

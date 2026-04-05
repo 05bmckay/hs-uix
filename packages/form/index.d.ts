@@ -168,7 +168,6 @@ export interface FormBuilderField {
   dependsOnConfig?: FormBuilderDependsOnConfig;
 
   // Layout
-  width?: "full" | "half";
   colSpan?: number;
 
   // Field grouping (non-collapsible divider groups)

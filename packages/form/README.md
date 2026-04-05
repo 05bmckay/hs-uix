@@ -122,13 +122,9 @@ Weighted columns use object entries:
 
 Fields not listed in `layout` are appended full-width at the end, so you never accidentally lose a field.
 
-### Legacy (default)
-
-When no layout props are set (`columns` defaults to 1), consecutive fields with `width: "half"` are paired side-by-side. This preserves backward compatibility.
-
 ### Layout Priority
 
-`layout` > `columnWidth` > `columns` > legacy
+`layout` > `columnWidth` > `columns` > single-column (default)
 
 ## Validation
 
@@ -834,7 +830,6 @@ try {
 | `disabled` | `boolean` | All | Disable this field |
 | `defaultValue` | `unknown` | All | Default value |
 | `colSpan` | `number` | All | Columns to span (with `columns` prop) |
-| `width` | `"full" \| "half"` | All | Legacy layout (when no `columns` set) |
 | `visible` | `(values) => boolean` | All | Conditional visibility |
 | `dependsOnConfig` | `{ field, display?, label?, message? }` | All | Grouped dependent config alias |
 | `validate` | `(value, allValues, context?) => true \| string \| Promise` | All | Custom validation (sync or async) |

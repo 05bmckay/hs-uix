@@ -17,7 +17,6 @@
 - Conditional visibility (`visible` predicate)
 - Dependent properties (Tile grouping with demibold header + info tooltip)
 - Cascading options (`options` as function)
-- Half-width layout (`width: "half"`)
 - Custom render escape hatch
 - Configurable Form wrapper (`noFormWrapper`)
 - Loading state with LoadingButton
@@ -65,7 +64,7 @@ Group fields into labeled, collapsible sections within a single view. This is th
 **Behavior:**
 - Each section renders in a collapsible container (Accordion or Section — TBD)
 - `defaultOpen` controls initial expand state
-- Fields not listed in any section render after all sections (backward-compatible)
+- Fields not listed in any section render after all sections
 - Layout props (`columns`, `columnWidth`, `layout`) apply within each section independently
 - Sections are independent of `steps` — a step can contain multiple sections
 

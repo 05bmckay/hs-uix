@@ -139,7 +139,7 @@ When `steps` prop is provided: `StepIndicator` at top, only current step's field
 
 - All components from `@hubspot/ui-extensions` and `@hubspot/ui-extensions/crm` — no HTML elements, no CSS.
 - Form fields in `Flex direction="column" gap="sm"` (FRM-06).
-- Layout uses four modes: `layout` prop (explicit rows), `columnWidth` (AutoGrid responsive), `columns` (Flex+Box grid with colSpan), legacy (half-width pairing).
+- Layout uses three modes: `layout` prop (explicit rows), `columnWidth` (AutoGrid responsive), `columns` (Flex+Box grid with colSpan). Default is single-column.
 - Multi-column grid rows use `Flex direction="row"` with `Box flex={colSpan}` wrappers; partial rows get an empty `Box` spacer.
 - AutoGrid mode uses `<AutoGrid columnWidth={n} flexible>` for responsive column collapse.
 - Dependent properties use `Tile` with demibold `Text` header and `Icon name="info"` tooltip.
