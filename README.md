@@ -90,7 +90,7 @@ Two edit modes: **discrete** (click-to-edit, default) and **inline** (always-vis
 
 Connect live CRM data (contacts, deals, tickets, etc.) to a DataTable with `useAssociations` from `@hubspot/ui-extensions/crm`.
 
-> **Full documentation:** [DataTable README](./packages/datatable/README.md) — includes full API reference, all examples, server-side mode, and more.
+> **Full documentation:** [DataTable README](https://github.com/05bmckay/hs-uix/blob/main/packages/datatable/README.md) — includes full API reference, all examples, server-side mode, and more.
 
 ---
 
@@ -167,7 +167,7 @@ const fields = [
 
 ![Read-Only Mode](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/form/assets/readonly-autosave-dirty.png)
 
-> **Full documentation:** [FormBuilder README](./packages/form/README.md) — includes full API reference, all field types, validation details, props tables, and more.
+> **Full documentation:** [FormBuilder README](https://github.com/05bmckay/hs-uix/blob/main/packages/form/README.md) — includes full API reference, all field types, validation details, props tables, and more.
 
 ---
 
