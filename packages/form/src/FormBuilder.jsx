@@ -2217,9 +2217,10 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     const elements = [];
     let currentRow = [];
     let currentRowSpan = 0;
-    // Derive a columnWidth that produces the desired column count.
-    // 100 / columns gives a percentage-like hint; AutoGrid flexible handles the rest.
-    const gridColumnWidth = Math.floor(100 / columns);
+    // Minimum column width (px) before AutoGrid collapses to fewer columns.
+    // 200px is a sensible floor — fields stay readable, and a 2-column form
+    // collapses to 1 column at ~400px container width (typical card/sidebar).
+    const gridColumnWidth = 200;
 
     const flushRow = () => {
       if (currentRow.length === 0) return;
