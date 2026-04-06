@@ -940,12 +940,23 @@ Works well in multi-step wizards where some steps capture new data via form fiel
 
 ## CRM Prefill
 
-Map CRM property values to form initial values:
+Map CRM property values to form initial values with `useFormPrefill`.
+
+**Direct pass-through** — when your field names match the CRM property names exactly, no mapping is needed:
 
 ```jsx
 import { FormBuilder, useFormPrefill } from "@hs-uix/form";
 import { useCrmProperties } from "@hubspot/ui-extensions/crm";
 
+const { properties } = useCrmProperties(["firstname", "lastname", "email"]);
+const initialValues = useFormPrefill(properties);
+
+<FormBuilder fields={fields} initialValues={initialValues} onSubmit={save} />
+```
+
+**Explicit mapping** — when your field names differ from CRM property names:
+
+```jsx
 const { properties } = useCrmProperties(["firstname", "lastname", "email"]);
 const initialValues = useFormPrefill(properties, {
   firstName: "firstname",
