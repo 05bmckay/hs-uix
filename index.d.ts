@@ -32,6 +32,7 @@ export type {
   FormBuilderLayout,
   FormBuilderLayoutEntry,
   FormBuilderSection,
+  FormBuilderSectionContext,
   FormBuilderStep,
   FormBuilderRef,
   FieldTypePlugin,

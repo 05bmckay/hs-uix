@@ -11,6 +11,7 @@ export {
   FormBuilderLayout,
   FormBuilderLayoutEntry,
   FormBuilderSection,
+  FormBuilderSectionContext,
   FormBuilderStep,
   FormBuilderRef,
   FieldTypePlugin,
