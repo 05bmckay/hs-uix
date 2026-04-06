@@ -3,5 +3,5 @@ dist
 .DS_Store
 .claude/settings.local.json
 **/.claude/settings.local.json
-CLAUDE.md
-**/CLAUDE.md
+AGENT.md
+**/AGENT.md
