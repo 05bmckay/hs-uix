@@ -862,38 +862,40 @@ export const DataTable = ({
     });
   }, []);
 
-  // Flatten for pagination
-  const flatRows = useMemo(() => {
-    if (!groupedData) return (serverSide ? data : sortedData).map((row) => ({ type: "data", row }));
-
-    const flat = [];
-    groupedData.forEach((group) => {
-      flat.push({ type: "group-header", group });
-      if (expandedGroups.has(group.key)) {
-        group.rows.forEach((row) => flat.push({ type: "data", row }));
-      }
-    });
-    return flat;
-  }, [groupedData, sortedData, data, serverSide, expandedGroups]);
+  const datasetRows = useMemo(() => {
+    if (!groupedData) return serverSide ? data : sortedData;
+    return groupedData.flatMap((group) => group.rows);
+  }, [groupedData, sortedData, data, serverSide]);
 
   // ---------------------------------------------------------------------------
   // Paginate
   // ---------------------------------------------------------------------------
-  const totalItems = serverSide ? (totalCount || data.length) : flatRows.length;
+  const totalItems = serverSide ? (totalCount || data.length) : datasetRows.length;
   const pageCount = Math.ceil(totalItems / pageSize);
 
-  let displayRows;
-  if (serverSide) {
-    // Server already paginated — render data as-is (with optional grouping)
-    displayRows = groupBy
-      ? flatRows
-      : data.map((row) => ({ type: "data", row }));
-  } else {
-    displayRows = flatRows.slice(
+  const paginatedRows = useMemo(() => {
+    if (serverSide) return datasetRows;
+    return datasetRows.slice(
       (activePage - 1) * pageSize,
       activePage * pageSize
     );
-  }
+  }, [serverSide, datasetRows, activePage, pageSize]);
+
+  const displayRows = useMemo(() => {
+    if (!groupedData) return paginatedRows.map((row) => ({ type: "data", row }));
+
+    const pageRows = new Set(paginatedRows);
+    const rows = [];
+    groupedData.forEach((group) => {
+      const groupPageRows = group.rows.filter((row) => pageRows.has(row));
+      if (groupPageRows.length === 0) return;
+      rows.push({ type: "group-header", group });
+      if (expandedGroups.has(group.key)) {
+        groupPageRows.forEach((row) => rows.push({ type: "data", row }));
+      }
+    });
+    return rows;
+  }, [groupedData, paginatedRows, expandedGroups]);
 
   // For footer callback — pass full filtered data (client) or current page (server)
   const footerData = serverSide ? data : filteredData;
@@ -1045,11 +1047,10 @@ export const DataTable = ({
 
   // "Select all rows" in client mode means all rows in filtered/grouped data
   const allRowIds = useMemo(
-    () => flatRows
-      .filter((r) => r.type === "data")
-      .map((r) => r.row[rowIdField])
+    () => datasetRows
+      .map((row) => row[rowIdField])
       .filter((id) => id != null),
-    [flatRows, rowIdField]
+    [datasetRows, rowIdField]
   );
 
   const handleSelectRow = useCallback((rowId, checked) => {
@@ -1111,19 +1112,25 @@ export const DataTable = ({
     }
   }, [onEditStart, data, rowIdField]);
 
-  const commitEdit = useCallback((row, field, value) => {
+  const commitEdit = useCallback((row, field, value, options = {}) => {
+    const { keepEditing = false } = options;
     const col = columns.find((c) => c.field === field);
     if (col?.editValidate) {
       const result = col.editValidate(value, row);
       if (result !== true && result !== undefined && result !== null) {
         setEditError(typeof result === "string" ? result : "Invalid value");
-        return;
+        return false;
       }
     }
     if (onRowEdit) onRowEdit(row, field, value);
-    setEditingCell(null);
-    setEditValue(null);
+    if (!keepEditing) {
+      setEditingCell(null);
+      setEditValue(null);
+    } else {
+      setEditValue(value);
+    }
     setEditError(null);
+    return true;
   }, [onRowEdit, columns]);
 
   const renderEditControl = (col, row) => {
@@ -1189,13 +1196,13 @@ export const DataTable = ({
           <Flex direction="row" align="center" gap="xs" wrap="nowrap">
             <DateInput {...extra} name={`${fieldName}-date`} label="" value={editValue?.date} onChange={(val) => {
               const next = { ...editValue, date: val };
-              setEditValue(next);
-              if (onRowEdit) onRowEdit(row, col.field, next);
+              handleInput(next);
+              commitEdit(row, col.field, next, { keepEditing: true });
             }} onBlur={maybeExitDatetimeEdit} />
             <TimeInput {...(extra.timeProps || {})} name={`${fieldName}-time`} label="" value={editValue?.time} onChange={(val) => {
               const next = { ...editValue, time: val };
-              setEditValue(next);
-              if (onRowEdit) onRowEdit(row, col.field, next);
+              handleInput(next);
+              commitEdit(row, col.field, next, { keepEditing: true });
             }} onBlur={maybeExitDatetimeEdit} />
           </Flex>
         );

@@ -127,6 +127,7 @@ export interface DataTableSelectionBarRenderContext<Id = string | number> {
   selectedCount: number;
   displayCount: number;
   countLabel: (n: number) => string;
+  allSelected: boolean;
   onSelectAll: () => void;
   onDeselectAll: () => void;
   selectionActions: DataTableSelectionAction<Id>[];
