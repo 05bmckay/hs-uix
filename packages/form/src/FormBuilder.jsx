@@ -712,11 +712,12 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   const inputDebounceRef = useRef(new Map());
   const rowKeyRef = useRef(new WeakMap());
   const rowKeyCounterRef = useRef(0);
+  const controlledBaselineLockedRef = useRef(false);
 
   // Track initial snapshot for dirty detection
   const initialSnapshot = useRef(null);
   if (initialSnapshot.current === null) {
-    initialSnapshot.current = deepClone(computeInitialValues());
+    initialSnapshot.current = deepClone(values != null ? values : computeInitialValues());
   }
 
   // -- State resolution (controlled vs uncontrolled) ------------------------
@@ -731,6 +732,11 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   const draftValuesRef = useRef(null);
   formValuesRef.current = formValues;
   formErrorsRef.current = formErrors;
+
+  const syncDirtyBaseline = useCallback((nextValues) => {
+    initialSnapshot.current = deepClone(nextValues || {});
+    prevAutoSaveValues.current = deepClone(nextValues || {});
+  }, []);
 
   const fieldByName = useMemo(() => {
     const map = new Map();
@@ -824,6 +830,12 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   }, []);
 
   // -- Dirty tracking -------------------------------------------------------
+
+  useEffect(() => {
+    if (values == null) return;
+    if (controlledBaselineLockedRef.current) return;
+    syncDirtyBaseline(values);
+  }, [values, syncDirtyBaseline]);
 
   const isDirty = useMemo(() => {
     return !deepEqual(formValues, initialSnapshot.current);
@@ -969,6 +981,61 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     [fieldTypes]
   );
 
+  const setRepeaterSubFieldError = useCallback(
+    (fieldName, rowIdx, subFieldName, errorMessage) => {
+      const key = getRepeaterErrorKey(fieldName, rowIdx, subFieldName);
+      const merged = { ...formErrorsRef.current };
+      if (errorMessage) {
+        merged[key] = errorMessage;
+      } else {
+        delete merged[key];
+      }
+
+      const subErrors = Object.keys(merged)
+        .filter((k) => k.startsWith(`${fieldName}[`))
+        .map((k) => {
+          const match = k.match(/\[(\d+)\]\./);
+          const row = match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+          return { key: k, row };
+        })
+        .sort((a, b) => a.row - b.row);
+
+      if (subErrors.length > 0) {
+        const first = subErrors[0];
+        merged[fieldName] = `Row ${first.row + 1}: ${merged[first.key]}`;
+      } else if (!merged[fieldName] || merged[fieldName].startsWith("Row ")) {
+        delete merged[fieldName];
+      }
+
+      replaceErrors(merged);
+    },
+    [replaceErrors]
+  );
+
+  const expandValidationFields = useCallback(
+    (fieldSubset) => {
+      const toValidate = fieldSubset || visibleFields;
+      const expanded = [];
+
+      for (const field of toValidate) {
+        if (field.type === "fieldGroup" && field.items && field.fields) {
+          for (const item of field.items) {
+            for (const subField of field.fields(item)) {
+              if (subField.visible && !subField.visible(formValues)) continue;
+              expanded.push(subField);
+            }
+          }
+          continue;
+        }
+
+        expanded.push(field);
+      }
+
+      return expanded;
+    },
+    [visibleFields, formValues]
+  );
+
   const validateField = useCallback(
     (name, value) => {
       const field = fieldByName.get(name);
@@ -991,7 +1058,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
   const validateVisibleFields = useCallback(
     (fieldSubset) => {
-      const toValidate = fieldSubset || visibleFields;
+      const toValidate = expandValidationFields(fieldSubset);
       const errors = {};
       let hasErrors = false;
 
@@ -1014,63 +1081,65 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
       return { errors, hasErrors };
     },
-    [visibleFields, formValues, validateRepeaterField, fieldTypes, validationMessages]
+    [expandValidationFields, formValues, validateRepeaterField, fieldTypes, validationMessages]
   );
 
   // -- Async validation engine ------------------------------------------------
 
-  const runAsyncValidation = useCallback(
-    (name, value) => {
-      const field = fieldByName.get(name);
-      if (!field || field.type === "repeater") return null;
+  const runAsyncValidationTarget = useCallback(
+    (target) => {
+      const { validationKey, field, value, allValues, applyError } = target || {};
+      if (!field || !validationKey || field.type === "repeater" || field.type === "fieldGroup") return null;
 
-      const val = value != null ? value : formValues[name];
-      const syncError = runValidators(val, field, formValues, fieldTypes, { includeCustomValidators: false, messages: validationMessages });
+      const syncError = runValidators(value, field, allValues, fieldTypes, {
+        includeCustomValidators: false,
+        messages: validationMessages,
+      });
 
-      const prevController = asyncAbortRef.current.get(name);
+      const prevController = asyncAbortRef.current.get(validationKey);
       if (prevController) prevController.abort();
-      asyncAbortRef.current.delete(name);
+      asyncAbortRef.current.delete(validationKey);
 
       setValidatingFields((prev) => {
-        if (!prev[name]) return prev;
+        if (!prev[validationKey]) return prev;
         const next = { ...prev };
-        delete next[name];
+        delete next[validationKey];
         return next;
       });
 
       if (syncError) return null;
 
-      const version = (asyncValidationVersionRef.current.get(name) || 0) + 1;
-      asyncValidationVersionRef.current.set(name, version);
+      const version = (asyncValidationVersionRef.current.get(validationKey) || 0) + 1;
+      asyncValidationVersionRef.current.set(validationKey, version);
       const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-      if (controller) asyncAbortRef.current.set(name, controller);
+      if (controller) asyncAbortRef.current.set(validationKey, controller);
 
       let asyncPromises;
       try {
         asyncPromises = collectAsyncValidatorPromises(
-          val,
+          value,
           field,
-          formValues,
+          allValues,
           controller ? { signal: controller.signal } : undefined
         );
       } catch (err) {
-        updateErrors({ [name]: err?.message || "Validation failed" });
+        applyError(err?.message || "Validation failed");
         return null;
       }
 
       if (asyncPromises.length === 0) {
-        asyncAbortRef.current.delete(name);
+        asyncAbortRef.current.delete(validationKey);
         return null;
       }
 
       const validationPromise = Promise.all(asyncPromises).then(
         (results) => {
-          if (asyncValidationVersionRef.current.get(name) !== version) return;
-          asyncValidationRef.current.delete(name);
-          asyncAbortRef.current.delete(name);
+          if (asyncValidationVersionRef.current.get(validationKey) !== version) return;
+          asyncValidationRef.current.delete(validationKey);
+          asyncAbortRef.current.delete(validationKey);
           setValidatingFields((prev) => {
             const next = { ...prev };
-            delete next[name];
+            delete next[validationKey];
             return next;
           });
           let err = null;
@@ -1081,48 +1150,134 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
               break;
             }
           }
-          updateErrors({ [name]: err });
+          applyError(err);
         },
         (rejection) => {
-          if (asyncValidationVersionRef.current.get(name) !== version) return;
-          asyncValidationRef.current.delete(name);
-          asyncAbortRef.current.delete(name);
+          if (asyncValidationVersionRef.current.get(validationKey) !== version) return;
+          asyncValidationRef.current.delete(validationKey);
+          asyncAbortRef.current.delete(validationKey);
           setValidatingFields((prev) => {
             const next = { ...prev };
-            delete next[name];
+            delete next[validationKey];
             return next;
           });
           if (rejection && rejection.name === "AbortError") return;
-          updateErrors({ [name]: rejection?.message || "Validation failed" });
+          applyError(rejection?.message || "Validation failed");
         }
       );
 
-      asyncValidationRef.current.set(name, validationPromise);
-      setValidatingFields((prev) => ({ ...prev, [name]: true }));
+      asyncValidationRef.current.set(validationKey, validationPromise);
+      setValidatingFields((prev) => ({ ...prev, [validationKey]: true }));
       return validationPromise;
     },
-    [fieldByName, formValues, fieldTypes, updateErrors]
+    [fieldTypes, validationMessages]
+  );
+
+  const runAsyncValidation = useCallback(
+    (name, value) => {
+      const field = fieldByName.get(name);
+      if (!field || field.type === "repeater" || field.type === "fieldGroup") return null;
+
+      return runAsyncValidationTarget({
+        validationKey: name,
+        field,
+        value: value != null ? value : formValues[name],
+        allValues: formValues,
+        applyError: (errorMessage) => updateErrors({ [name]: errorMessage }),
+      });
+    },
+    [fieldByName, formValues, runAsyncValidationTarget, updateErrors]
+  );
+
+  const triggerAsyncValidationTarget = useCallback(
+    (target) => {
+      if (!target?.field || !target.validationKey) return;
+
+      const debounceMs = target.field.validateDebounce;
+      if (debounceMs && debounceMs > 0) {
+        const existing = debounceTimersRef.current.get(target.validationKey);
+        if (existing) clearTimeout(existing);
+        const timer = setTimeout(() => {
+          debounceTimersRef.current.delete(target.validationKey);
+          runAsyncValidationTarget(target);
+        }, debounceMs);
+        debounceTimersRef.current.set(target.validationKey, timer);
+      } else {
+        runAsyncValidationTarget(target);
+      }
+    },
+    [runAsyncValidationTarget]
   );
 
   const triggerAsyncValidation = useCallback(
     (name, value) => {
       const field = fieldByName.get(name);
-      if (!field || field.type === "repeater") return;
+      if (!field || field.type === "repeater" || field.type === "fieldGroup") return;
 
-      const debounceMs = field.validateDebounce;
-      if (debounceMs && debounceMs > 0) {
-        const existing = debounceTimersRef.current.get(name);
-        if (existing) clearTimeout(existing);
-        const timer = setTimeout(() => {
-          debounceTimersRef.current.delete(name);
-          runAsyncValidation(name, value);
-        }, debounceMs);
-        debounceTimersRef.current.set(name, timer);
-      } else {
-        runAsyncValidation(name, value);
-      }
+      triggerAsyncValidationTarget({
+        validationKey: name,
+        field,
+        value: value != null ? value : formValuesRef.current[name],
+        allValues: formValuesRef.current,
+        applyError: (errorMessage) => updateErrors({ [name]: errorMessage }),
+      });
     },
-    [fieldByName, runAsyncValidation]
+    [fieldByName, triggerAsyncValidationTarget, updateErrors]
+  );
+
+  const getAsyncValidationTargets = useCallback(
+    (fieldSubset) => {
+      const toValidate = fieldSubset || visibleFields;
+      const targets = [];
+
+      for (const field of toValidate) {
+        if (field.type === "fieldGroup" && field.items && field.fields) {
+          for (const item of field.items) {
+            for (const subField of field.fields(item)) {
+              if (subField.visible && !subField.visible(formValues)) continue;
+              targets.push({
+                validationKey: subField.name,
+                field: subField,
+                value: formValues[subField.name],
+                allValues: formValues,
+                applyError: (errorMessage) => updateErrors({ [subField.name]: errorMessage }),
+              });
+            }
+          }
+          continue;
+        }
+
+        if (field.type === "repeater") {
+          const rows = Array.isArray(formValues[field.name]) ? formValues[field.name] : [];
+          const subFields = field.fields || [];
+          rows.forEach((row, rowIdx) => {
+            const rowValues = { ...formValues, [field.name]: rows };
+            subFields.forEach((subField) => {
+              if (subField.visible && !subField.visible(rowValues)) return;
+              targets.push({
+                validationKey: getRepeaterErrorKey(field.name, rowIdx, subField.name),
+                field: subField,
+                value: row?.[subField.name],
+                allValues: rowValues,
+                applyError: (errorMessage) => setRepeaterSubFieldError(field.name, rowIdx, subField.name, errorMessage),
+              });
+            });
+          });
+          continue;
+        }
+
+        targets.push({
+          validationKey: field.name,
+          field,
+          value: formValues[field.name],
+          allValues: formValues,
+          applyError: (errorMessage) => updateErrors({ [field.name]: errorMessage }),
+        });
+      }
+
+      return targets;
+    },
+    [visibleFields, formValues, setRepeaterSubFieldError, updateErrors]
   );
 
   // -- Event handlers -------------------------------------------------------
@@ -1131,6 +1286,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     (nextValues) => {
       formValuesRef.current = nextValues;
       if (values != null) {
+        controlledBaselineLockedRef.current = true;
         if (onChange) onChange(nextValues);
       } else {
         setInternalValues(nextValues);
@@ -1150,7 +1306,8 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   );
 
   const handleFieldChange = useCallback(
-    (name, value) => {
+    (name, value, options = {}) => {
+      const { clearNestedErrors = true } = options;
       const newValues = { ...formValuesRef.current, [name]: value };
       const queue = [name];
       const visited = new Set();
@@ -1197,9 +1354,11 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       if (formErrorsRef.current[name] != null) {
         clearedErrors[name] = null;
       }
-      for (const key of Object.keys(formErrorsRef.current)) {
-        if (key.startsWith(`${name}[`)) {
-          clearedErrors[key] = null;
+      if (clearNestedErrors) {
+        for (const key of Object.keys(formErrorsRef.current)) {
+          if (key.startsWith(`${name}[`)) {
+            clearedErrors[key] = null;
+          }
         }
       }
 
@@ -1284,8 +1443,8 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         }
 
         // Run async validators for visible fields, then wait for all pending validations.
-        const asyncSubmitValidations = allVisibleFields
-          .map((field) => runAsyncValidation(field.name, formValues[field.name]))
+        const asyncSubmitValidations = getAsyncValidationTargets(allVisibleFields)
+          .map((target) => runAsyncValidationTarget(target))
           .filter(Boolean);
 
         if (asyncSubmitValidations.length > 0 || asyncValidationRef.current.size > 0) {
@@ -1303,6 +1462,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       const reset = () => {
         const fresh = computeInitialValues();
         if (values == null) setInternalValues(fresh);
+        controlledBaselineLockedRef.current = false;
         replaceErrors({});
         initialSnapshot.current = deepClone(fresh);
         prevAutoSaveValues.current = deepClone(fresh);
@@ -1352,7 +1512,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         if (controlledLoading == null) setInternalLoading(false);
       }
     },
-    [validateOnSubmit, allVisibleFields, validateVisibleFields, replaceErrors, onSubmit, values, controlledLoading, transformValues, onBeforeSubmit, onSubmitSuccess, onSubmitError, resetOnSuccess, formValues, fieldByName, runAsyncValidation]
+    [validateOnSubmit, allVisibleFields, validateVisibleFields, replaceErrors, onSubmit, values, controlledLoading, transformValues, onBeforeSubmit, onSubmitSuccess, onSubmitError, resetOnSuccess, formValues, fieldByName, getAsyncValidationTargets, runAsyncValidationTarget]
   );
 
   // Multi-step navigation
@@ -1368,8 +1528,8 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         return;
       }
 
-      const asyncStepValidations = stepFields
-        .map((field) => runAsyncValidation(field.name, formValues[field.name]))
+      const asyncStepValidations = getAsyncValidationTargets(stepFields)
+        .map((target) => runAsyncValidationTarget(target))
         .filter(Boolean);
 
       if (asyncStepValidations.length > 0 || asyncValidationRef.current.size > 0) {
@@ -1399,7 +1559,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     } else {
       setInternalStep(nextStep);
     }
-  }, [isMultiStep, validateStepOnNext, steps, currentStep, formValues, validateVisibleFields, controlledStep, onStepChange, replaceErrors, allVisibleFields, runAsyncValidation]);
+  }, [isMultiStep, validateStepOnNext, steps, currentStep, formValues, validateVisibleFields, controlledStep, onStepChange, replaceErrors, allVisibleFields, getAsyncValidationTargets, runAsyncValidationTarget]);
 
   const handleBack = useCallback(() => {
     if (!isMultiStep) return;
@@ -1436,6 +1596,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     reset: () => {
       const fresh = computeInitialValues();
       if (values == null) setInternalValues(fresh);
+      controlledBaselineLockedRef.current = false;
       replaceErrors({});
       initialSnapshot.current = deepClone(fresh);
       prevAutoSaveValues.current = deepClone(fresh);
@@ -1450,37 +1611,6 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   }));
 
   // -- Field rendering ------------------------------------------------------
-
-  const setRepeaterSubFieldError = useCallback(
-    (fieldName, rowIdx, subFieldName, errorMessage) => {
-      const key = getRepeaterErrorKey(fieldName, rowIdx, subFieldName);
-      const merged = { ...formErrorsRef.current };
-      if (errorMessage) {
-        merged[key] = errorMessage;
-      } else {
-        delete merged[key];
-      }
-
-      const subErrors = Object.keys(merged)
-        .filter((k) => k.startsWith(`${fieldName}[`))
-        .map((k) => {
-          const match = k.match(/\[(\d+)\]\./);
-          const row = match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
-          return { key: k, row };
-        })
-        .sort((a, b) => a.row - b.row);
-
-      if (subErrors.length > 0) {
-        const first = subErrors[0];
-        merged[fieldName] = `Row ${first.row + 1}: ${merged[first.key]}`;
-      } else if (!merged[fieldName] || merged[fieldName].startsWith("Row ")) {
-        delete merged[fieldName];
-      }
-
-      replaceErrors(merged);
-    },
-    [replaceErrors]
-  );
 
   const renderField = (field) => {
     const fieldError = formErrors[field.name] || null;
@@ -2009,13 +2139,14 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
           const rowValues = { ...formValues, [field.name]: nextRows };
           const err = runValidators(subValue, subField, rowValues, fieldTypes, { messages: validationMessages });
           setRepeaterSubFieldError(field.name, rowIdx, subField.name, err);
+          return err;
         };
 
         const handleSubFieldChange = (rowIdx, subField, subValue) => {
           const updated = rows.map((row, i) =>
             i === rowIdx ? { ...row, [subField.name]: subValue } : row
           );
-          handleFieldChange(field.name, updated);
+          handleFieldChange(field.name, updated, { clearNestedErrors: false });
           if (validateOnChange) {
             validateSubField(rowIdx, subField, subValue, updated);
           }
@@ -2026,7 +2157,18 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
           const nextRows = rows.map((row, i) =>
             i === rowIdx ? { ...row, [subField.name]: subValue } : row
           );
-          validateSubField(rowIdx, subField, subValue, nextRows);
+          const err = validateSubField(rowIdx, subField, subValue, nextRows);
+          if (err) return;
+
+          const validationKey = getRepeaterErrorKey(field.name, rowIdx, subField.name);
+          const rowValues = { ...formValues, [field.name]: nextRows };
+          triggerAsyncValidationTarget({
+            validationKey,
+            field: subField,
+            value: subValue,
+            allValues: rowValues,
+            applyError: (errorMessage) => setRepeaterSubFieldError(field.name, rowIdx, subField.name, errorMessage),
+          });
         };
 
         return (
@@ -2046,6 +2188,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
                   const sfLabel = rowIdx === 0 ? sf.label : undefined;
                   const sfOptions = resolveOptions(sf, { ...formValues, [field.name]: rows });
                   const sfError = formErrors[getRepeaterErrorKey(field.name, rowIdx, sf.name)] || null;
+                  const validationKey = getRepeaterErrorKey(field.name, rowIdx, sf.name);
                   const sfProps = {
                     name: `${field.name}-${rowIdx}-${sf.name}`,
                     label: sfLabel,
@@ -2054,6 +2197,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
                     disabled: resolveDisabled(sf, formValues) || isDisabled,
                     error: !!sfError,
                     validationMessage: sfError || undefined,
+                    ...(validatingFields[validationKey] ? { loading: true } : {}),
                     ...(sf.fieldProps || {}),
                   };
 
