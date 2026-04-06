@@ -57,7 +57,7 @@ export interface DataTableColumn<Row = Record<string, unknown>> {
   width?: DataTableColumnWidth;
   cellWidth?: DataTableWidth;
   align?: "left" | "center" | "right";
-  truncate?: true | { maxLength?: number };
+  truncate?: true | number | { maxLength?: number };
   editable?: boolean;
   editType?: DataTableEditType;
   editOptions?: DataTableOption[];

@@ -374,7 +374,17 @@ const computeAutoWidths = (columns, data) => {
     if (col.width && col.cellWidth) return;
 
     const values = sample.map((row) => row[col.field]).filter((v) => v != null);
-    const strings = values.map((v) => String(v));
+    const strings = values.map((v) => {
+      const s = String(v);
+      // If column has truncation with a character limit, cap the string length
+      // so auto-width sizes to the truncated content, not the full value
+      const truncLen = typeof col.truncate === "number"
+        ? col.truncate
+        : col.truncate && typeof col.truncate === "object"
+          ? col.truncate.maxLength
+          : null;
+      return truncLen && s.length > truncLen ? s.slice(0, truncLen) : s;
+    });
 
     let widthHint = null; // "min" | "auto"
     let cellWidthHint = null;
@@ -384,7 +394,12 @@ const computeAutoWidths = (columns, data) => {
       cellWidthHint = "min";
     }
 
-    // 2. Content analysis
+    // 2. CSS truncation (truncate: true) → cell should shrink, not expand to fit
+    if (col.truncate === true) {
+      cellWidthHint = cellWidthHint || "min";
+    }
+
+    // 3. Content analysis
     if (strings.length > 0) {
       const lengths = strings.map((s) => s.length);
       const maxLen = Math.max(...lengths);
@@ -1311,34 +1326,55 @@ export const DataTable = ({
     const rawStr = String(rawValue ?? "");
 
     if (col.truncate && rawStr.length > 0) {
-      // Simple truncation: single line with tooltip on hover
+      // Simple truncation: single line with tooltip on hover (CSS-based)
       if (col.truncate === true) {
-        const content = col.renderCell ? col.renderCell(rawValue, row) : rawStr;
+        if (col.renderCell) {
+          // renderCell owns the output — pass raw value and let it handle display.
+          // We only wrap in <Text truncate> when there's no renderCell, so custom
+          // elements (e.g. <Link>) don't get double-clipped.
+          const content = col.renderCell(rawValue, row);
+          if (col.editable) {
+            return (
+              <Link variant="dark" onClick={() => startEditing(rowId, col.field, rawValue)}>
+                {content || "--"}
+              </Link>
+            );
+          }
+          return content;
+        }
         if (col.editable) {
           return (
             <Text truncate={{ tooltipText: rawStr }}>
               <Link variant="dark" onClick={() => startEditing(rowId, col.field, rawValue)}>
-                {content || "--"}
+                {rawStr || "--"}
               </Link>
             </Text>
           );
         }
-        return <Text truncate={{ tooltipText: rawStr }}>{content}</Text>;
+        return <Text truncate={{ tooltipText: rawStr }}>{rawStr}</Text>;
       }
 
-      // Object truncation with maxLength: character-limited with tooltip
-      const maxLen = col.truncate.maxLength || 100;
+      // Character-limited truncation: truncate: number or truncate: { maxLength }
+      const maxLen = typeof col.truncate === "number"
+        ? col.truncate
+        : col.truncate.maxLength || 100;
       if (rawStr.length > maxLen) {
         const truncatedStr = rawStr.slice(0, maxLen) + "…";
-        const truncatedContent = col.renderCell ? col.renderCell(truncatedStr, row) : truncatedStr;
+        // Pass the already-truncated string to renderCell so it wraps the
+        // short text — no extra <Text truncate> wrapper needed.
+        const content = col.renderCell
+          ? col.renderCell(truncatedStr, row)
+          : truncatedStr;
         if (col.editable) {
           return (
             <Link variant="dark" onClick={() => startEditing(rowId, col.field, rawValue)}>
-              {truncatedContent || "--"}
+              {content || "--"}
             </Link>
           );
         }
-        return <Text truncate={{ tooltipText: rawStr }}>{truncatedContent || "--"}</Text>;
+        return col.renderCell
+          ? content
+          : <Text truncate={{ tooltipText: rawStr }}>{content || "--"}</Text>;
       }
     }
 
