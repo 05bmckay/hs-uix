@@ -21,6 +21,7 @@ export type FormBuilderFieldType =
   | "checkboxGroup"
   | "radioGroup"
   | "display"
+  | "slot"
   | "repeater"
   | "fieldGroup"
   | "crmPropertyList"
@@ -308,6 +309,21 @@ export interface FormBuilderSection {
   renderAfter?: (context: FormBuilderSectionContext) => ReactNode;
 }
 
+export interface FormBuilderGroupOptions {
+  /** Override the displayed group label (defaults to the group key). */
+  label?: string;
+  /** Show the group header label. Defaults to true. */
+  showLabel?: boolean;
+  /** Show the divider that separates this group from the previous one. Defaults to true. */
+  showDivider?: boolean;
+  /** Custom header renderer. Receives group name, fields in the group, and current form values. */
+  renderHeader?: (
+    group: string,
+    fields: FormBuilderField[],
+    values: Record<string, unknown>
+  ) => ReactNode;
+}
+
 // ---------------------------------------------------------------------------
 // Multi-step definition
 // ---------------------------------------------------------------------------
@@ -406,6 +422,12 @@ export interface FormBuilderProps {
   maxColumns?: number;
   layout?: FormBuilderLayout;
   sections?: FormBuilderSection[];
+  groups?: Record<string, FormBuilderGroupOptions>;
+  /**
+   * Gap between fields (and between rows in grid layouts).
+   * HubSpot spacing token: `"flush" | "extra-small" | "small" | "medium" | "large" | "extra-large"`
+   * or shorthand: `"xs" | "sm" | "md" | "lg" | "xl"`. Defaults to `"sm"`.
+   */
   gap?: string;
   showRequiredIndicator?: boolean;
   noFormWrapper?: boolean;

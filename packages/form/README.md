@@ -48,6 +48,7 @@ Every field maps to a native HubSpot UI Extension component with full prop suppo
 | `checkboxGroup` | `ToggleGroup checkboxList` | `options`, `inline`, `variant` |
 | `radioGroup` | `ToggleGroup radioButtonList` | `options`, `inline`, `variant` |
 | `display` | Custom render | Render-only, no form value or validation |
+| `slot` | Custom render | Alias of `display` — clearer name for injecting JSX between fields |
 | `repeater` | Sub-field rows | `fields`, `min`, `max` — add/remove dynamic rows |
 | `fieldGroup` | Structured rows | `items`, `fields` — fixed predefined rows (no add/remove) |
 | `crmPropertyList` | `CrmPropertyList` | `properties`, `direction` — native HubSpot inline editing |
@@ -639,16 +640,45 @@ Lightweight non-collapsible grouping with auto-inserted dividers:
 
 ```jsx
 const fields = [
-  { name: "name", type: "text", label: "Name", group: "Contact Info" },
-  { name: "email", type: "text", label: "Email", group: "Contact Info" },
+  { name: "name", type: "text", label: "Name", group: "contact" },
+  { name: "email", type: "text", label: "Email", group: "contact" },
   // Divider + label auto-inserted here
-  { name: "company", type: "text", label: "Company", group: "Company Info" },
+  { name: "company", type: "text", label: "Company", group: "company" },
 ];
 ```
 
-## Display Fields
+By default the group key is rendered as the header text. Use the `groups` prop to customize per-group rendering — including a friendly label, hiding the divider, hiding the header, or rendering a fully custom header:
 
-Render-only fields with no form value, no validation, and not included in submit values:
+```jsx
+<FormBuilder
+  fields={fields}
+  groups={{
+    contact: { label: "Contact Info" },
+    company: {
+      label: "Company Info",
+      showDivider: false,
+      renderHeader: (group) => (
+        <Text variant="microcopy" format={{ fontWeight: "demibold" }}>
+          {group}
+        </Text>
+      ),
+    },
+  }}
+/>
+```
+
+Per-group options:
+
+| Option | Type | Description |
+|---|---|---|
+| `label` | `string` | Override the displayed header text (defaults to the group key) |
+| `showLabel` | `boolean` | Hide the header entirely. Defaults to `true` |
+| `showDivider` | `boolean` | Hide the divider above this group. Defaults to `true` |
+| `renderHeader` | `(group, fields, values) => ReactNode` | Fully custom header renderer |
+
+## Display & Slot Fields
+
+Render-only fields with no form value, no validation, and not included in submit values. Use `type: "display"` or its alias `type: "slot"` (clearer when injecting JSX between fields):
 
 ```jsx
 {
@@ -658,6 +688,17 @@ Render-only fields with no form value, no validation, and not included in submit
     const url = buildMapsUrl(values.address, values.city, values.zip);
     return url ? <Link href={url}>Preview in Google Maps</Link> : null;
   },
+}
+```
+
+Combine `type: "slot"` with `visible` to inject conditional content (warnings, hints, banners) anywhere in the field list:
+
+```jsx
+{
+  name: "_addressWarning",
+  type: "slot",
+  visible: (vals) => isAddressIncomplete(vals),
+  render: () => <Tag variant="warning">Incomplete address</Tag>,
 }
 ```
 
@@ -1035,7 +1076,8 @@ try {
 | `columns` | `number` | `1` | Fixed column count (Flex+Box grid) |
 | `columnWidth` | `number` | - | AutoGrid responsive column width (px) |
 | `layout` | `FormBuilderLayout` | - | Explicit row layout |
-| `gap` | `string` | `"sm"` | Spacing between fields |
+| `groups` | `Record<string, FormBuilderGroupOptions>` | - | Per-group rendering options keyed by group name (`label`, `showLabel`, `showDivider`, `renderHeader`) |
+| `gap` | `string` | `"sm"` | Spacing between fields. HubSpot tokens: `"flush" \| "extra-small" \| "small" \| "medium" \| "large" \| "extra-large"` (or shorthand `"xs" \| "sm" \| "md" \| "lg" \| "xl"`) |
 | `showRequiredIndicator` | `boolean` | `true` | Show * on required fields |
 | `noFormWrapper` | `boolean` | `false` | Skip `<Form>` wrapper |
 | `autoComplete` | `string` | - | Form autoComplete attribute |

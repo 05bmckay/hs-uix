@@ -65,6 +65,7 @@ const getEmptyValue = (field) => {
     case "datetime":
       return undefined;
     case "display":
+    case "slot":
     case "crmPropertyList":
     case "crmAssociationPropertyList":
       return undefined; // these field types have no form value
@@ -233,7 +234,7 @@ const runValidators = (value, field, allValues, fieldTypes, options = {}) => {
   const includeCustomValidators = options.includeCustomValidators !== false;
   const msg = options.messages || {};
   // Display, CRM data, and fieldGroup fields have no direct validation
-  if (field.type === "display" || field.type === "crmPropertyList" || field.type === "crmAssociationPropertyList" || field.type === "fieldGroup") return null;
+  if (field.type === "display" || field.type === "slot" || field.type === "crmPropertyList" || field.type === "crmAssociationPropertyList" || field.type === "fieldGroup") return null;
 
   // 1. Required (supports function form for conditional required)
   const isRequired = resolveRequired(field, allValues);
@@ -504,6 +505,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     maxColumns,                    // cap number of columns per row in AutoGrid mode
     layout,                        // explicit row layout array (overrides columns + columnWidth)
     sections,                      // FormBuilderSection[] — accordion field grouping
+    groups,                        // Record<string, FormBuilderGroupOptions> — per-group rendering options keyed by group name
     gap = "sm",                    // gap between fields
     showRequiredIndicator = true,  // show * on required fields
     noFormWrapper = false,         // skip HubSpot <Form> wrapper
@@ -657,7 +659,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       : initialValues;
     const vals = {};
     for (const field of fields) {
-      if (field.type === "display" || field.type === "crmPropertyList" || field.type === "crmAssociationPropertyList") continue;
+      if (field.type === "display" || field.type === "slot" || field.type === "crmPropertyList" || field.type === "crmAssociationPropertyList") continue;
 
       // fieldGroup: initialize all generated sub-fields
       if (field.type === "fieldGroup" && field.items && field.fields) {
@@ -1310,7 +1312,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       const rawValues = {};
       for (const key of Object.keys(formValues)) {
         const f = fieldByName.get(key);
-        if (f && (f.type === "display" || f.type === "crmPropertyList" || f.type === "crmAssociationPropertyList" || f.type === "fieldGroup")) continue;
+        if (f && (f.type === "display" || f.type === "slot" || f.type === "crmPropertyList" || f.type === "crmAssociationPropertyList" || f.type === "fieldGroup")) continue;
         rawValues[key] = f && f.transformOut ? f.transformOut(formValues[key]) : formValues[key];
       }
       // Also apply transformOut for fieldGroup sub-fields
@@ -1505,8 +1507,8 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       ? (v) => handleDebouncedFieldChange(field.name, v)
       : (v) => handleFieldChange(field.name, v);
 
-    // Display fields — render-only, no form value
-    if (field.type === "display") {
+    // Display / slot fields — render-only, no form value, no label wrapper
+    if (field.type === "display" || field.type === "slot") {
       if (field.render) {
         return field.render({
           values: formValues,
@@ -2170,7 +2172,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     if (field.width === "full" && columns > 1) return columns;
     // Display and CRM fields default to full width — they render non-standard
     // content that doesn't fit a grid cell
-    if (columns > 1 && (field.type === "display" || field.type === "crmPropertyList" || field.type === "crmAssociationPropertyList")) return columns;
+    if (columns > 1 && (field.type === "display" || field.type === "slot" || field.type === "crmPropertyList" || field.type === "crmAssociationPropertyList")) return columns;
     return 1;
   };
 
@@ -2236,7 +2238,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     const colSpan = (field) => {
       if (field.colSpan != null) return Math.min(field.colSpan, cols);
       if (field.width === "full" && cols > 1) return cols;
-      if (cols > 1 && (field.type === "display" || field.type === "crmPropertyList" || field.type === "crmAssociationPropertyList")) return cols;
+      if (cols > 1 && (field.type === "display" || field.type === "slot" || field.type === "crmPropertyList" || field.type === "crmAssociationPropertyList")) return cols;
       return 1;
     };
 
@@ -2481,17 +2483,27 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     const elements = [];
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
+      const opts = (chunk.group && groups && groups[chunk.group]) || {};
+      const showDivider = opts.showDivider !== false;
+      const showLabel = opts.showLabel !== false;
 
-      if (i > 0) {
+      if (i > 0 && showDivider) {
         elements.push(<Divider key={`group-div-${i}`} />);
       }
 
-      if (chunk.group) {
-        elements.push(
-          <Text key={`group-label-${i}`} format={{ fontWeight: "demibold" }}>
-            {chunk.group}
-          </Text>
-        );
+      if (chunk.group && showLabel) {
+        if (typeof opts.renderHeader === "function") {
+          const header = opts.renderHeader(chunk.group, chunk.fields, formValues);
+          if (header) elements.push(
+            <React.Fragment key={`group-header-${i}`}>{header}</React.Fragment>
+          );
+        } else {
+          elements.push(
+            <Text key={`group-label-${i}`} format={{ fontWeight: "demibold" }}>
+              {opts.label || chunk.group}
+            </Text>
+          );
+        }
       }
 
       // Render the chunk's fields using the layout renderer
