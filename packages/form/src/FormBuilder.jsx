@@ -589,6 +589,60 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     prevSuccessRef.current = formSuccess;
   }, [addAlert, formSuccess, successTitle]);
 
+  // -- Dev warnings for common prop mistakes --------------------------------
+
+  if (process.env.NODE_ENV !== "production") {
+    const KNOWN_FIELD_PROPS = new Set([
+      "name", "type", "label", "description", "placeholder", "tooltip", "required",
+      "readOnly", "disabled", "defaultValue", "fieldProps", "colSpan", "width",
+      "visible", "dependsOn", "dependsOnConfig", "group", "debounce",
+      "pattern", "patternMessage", "minLength", "maxLength", "min", "max",
+      "validate", "validators", "validateDebounce", "useDefaultValidators",
+      "transformIn", "transformOut", "onFieldChange", "onInput", "onBlur",
+      "options", "variant", "inline", "render", "fields", "items", "showItemLabel",
+      "columns", "repeaterProps", "size", "labelDisplay", "textChecked", "textUnchecked",
+      "rows", "cols", "resize", "stepSize", "precision", "formatStyle",
+      "minValueReachedTooltip", "maxValueReachedTooltip", "currency",
+      "format", "timezone", "clearButtonLabel", "todayButtonLabel",
+      "minValidationMessage", "maxValidationMessage", "interval",
+      "properties", "direction", "objectId", "objectTypeId", "associationLabels",
+      "filters", "sort",
+    ]);
+    const FIELD_SUGGESTIONS = {
+      fullWidth: 'Use width: "full" or colSpan instead',
+      title: "Use label instead",
+      maxColumns: "maxColumns is a FormBuilder prop, not a field prop",
+    };
+    const KNOWN_SECTION_PROPS = new Set([
+      "id", "label", "fields", "defaultOpen", "info", "renderBefore", "renderAfter",
+    ]);
+    const SECTION_SUGGESTIONS = {
+      title: "Use label instead",
+      name: "Use id instead",
+      open: "Use defaultOpen instead",
+    };
+    for (const field of fields) {
+      for (const key of Object.keys(field)) {
+        if (!KNOWN_FIELD_PROPS.has(key)) {
+          const suggestion = FIELD_SUGGESTIONS[key];
+          const hint = suggestion ? ` ${suggestion}.` : "";
+          console.warn(`[hs-uix] Warning: Field "${field.name}" has unknown prop "${key}".${hint}`);
+        }
+      }
+    }
+    if (Array.isArray(sections)) {
+      for (const sec of sections) {
+        for (const key of Object.keys(sec)) {
+          if (!KNOWN_SECTION_PROPS.has(key)) {
+            const suggestion = SECTION_SUGGESTIONS[key];
+            const hint = suggestion ? ` ${suggestion}.` : "";
+            console.warn(`[hs-uix] Warning: Section "${sec.id || "(unnamed)"}" has unknown prop "${key}".${hint}`);
+          }
+        }
+      }
+    }
+  }
+
   // -- Internal state -------------------------------------------------------
 
   const computeInitialValues = () => {
@@ -1450,7 +1504,8 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     if (field.type === "display") {
       if (field.render) {
         return field.render({
-          allValues: formValues,
+          values: formValues,
+          allValues: formValues, // deprecated — use `values`
           setFieldValue: (name, value) => handleFieldChange(name, value),
           setFieldError: (name, message) => updateErrors({ [name]: message }),
         });
@@ -1622,7 +1677,8 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         value: fieldValue,
         onChange: fieldOnChange,
         error: hasError,
-        allValues: formValues,
+        values: formValues,
+        allValues: formValues, // deprecated — use `values`
       });
     }
 
@@ -1634,7 +1690,8 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         onChange: fieldOnChange,
         error: hasError,
         field,
-        allValues: formValues,
+        values: formValues,
+        allValues: formValues, // deprecated — use `values`
       });
     }
 
@@ -2153,27 +2210,48 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     );
   };
 
-  // Grid layout: chunk fields into rows based on columns and colSpan
+  // Grid layout: chunk fields into rows based on columns and colSpan.
+  // Uses AutoGrid per row so columns collapse responsively on narrow viewports.
   const renderGridLayout = (fieldSubset) => {
     const fieldList = fieldSubset || visibleFields;
     const elements = [];
     let currentRow = [];
     let currentRowSpan = 0;
+    // Derive a columnWidth that produces the desired column count.
+    // 100 / columns gives a percentage-like hint; AutoGrid flexible handles the rest.
+    const gridColumnWidth = Math.floor(100 / columns);
 
     const flushRow = () => {
       if (currentRow.length === 0) return;
+      const allUniform = currentRow.every((f) => getFieldColSpan(f) === 1);
       const totalSpan = currentRow.reduce((s, f) => s + getFieldColSpan(f), 0);
       const remainder = columns - totalSpan;
-      elements.push(
-        <Flex key={`row-${currentRow[0].name}`} direction="row" gap={gap}>
-          {currentRow.map((f) => (
-            <Box key={f.name} flex={getFieldColSpan(f)}>
-              {renderField(f)}
-            </Box>
-          ))}
-          {remainder > 0 && <Box flex={remainder} />}
-        </Flex>
-      );
+
+      if (allUniform) {
+        // Uniform colSpan — use AutoGrid for responsive collapse
+        elements.push(
+          <AutoGrid key={`row-${currentRow[0].name}`} columnWidth={gridColumnWidth} flexible gap={gap}>
+            {currentRow.map((f) => (
+              <React.Fragment key={f.name}>{renderField(f)}</React.Fragment>
+            ))}
+            {remainder > 0 && Array.from({ length: remainder }, (_, i) => (
+              <Box key={`spacer-${i}`} />
+            ))}
+          </AutoGrid>
+        );
+      } else {
+        // Mixed colSpan — keep Flex+Box for weighted layout
+        elements.push(
+          <Flex key={`row-${currentRow[0].name}`} direction="row" gap={gap}>
+            {currentRow.map((f) => (
+              <Box key={f.name} flex={getFieldColSpan(f)}>
+                {renderField(f)}
+              </Box>
+            ))}
+            {remainder > 0 && <Box flex={remainder} />}
+          </Flex>
+        );
+      }
       currentRow = [];
       currentRowSpan = 0;
     };

@@ -170,6 +170,7 @@ export interface FormBuilderField {
 
   // Layout
   colSpan?: number;
+  width?: "full";
 
   // Field grouping (non-collapsible divider groups)
   group?: string;
@@ -261,6 +262,8 @@ export interface FormBuilderField {
     value?: unknown;
     onChange?: (v: unknown) => void;
     error?: boolean;
+    values: Record<string, unknown>;
+    /** @deprecated Use `values` instead */
     allValues: Record<string, unknown>;
     setFieldValue?: (name: string, value: unknown) => void;
     setFieldError?: (name: string, message: string) => void;
@@ -277,6 +280,8 @@ export interface FieldTypePlugin {
     onChange: (v: unknown) => void;
     error: boolean;
     field: FormBuilderField;
+    values: Record<string, unknown>;
+    /** @deprecated Use `values` instead */
     allValues: Record<string, unknown>;
   }) => ReactNode;
   getEmptyValue?: () => unknown;

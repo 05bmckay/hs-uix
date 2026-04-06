@@ -57,23 +57,37 @@ All field types share these common props: `description`, `placeholder`, `tooltip
 
 ## Layout
 
-FormBuilder provides four layout modes. HubSpot rarely uses full-width inputs — use `columns` or `columnWidth` to match the platform's standard.
+FormBuilder provides four layout modes. The default is a single full-width column, but HubSpot rarely uses full-width inputs — most forms should use `columns` or `columnWidth` for a tighter layout.
 
-### Fixed Columns
+### Choosing a Layout Mode
 
-Set a column count. Fields flow left-to-right, top-to-bottom.
+| Mode | Prop | Best for | Responsive? |
+|---|---|---|---|
+| **Single column** | *(default)* | Simple forms, sidebars | N/A |
+| **Fixed columns** | `columns={2}` | Most forms — predictable grid | Yes — collapses on narrow viewports |
+| **Responsive** | `columnWidth={200}` | Cards and variable-width containers | Yes — columns fill available space |
+| **Explicit** | `layout={[...]}` | Precise per-row control, weighted columns | No — rows are fixed as defined |
+
+Priority when multiple are set: `layout` > `columnWidth` > `columns` > single-column.
+
+### Fixed Columns (recommended default)
+
+Set a column count. Fields flow left-to-right, top-to-bottom, and columns collapse to single-column on narrow viewports.
 
 ```jsx
 <FormBuilder columns={2} fields={fields} />
 ```
 
-Use `colSpan` on individual fields to span multiple columns:
+#### Spanning columns
+
+Use `colSpan` to span a specific number of columns, or `width: "full"` to always span all columns regardless of the column count:
 
 ```jsx
 const fields = [
   { name: "firstName", type: "text", label: "First name" },           // 1 column
   { name: "lastName", type: "text", label: "Last name" },             // 1 column
-  { name: "bio", type: "textarea", label: "Bio", colSpan: 2 },       // full width
+  { name: "bio", type: "textarea", label: "Bio", colSpan: 2 },       // spans 2 columns
+  { name: "notes", type: "textarea", label: "Notes", width: "full" }, // always full width
   { name: "city", type: "text", label: "City" },                      // 1 column
   { name: "state", type: "select", label: "State", options: STATES }, // 1 column
 ];
@@ -81,17 +95,26 @@ const fields = [
 <FormBuilder columns={2} fields={fields} />
 ```
 
+- `colSpan: N` — span exactly N columns (capped at the column count)
+- `width: "full"` — span all columns without knowing the count. Prefer this over `colSpan` when the form's column count might change.
+
 Partial rows get empty space (fields don't stretch to fill).
 
 ### Responsive (AutoGrid)
 
-Set `columnWidth` in pixels. Columns collapse automatically on narrow screens using HubSpot's `AutoGrid` component.
+Set `columnWidth` in pixels. Columns fill the available space and collapse automatically on narrow screens using HubSpot's `AutoGrid` component.
 
 ```jsx
 <FormBuilder columnWidth={200} fields={fields} />
 ```
 
-With `columnWidth={200}`, a 400px card shows 2 columns; a 600px page shows 3.
+With `columnWidth={200}`, a 400px card shows 2 columns; a 600px page shows 3. Use `maxColumns` to cap the number of columns:
+
+```jsx
+<FormBuilder columnWidth={200} maxColumns={3} fields={fields} />
+```
+
+> **Note:** `colSpan` and `width: "full"` are not supported in AutoGrid mode — all fields get equal width. If you need per-field column control with responsive behavior, use `columns` instead.
 
 ### Explicit Layout
 
@@ -121,11 +144,7 @@ Weighted columns use object entries:
 />
 ```
 
-Fields not listed in `layout` are appended full-width at the end, so you never accidentally lose a field.
-
-### Layout Priority
-
-`layout` > `columnWidth` > `columns` > single-column (default)
+Fields not listed in `layout` are appended full-width at the end, so you never accidentally lose a field. Explicit layout rows do not collapse on narrow viewports — each row renders exactly as defined.
 
 ## Validation
 
@@ -469,7 +488,7 @@ For fields that need custom rendering:
   name: "rating",
   type: "text",  // type is required but ignored when render is set
   label: "Rating",
-  render: ({ value, onChange, error, allValues }) => (
+  render: ({ value, onChange, error, values }) => (
     <MyCustomRatingWidget value={value} onChange={onChange} hasError={error} />
   ),
 }
@@ -553,8 +572,8 @@ Render-only fields with no form value, no validation, and not included in submit
 {
   name: "mapPreview",
   type: "display",
-  render: ({ allValues }) => {
-    const url = buildMapsUrl(allValues.address, allValues.city, allValues.zip);
+  render: ({ values }) => {
+    const url = buildMapsUrl(values.address, values.city, values.zip);
     return url ? <Link href={url}>Preview in Google Maps</Link> : null;
   },
 }
@@ -566,7 +585,7 @@ Display fields can also interact with the form via `setFieldValue` and `setField
 {
   name: "fileUpload",
   type: "display",
-  render: ({ allValues, setFieldValue, setFieldError }) => (
+  render: ({ values, setFieldValue, setFieldError }) => (
     <CrmPropertyList
       properties={["profile_file_id"]}
       direction="column"
@@ -960,6 +979,7 @@ try {
 | `disabled` | `boolean` | All | Disable this field |
 | `defaultValue` | `unknown` | All | Default value |
 | `colSpan` | `number` | All | Columns to span (with `columns` prop) |
+| `width` | `"full"` | All | Span all columns regardless of column count |
 | `visible` | `(values) => boolean` | All | Conditional visibility |
 | `dependsOnConfig` | `{ field, display?, label?, message? }` | All | Grouped dependent config alias |
 | `validate` | `(value, allValues, context?) => true \| string \| Promise` | All | Custom validation (sync or async) |
