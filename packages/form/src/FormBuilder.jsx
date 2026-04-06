@@ -495,7 +495,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   const {
     columns = 1,                   // number of grid columns (1 = full-width stack)
     columnWidth,                   // AutoGrid columnWidth — responsive layout (overrides columns)
-    maxColumns,                    // cap number of columns per row in AutoGrid mode
+    maxColumns,                    // @deprecated — no longer enforced; AutoGrid reflow requires all fields in one grid instance
     layout,                        // explicit row layout array (overrides columns + columnWidth)
     sections,                      // FormBuilderSection[] — accordion field grouping
     gap = "sm",                    // gap between fields
@@ -2118,20 +2118,16 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
     const flushBatch = () => {
       if (batch.length === 0) return;
-      // Chunk into rows of maxColumns when set
-      const chunks = maxColumns
-        ? Array.from({ length: Math.ceil(batch.length / maxColumns) }, (_, i) =>
-          batch.slice(i * maxColumns, i * maxColumns + maxColumns))
-        : [batch];
-      for (const chunk of chunks) {
-        elements.push(
-          <AutoGrid key={`ag-${chunk[0].name}`} columnWidth={columnWidth} flexible gap={gap}>
-            {chunk.map((f) => (
-              <React.Fragment key={f.name}>{renderField(f)}</React.Fragment>
-            ))}
-          </AutoGrid>
-        );
-      }
+      // All fields go in one AutoGrid so they can reflow together across column counts.
+      // Note: maxColumns cannot be enforced via separate AutoGrid instances — doing so
+      // breaks responsive reflow (fields in different AutoGrids can't flow into each other).
+      elements.push(
+        <AutoGrid key={`ag-${batch[0].name}`} columnWidth={columnWidth} flexible gap={gap}>
+          {batch.map((f) => (
+            <React.Fragment key={f.name}>{renderField(f)}</React.Fragment>
+          ))}
+        </AutoGrid>
+      );
       batch = [];
     };
 

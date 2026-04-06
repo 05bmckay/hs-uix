@@ -378,6 +378,7 @@ export interface FormBuilderProps {
   // Appearance / layout
   columns?: number;
   columnWidth?: number;
+  /** @deprecated No longer enforced — HubSpot AutoGrid requires all fields in one grid instance for responsive reflow. */
   maxColumns?: number;
   layout?: FormBuilderLayout;
   sections?: FormBuilderSection[];
