@@ -27,10 +27,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "prepublishOnly": "tsup",
-    "release:patch": "npm version patch && npm publish --access public && git push origin main --tags",
-    "release:minor": "npm version minor && npm publish --access public && git push origin main --tags",
-    "release:major": "npm version major && npm publish --access public && git push origin main --tags"
+    "prepublishOnly": "echo 'Publish via root hs-uix package instead' && exit 1"
   },
   "peerDependencies": {
     "@hubspot/ui-extensions": ">=0.12.0",
