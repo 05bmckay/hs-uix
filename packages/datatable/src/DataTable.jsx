@@ -1545,6 +1545,7 @@ export const DataTable = ({
           selectedCount: selectedIds.size,
           displayCount,
           countLabel,
+          allSelected: selectedIds.size >= (serverSide ? (totalCount || data.length) : allRowIds.length),
           onSelectAll: handleSelectAllRows,
           onDeselectAll: handleDeselectAll,
           selectionActions,
@@ -1553,9 +1554,11 @@ export const DataTable = ({
           <Box flex={3}>
             <Flex direction="row" align="center" gap="sm" wrap="nowrap">
               <Text inline={true} format={{ fontWeight: "demibold" }}>{typeof resolvedSelectedLabel === "function" ? resolvedSelectedLabel(selectedIds.size, countLabel(selectedIds.size)) : resolvedSelectedLabel}</Text>
+              {selectedIds.size < (serverSide ? (totalCount || data.length) : allRowIds.length) && (
               <Button variant="transparent" size="extra-small" onClick={handleSelectAllRows}>
                 {typeof resolvedSelectAllLabel === "function" ? resolvedSelectAllLabel(displayCount, countLabel(displayCount)) : resolvedSelectAllLabel}
               </Button>
+              )}
               <Button variant="transparent" size="extra-small" onClick={handleDeselectAll}>
                 {resolvedDeselectAllLabel}
               </Button>
