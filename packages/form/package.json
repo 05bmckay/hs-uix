@@ -1,6 +1,6 @@
 {
   "name": "@hs-uix/form",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "Declarative, config-driven FormBuilder for HubSpot UI Extensions",
   "license": "MIT",
   "main": "./dist/index.js",
