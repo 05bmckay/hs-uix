@@ -142,7 +142,7 @@ export interface FormBuilderField {
   tooltip?: string;
   required?: boolean | ((values: Record<string, unknown>) => boolean);
   readOnly?: boolean;
-  disabled?: boolean;
+  disabled?: boolean | ((values: Record<string, unknown>) => boolean);
   defaultValue?: unknown;
 
   // Validation (validate may return a Promise for async validation)
@@ -303,6 +303,7 @@ export interface FormBuilderSection {
   fields: string[];
   defaultOpen?: boolean;
   info?: string;
+  columns?: number;
   renderBefore?: (context: FormBuilderSectionContext) => ReactNode;
   renderAfter?: (context: FormBuilderSectionContext) => ReactNode;
 }

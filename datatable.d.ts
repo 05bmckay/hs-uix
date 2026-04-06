@@ -3,6 +3,7 @@ export {
   DataTableProps,
   DataTableColumn,
   DataTableFilterConfig,
+  DataTableFilterType,
   DataTableGroupBy,
   DataTableSortDirection,
   DataTableSortObject,
@@ -18,4 +19,9 @@ export {
   DataTableSelectionAction,
   DataTableRowAction,
   DataTableSelectAllRequestPayload,
+  DataTableLabels,
+  DataTableSelectionBarRenderContext,
+  DataTableEmptyStateRenderContext,
+  DataTableLoadingStateRenderContext,
+  DataTableErrorStateRenderContext,
 } from "./packages/datatable/index";

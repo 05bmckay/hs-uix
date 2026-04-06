@@ -243,6 +243,58 @@ const [errors, setErrors] = useState({});
 />
 ```
 
+## Ref API
+
+Access form methods imperatively — essential for modals, panels, and any UI where buttons live outside the form:
+
+```jsx
+const formRef = useRef();
+
+<FormBuilder ref={formRef} fields={fields} onSubmit={save} />
+
+// Later:
+formRef.current.submit();                              // trigger validation + submit
+formRef.current.validate();                            // { valid: boolean, errors: {} }
+formRef.current.reset();                               // reset to initial values
+formRef.current.getValues();                           // current form values
+formRef.current.isDirty();                             // true if values changed
+formRef.current.setFieldValue("email", "new@test.com"); // programmatic update
+formRef.current.setFieldError("email", "Taken");        // programmatic error
+formRef.current.setErrors({ email: "Taken", phone: "Invalid" }); // bulk set errors
+```
+
+Use `submitPosition="none"` to hide the built-in buttons and drive the form entirely via ref.
+
+## Submit Lifecycle
+
+The full submit flow: validation → `onBeforeSubmit` → `onSubmit` → `onSubmitSuccess` / `onSubmitError`.
+
+```jsx
+<FormBuilder
+  fields={fields}
+  onBeforeSubmit={(values) => {
+    // Return false to cancel submit
+    return window.confirm("Save changes?");
+  }}
+  onSubmit={async (values) => {
+    // If this throws or returns a rejected promise, onSubmitError fires.
+    // If it resolves, onSubmitSuccess fires with the return value.
+    return await saveRecord(values);
+  }}
+  onSubmitSuccess={(result, { reset, values }) => {
+    // result = whatever onSubmit returned
+    showToast("Saved!");
+  }}
+  onSubmitError={(error, { values }) => {
+    // error = whatever onSubmit threw
+    showToast(`Failed: ${error.message}`);
+  }}
+  resetOnSuccess={true}  // auto-reset after successful submit
+/>
+```
+
+If `onSubmitError` is not provided and `onSubmit` throws, the error re-throws (so you can catch it in a parent). The `loading` state is managed automatically during the async submit — all fields disable and the submit button shows a spinner.
+
 ## Conditional Visibility
 
 Fields can show/hide based on other field values:
@@ -259,11 +311,27 @@ const fields = [
 ];
 ```
 
+## Conditional Disabled
+
+Like `visible` and `required`, `disabled` accepts a function to conditionally disable fields based on other field values. The field stays visible but greyed out:
+
+```jsx
+const fields = [
+  { name: "acceptWalkins", type: "toggle", label: "Accept walk-ins" },
+  {
+    name: "walkinHours",
+    type: "text",
+    label: "Walk-in hours",
+    disabled: (values) => !values.acceptWalkins,
+  },
+];
+```
+
 ## Dependent Properties
 
 ![Dependent & Cascading](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/form/assets/dependent-cascading.gif)
 
-Dependent fields are grouped in a HubSpot Tile container below their parent:
+Dependent fields are grouped in a HubSpot Tile container below their parent. Use `dependsOnConfig` to define the relationship and `visible` to control when the dependent field appears:
 
 ```jsx
 const fields = [
@@ -273,14 +341,28 @@ const fields = [
     type: "number",
     label: "Contract length (months)",
     dependsOnConfig: {
-      field: "dealType",
-      display: "grouped",
-      label: "Contract details",
-      message: (parentLabel) => `These properties depend on ${parentLabel}`,
+      field: "dealType",         // parent field name — determines tile placement
+      display: "grouped",        // "grouped" (in Tile below parent) or "inline" (normal position)
+      label: "Contract details", // tile header text
+      message: (parentLabel) => `These properties depend on ${parentLabel}`, // info tooltip
     },
-    visible: (values) => values.dealType === "recurring",
+    visible: (values) => values.dealType === "recurring",  // when to show
   },
 ];
+```
+
+`dependsOnConfig` controls **where** the field renders (grouped in a Tile below the parent). `visible` controls **whether** it renders. They work together: the Tile only appears when at least one dependent field is visible.
+
+You can combine `dependsOnConfig` with `disabled` for fields that should always be visible but only editable when a condition is met:
+
+```jsx
+{
+  name: "renewalDate",
+  type: "date",
+  label: "Renewal date",
+  dependsOnConfig: { field: "dealType", label: "Renewal settings" },
+  disabled: (values) => values.dealType !== "recurring",
+}
 ```
 
 ## Cascading Options
@@ -332,25 +414,6 @@ Each step can have per-step validation:
     return true;
   },
 }
-```
-
-## Ref API
-
-Access form methods imperatively:
-
-```jsx
-const formRef = useRef();
-
-<FormBuilder ref={formRef} fields={fields} onSubmit={save} />
-
-// Later:
-formRef.current.submit();                              // trigger validation + submit
-formRef.current.validate();                            // { valid: boolean, errors: {} }
-formRef.current.reset();                               // reset to initial values
-formRef.current.getValues();                           // current form values
-formRef.current.isDirty();                             // true if values changed
-formRef.current.setFieldValue("email", "new@test.com"); // programmatic update
-formRef.current.setFieldError("email", "Taken");        // programmatic error
 ```
 
 ## Display Options
@@ -524,7 +587,26 @@ Group fields into collapsible accordion sections:
 />
 ```
 
-Fields not listed in any section render after all sections. Layout props (`columns`, `columnWidth`) apply within each section independently. Sections can be combined with multi-step forms.
+Fields not listed in any section render after all sections. Sections can be combined with multi-step forms.
+
+### Per-Section Columns
+
+Each section can override the form-level column count:
+
+```jsx
+<FormBuilder
+  columns={1}
+  fields={fields}
+  sections={[
+    { id: "images", label: "Images", fields: ["profileImage", "bannerImage"] },
+    { id: "social", label: "Social Links", fields: ["facebook", "instagram", "twitter", "linkedin"], columns: 2 },
+    { id: "hours", label: "Business Hours", fields: ["acceptWalkins", "hoursSchedule"], columns: 1 },
+  ]}
+  onSubmit={handleSubmit}
+/>
+```
+
+The Social Links section renders in 2 columns while the rest of the form stays single-column.
 
 ### Section Render Slots
 
@@ -976,7 +1058,7 @@ try {
 | `tooltip` | `string` | Most | Tooltip next to label |
 | `required` | `boolean \| (values) => boolean` | All | Required validation (supports conditional) |
 | `readOnly` | `boolean` | All | Prevent editing |
-| `disabled` | `boolean` | All | Disable this field |
+| `disabled` | `boolean \| (values) => boolean` | All | Disable this field (supports function for conditional disable) |
 | `defaultValue` | `unknown` | All | Default value |
 | `colSpan` | `number` | All | Columns to span (with `columns` prop) |
 | `width` | `"full"` | All | Span all columns regardless of column count |

@@ -319,6 +319,11 @@ const resolveRequired = (field, allValues) => {
   return !!field.required;
 };
 
+const resolveDisabled = (field, allValues) => {
+  if (typeof field.disabled === "function") return field.disabled(allValues);
+  return !!field.disabled;
+};
+
 const resolveOptions = (field, allValues) => {
   if (typeof field.options === "function") return field.options(allValues);
   return field.options || [];
@@ -614,7 +619,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       maxColumns: "maxColumns is a FormBuilder prop, not a field prop",
     };
     const KNOWN_SECTION_PROPS = new Set([
-      "id", "label", "fields", "defaultOpen", "info", "renderBefore", "renderAfter",
+      "id", "label", "fields", "defaultOpen", "info", "renderBefore", "renderAfter", "columns",
     ]);
     const SECTION_SUGGESTIONS = {
       title: "Use label instead",
@@ -1493,7 +1498,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     const hasError = !!fieldError;
     const isRequired = showRequiredIndicator && resolveRequired(field, formValues);
     const isReadOnly = field.readOnly || formReadOnly;
-    const isDisabled = disabled || field.disabled || formReadOnly;
+    const isDisabled = disabled || resolveDisabled(field, formValues) || formReadOnly;
 
     // Route onChange through debounce if field has debounce prop
     const fieldOnChange = field.debounce
@@ -1560,7 +1565,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
                   const sfError = formErrors[sf.name] || null;
                   const sfLabel = itemIdx === 0 ? sf.label : undefined;
                   const sfReadOnly = sf.readOnly || formReadOnly;
-                  const sfDisabled = disabled || sf.disabled || formReadOnly;
+                  const sfDisabled = disabled || resolveDisabled(sf, formValues) || formReadOnly;
                   const sfOnChange = sf.debounce
                     ? (v) => handleDebouncedFieldChange(sf.name, v)
                     : (v) => handleFieldChange(sf.name, v);
@@ -2044,7 +2049,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
                     label: sfLabel,
                     placeholder: sf.placeholder,
                     readOnly: sf.readOnly || isReadOnly,
-                    disabled: sf.disabled || isDisabled,
+                    disabled: resolveDisabled(sf, formValues) || isDisabled,
                     error: !!sfError,
                     validationMessage: sfError || undefined,
                     ...(sf.fieldProps || {}),
@@ -2163,6 +2168,9 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   const getFieldColSpan = (field) => {
     if (field.colSpan != null) return Math.min(field.colSpan, columns);
     if (field.width === "full" && columns > 1) return columns;
+    // Display and CRM fields default to full width — they render non-standard
+    // content that doesn't fit a grid cell
+    if (columns > 1 && (field.type === "display" || field.type === "crmPropertyList" || field.type === "crmAssociationPropertyList")) return columns;
     return 1;
   };
 
@@ -2212,7 +2220,9 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
   // Grid layout: chunk fields into rows based on columns and colSpan.
   // Uses AutoGrid per row so columns collapse responsively on narrow viewports.
-  const renderGridLayout = (fieldSubset) => {
+  // effectiveCols allows per-section column overrides.
+  const renderGridLayout = (fieldSubset, effectiveCols) => {
+    const cols = effectiveCols || columns;
     const fieldList = fieldSubset || visibleFields;
     const elements = [];
     let currentRow = [];
@@ -2222,11 +2232,19 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     // collapses to 1 column at ~400px container width (typical card/sidebar).
     const gridColumnWidth = 200;
 
+    // Local colSpan helper that respects the effective column count
+    const colSpan = (field) => {
+      if (field.colSpan != null) return Math.min(field.colSpan, cols);
+      if (field.width === "full" && cols > 1) return cols;
+      if (cols > 1 && (field.type === "display" || field.type === "crmPropertyList" || field.type === "crmAssociationPropertyList")) return cols;
+      return 1;
+    };
+
     const flushRow = () => {
       if (currentRow.length === 0) return;
-      const allUniform = currentRow.every((f) => getFieldColSpan(f) === 1);
-      const totalSpan = currentRow.reduce((s, f) => s + getFieldColSpan(f), 0);
-      const remainder = columns - totalSpan;
+      const allUniform = currentRow.every((f) => colSpan(f) === 1);
+      const totalSpan = currentRow.reduce((s, f) => s + colSpan(f), 0);
+      const remainder = cols - totalSpan;
 
       if (allUniform) {
         // Uniform colSpan — use AutoGrid for responsive collapse
@@ -2245,7 +2263,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         elements.push(
           <Flex key={`row-${currentRow[0].name}`} direction="row" gap={gap}>
             {currentRow.map((f) => (
-              <Box key={f.name} flex={getFieldColSpan(f)}>
+              <Box key={f.name} flex={colSpan(f)}>
                 {renderField(f)}
               </Box>
             ))}
@@ -2260,18 +2278,18 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     for (const field of fieldList) {
       if (isDependent(field)) continue;
 
-      const span = getFieldColSpan(field);
+      const span = colSpan(field);
 
-      if (span >= columns) {
+      if (span >= cols) {
         flushRow();
         elements.push(
           <React.Fragment key={field.name}>{renderField(field)}</React.Fragment>
         );
       } else {
-        if (currentRowSpan + span > columns) flushRow();
+        if (currentRowSpan + span > cols) flushRow();
         currentRow.push(field);
         currentRowSpan += span;
-        if (currentRowSpan >= columns) flushRow();
+        if (currentRowSpan >= cols) flushRow();
       }
 
       // Dependent group renders full-width after parent's row
@@ -2489,11 +2507,13 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   };
 
   // Render a subset of fields through the active layout mode
-  const renderFieldSubset = (fieldSubset) => {
+  // overrides.columns allows sections to override the form-level column count
+  const renderFieldSubset = (fieldSubset, overrides) => {
+    const effectiveColumns = (overrides && overrides.columns) || columns;
     // Explicit layout doesn't support subsetting — only use for full field list
     if (layout && fieldSubset === visibleFields) return renderExplicitLayout();
     if (columnWidth) return renderAutoGridLayout(fieldSubset);
-    if (columns > 1) return renderGridLayout(fieldSubset);
+    if (effectiveColumns > 1) return renderGridLayout(fieldSubset, effectiveColumns);
     return renderSingleColumnLayout(fieldSubset);
   };
 
@@ -2519,10 +2539,12 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
       const sectionContext = { values: formValues, errors: formErrors };
 
+      const sectionOverrides = sec.columns ? { columns: sec.columns } : undefined;
+
       const accordionContent = (
         <Flex direction="column" gap={gap}>
           {sec.renderBefore && sec.renderBefore(sectionContext)}
-          {renderFieldSubset(sectionFields)}
+          {renderFieldSubset(sectionFields, sectionOverrides)}
           {sec.renderAfter && sec.renderAfter(sectionContext)}
         </Flex>
       );
