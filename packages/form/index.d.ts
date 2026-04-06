@@ -22,6 +22,7 @@ export type FormBuilderFieldType =
   | "radioGroup"
   | "display"
   | "repeater"
+  | "fieldGroup"
   | "crmPropertyList"
   | "crmAssociationPropertyList"
   | (string & {}); // custom field types via fieldTypes plugin
@@ -173,6 +174,10 @@ export interface FormBuilderField {
   // Field grouping (non-collapsible divider groups)
   group?: string;
 
+  // Value transforms (storage ↔ display)
+  transformIn?: (rawValue: unknown) => unknown;   // storage → display (on load)
+  transformOut?: (displayValue: unknown) => unknown; // display → storage (on save)
+
   // Debounce onChange callback (ms) — useful for search-as-you-type fields
   debounce?: number;
 
@@ -243,16 +248,22 @@ export interface FormBuilderField {
     }
   ) => void;
 
-  // Repeater field
-  fields?: FormBuilderField[];
+  // Repeater field / fieldGroup field factory
+  fields?: FormBuilderField[] | ((item: { key: string; label?: string; [k: string]: unknown }) => FormBuilderField[]);
   repeaterProps?: FormBuilderRepeaterProps;
 
-  // Custom render escape hatch (for display fields, only allValues is provided)
+  // fieldGroup props (type: "fieldGroup") — fixed structured groups
+  items?: Array<{ key: string; label?: string; [k: string]: unknown }>;
+  showItemLabel?: boolean;
+
+  // Custom render escape hatch
   render?: (props: {
     value?: unknown;
     onChange?: (v: unknown) => void;
     error?: boolean;
     allValues: Record<string, unknown>;
+    setFieldValue?: (name: string, value: unknown) => void;
+    setFieldError?: (name: string, message: string) => void;
   }) => ReactNode;
 }
 
@@ -276,12 +287,19 @@ export interface FieldTypePlugin {
 // Section definition (accordion grouping)
 // ---------------------------------------------------------------------------
 
+export interface FormBuilderSectionContext {
+  values: Record<string, unknown>;
+  errors: Record<string, string>;
+}
+
 export interface FormBuilderSection {
   id: string;
   label: string;
   fields: string[];
   defaultOpen?: boolean;
   info?: string;
+  renderBefore?: (context: FormBuilderSectionContext) => ReactNode;
+  renderAfter?: (context: FormBuilderSectionContext) => ReactNode;
 }
 
 // ---------------------------------------------------------------------------
@@ -328,8 +346,9 @@ export interface FormBuilderProps {
     helpers: { reset: () => void; rawValues: Record<string, unknown> }
   ) => void | Promise<unknown>;
 
-  // Submit lifecycle
+  // Value transforms
   transformValues?: (values: Record<string, unknown>) => Record<string, unknown>;
+  transformInitialValues?: (rawValues: Record<string, unknown>) => Record<string, unknown>;
   onBeforeSubmit?: (values: Record<string, unknown>) => boolean | Promise<boolean>;
   onSubmitSuccess?: (
     result: unknown,

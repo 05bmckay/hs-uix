@@ -49,6 +49,7 @@ Every field maps to a native HubSpot UI Extension component with full prop suppo
 | `radioGroup` | `ToggleGroup radioButtonList` | `options`, `inline`, `variant` |
 | `display` | Custom render | Render-only, no form value or validation |
 | `repeater` | Sub-field rows | `fields`, `min`, `max` — add/remove dynamic rows |
+| `fieldGroup` | Structured rows | `items`, `fields` — fixed predefined rows (no add/remove) |
 | `crmPropertyList` | `CrmPropertyList` | `properties`, `direction` — native HubSpot inline editing |
 | `crmAssociationPropertyList` | `CrmAssociationPropertyList` | `objectTypeId`, `properties`, `filters`, `sort` |
 
@@ -506,6 +507,31 @@ Group fields into collapsible accordion sections:
 
 Fields not listed in any section render after all sections. Layout props (`columns`, `columnWidth`) apply within each section independently. Sections can be combined with multi-step forms.
 
+### Section Render Slots
+
+Inject arbitrary content before or after a section's fields with `renderBefore` and `renderAfter`:
+
+```jsx
+sections={[
+  {
+    id: "images",
+    label: "Images",
+    defaultOpen: false,
+    fields: ["profileImage", "bannerImage"],
+    renderBefore: ({ values }) => (
+      <Text variant="microcopy">Upload or paste a hosted image URL.</Text>
+    ),
+    renderAfter: ({ values }) => (
+      values.profileImage
+        ? <Image src={values.profileImage} width={100} />
+        : null
+    ),
+  },
+]}
+```
+
+Both callbacks receive `{ values, errors }` — the current form state.
+
 ## Field Groups (Dividers)
 
 Lightweight non-collapsible grouping with auto-inserted dividers:
@@ -531,6 +557,22 @@ Render-only fields with no form value, no validation, and not included in submit
     const url = buildMapsUrl(allValues.address, allValues.city, allValues.zip);
     return url ? <Link href={url}>Preview in Google Maps</Link> : null;
   },
+}
+```
+
+Display fields can also interact with the form via `setFieldValue` and `setFieldError`:
+
+```jsx
+{
+  name: "fileUpload",
+  type: "display",
+  render: ({ allValues, setFieldValue, setFieldError }) => (
+    <CrmPropertyList
+      properties={["profile_file_id"]}
+      direction="column"
+      onChange={(fileId) => setFieldValue("profileFileId", fileId)}
+    />
+  ),
 }
 ```
 
@@ -582,11 +624,70 @@ Validation gates (`submit`, `next step`) also trigger async validators for untou
   required: (values) => values.accountType === "business" }
 ```
 
-## Submit Lifecycle
+## Value Transforms
 
-### Transform Values
+### Per-Field Transforms (`transformIn` / `transformOut`)
 
-Reshape values before submission:
+When storage format differs from display format, use per-field transforms to bridge the gap:
+
+```jsx
+const fields = [
+  {
+    name: "startTime",
+    type: "text",
+    label: "Start time",
+    transformIn: (raw) => to12Hour(raw),     // "14:00" → "2:00 PM" (on load)
+    transformOut: (display) => to24Hour(display), // "2:00 PM" → "14:00" (on save)
+  },
+  {
+    name: "website",
+    type: "text",
+    label: "Website",
+    transformIn: (url) => url?.replace(/^https?:\/\//, ""),  // strip protocol for display
+    transformOut: (handle) => handle ? `https://${handle}` : "", // add protocol for storage
+  },
+  {
+    name: "isActive",
+    type: "toggle",
+    label: "Active",
+    transformIn: (raw) => raw === "true",    // string → boolean
+    transformOut: (val) => String(val),       // boolean → string
+  },
+];
+```
+
+`transformIn` runs once during initial value computation (storage → display). `transformOut` runs at submit time before `transformValues` (display → storage). The form internally works with display values, so validation runs against the display format.
+
+### Transform Initial Values
+
+Reshape raw API data into the form's field structure on load:
+
+```jsx
+<FormBuilder
+  initialValues={rawCrmProperties}
+  transformInitialValues={(raw) => {
+    const values = { ...raw };
+    // Parse a JSON blob into individual fields
+    const hours = JSON.parse(raw.business_hours || "[]");
+    for (const entry of hours) {
+      values[`hours_${entry.day}_start`] = entry.opensAt;
+      values[`hours_${entry.day}_end`] = entry.closesAt;
+    }
+    return values;
+  }}
+  transformValues={(values) => {
+    // Reverse: individual fields back to JSON for save
+  }}
+  fields={fields}
+  onSubmit={save}
+/>
+```
+
+Runs once in `computeInitialValues`, before per-field defaults and `transformIn`. Combined with `transformValues` for the save side, this creates a clean load ↔ save pipeline for API-backed forms.
+
+### Transform Values (Submit)
+
+Reshape the aggregate form values before submission:
 
 ```jsx
 <FormBuilder
@@ -664,6 +765,34 @@ Add/remove rows for dynamic lists:
 ```
 
 Repeater sub-fields now validate on blur/onChange like top-level fields. Optional row reordering is available via `repeaterProps.reorderable` (with customizable move controls).
+
+## Field Groups (Structured)
+
+Fixed structured groups for patterns like weekly schedules, multi-address forms, or per-region settings. Unlike repeaters, items are predefined — no add/remove.
+
+```jsx
+const fields = [
+  {
+    name: "businessHours",
+    type: "fieldGroup",
+    label: "Business Hours",
+    items: [
+      { key: "monday", label: "Monday" },
+      { key: "tuesday", label: "Tuesday" },
+      { key: "wednesday", label: "Wednesday" },
+      { key: "thursday", label: "Thursday" },
+      { key: "friday", label: "Friday" },
+    ],
+    fields: (item) => [
+      { name: `hours_${item.key}_start`, type: "text", label: "Start", placeholder: "9:00 AM" },
+      { name: `hours_${item.key}_end`, type: "text", label: "End", placeholder: "5:00 PM" },
+    ],
+    showItemLabel: true, // render item.label as row header (default true)
+  },
+];
+```
+
+Each item's sub-fields get their own top-level form values (e.g. `hours_monday_start`, `hours_monday_end`), so they work with `initialValues`, validation, `transformIn`/`transformOut`, and `transformValues` like any other field.
 
 ## Custom Field Types
 
@@ -806,7 +935,8 @@ try {
 | `alerts` | `{ addAlert?, readOnlyTitle?, errorTitle?, successTitle? }` | - | Grouped alert config |
 | `error` | `string \| boolean` | - | Form-level error alert |
 | `success` | `string` | - | Form-level success alert |
-| `transformValues` | `(values) => values` | - | Reshape values before submit |
+| `transformValues` | `(values) => values` | - | Reshape values before submit (after per-field `transformOut`) |
+| `transformInitialValues` | `(rawValues) => values` | - | Reshape raw initial values on load (before per-field `transformIn`) |
 | `onBeforeSubmit` | `(values) => boolean \| Promise` | - | Intercept submit |
 | `onSubmitSuccess` | `(result, helpers) => void` | - | Post-submit success |
 | `onSubmitError` | `(error, helpers) => void` | - | Post-submit error |
@@ -840,7 +970,11 @@ try {
 | `loading` | `boolean` | All | Field-level loading indicator |
 | `group` | `string` | All | Divider-based field grouping |
 | `onFieldChange` | `(value, allValues, helpers) => void` | All | Cross-field side effects |
-| `fields` | `FormBuilderField[]` | repeater | Sub-field definitions |
+| `transformIn` | `(rawValue) => displayValue` | All | Storage → display transform (on load) |
+| `transformOut` | `(displayValue) => rawValue` | All | Display → storage transform (on save) |
+| `fields` | `Field[] \| (item) => Field[]` | repeater, fieldGroup | Sub-field definitions (array for repeater, function for fieldGroup) |
+| `items` | `Array<{ key, label? }>` | fieldGroup | Predefined items to generate rows |
+| `showItemLabel` | `boolean` | fieldGroup | Show item labels as row headers (default `true`) |
 | `repeaterProps` | `RepeaterProps` | repeater | Repeater controls (labels, custom add/remove, reorder) |
 | `pattern` | `RegExp` | text, textarea, password | Regex validation |
 | `patternMessage` | `string` | text, textarea, password | Custom pattern error |

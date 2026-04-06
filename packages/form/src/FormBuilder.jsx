@@ -232,8 +232,8 @@ const collectAsyncValidatorPromises = (value, field, allValues, context) => {
 const runValidators = (value, field, allValues, fieldTypes, options = {}) => {
   const includeCustomValidators = options.includeCustomValidators !== false;
   const msg = options.messages || {};
-  // Display and CRM data fields have no validation
-  if (field.type === "display" || field.type === "crmPropertyList" || field.type === "crmAssociationPropertyList") return null;
+  // Display, CRM data, and fieldGroup fields have no direct validation
+  if (field.type === "display" || field.type === "crmPropertyList" || field.type === "crmAssociationPropertyList" || field.type === "fieldGroup") return null;
 
   // 1. Required (supports function form for conditional required)
   const isRequired = resolveRequired(field, allValues);
@@ -448,6 +448,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     fields,       // FormBuilderField[] — field definitions
     onSubmit,     // (values, { reset, rawValues }) => void | Promise
     transformValues, // (values) => values — reshape before submit
+    transformInitialValues, // (rawInitialValues) => values — reshape raw data on load
     onBeforeSubmit,  // (values) => boolean | Promise<boolean> — intercept submit
     onSubmitSuccess, // (result, { reset, values }) => void
     onSubmitError,   // (error, { values }) => void
@@ -591,19 +592,45 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   // -- Internal state -------------------------------------------------------
 
   const computeInitialValues = () => {
+    // Apply form-level initial values transform (reshape raw API data)
+    const resolved = transformInitialValues && initialValues
+      ? transformInitialValues(initialValues)
+      : initialValues;
     const vals = {};
     for (const field of fields) {
       if (field.type === "display" || field.type === "crmPropertyList" || field.type === "crmAssociationPropertyList") continue;
+
+      // fieldGroup: initialize all generated sub-fields
+      if (field.type === "fieldGroup" && field.items && field.fields) {
+        for (const item of field.items) {
+          const subFields = field.fields(item);
+          for (const sf of subFields) {
+            const plugin = fieldTypes && fieldTypes[sf.type];
+            const emptyValue = plugin && plugin.getEmptyValue ? plugin.getEmptyValue() : getEmptyValue(sf);
+            let init = resolved && resolved[sf.name] !== undefined
+              ? resolved[sf.name]
+              : sf.defaultValue !== undefined
+                ? sf.defaultValue
+                : emptyValue;
+            if (sf.transformIn) init = sf.transformIn(init);
+            vals[sf.name] = init;
+          }
+        }
+        continue;
+      }
+
       // Check custom field type for getEmptyValue
       const plugin = fieldTypes && fieldTypes[field.type];
       const emptyValue = plugin && plugin.getEmptyValue
         ? plugin.getEmptyValue()
         : getEmptyValue(field);
-      const init = initialValues && initialValues[field.name] !== undefined
-        ? initialValues[field.name]
+      let init = resolved && resolved[field.name] !== undefined
+        ? resolved[field.name]
         : field.defaultValue !== undefined
           ? field.defaultValue
           : emptyValue;
+      // Apply per-field transformIn (storage → display)
+      if (field.transformIn) init = field.transformIn(init);
       vals[field.name] = init;
     }
     return vals;
@@ -646,7 +673,15 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
   const fieldByName = useMemo(() => {
     const map = new Map();
-    for (const field of fields) map.set(field.name, field);
+    for (const field of fields) {
+      map.set(field.name, field);
+      // Register fieldGroup sub-fields so validation/change handlers can find them
+      if (field.type === "fieldGroup" && field.items && field.fields) {
+        for (const item of field.items) {
+          for (const sf of field.fields(item)) map.set(sf.name, sf);
+        }
+      }
+    }
     return map;
   }, [fields]);
 
@@ -1212,12 +1247,22 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         prevAutoSaveValues.current = deepClone(fresh);
       };
 
-      // Exclude display fields from submitted values
+      // Exclude display fields from submitted values and apply per-field transformOut
       const rawValues = {};
       for (const key of Object.keys(formValues)) {
         const f = fieldByName.get(key);
-        if (f && (f.type === "display" || f.type === "crmPropertyList" || f.type === "crmAssociationPropertyList")) continue;
-        rawValues[key] = formValues[key];
+        if (f && (f.type === "display" || f.type === "crmPropertyList" || f.type === "crmAssociationPropertyList" || f.type === "fieldGroup")) continue;
+        rawValues[key] = f && f.transformOut ? f.transformOut(formValues[key]) : formValues[key];
+      }
+      // Also apply transformOut for fieldGroup sub-fields
+      for (const f of fields) {
+        if (f.type !== "fieldGroup" || !f.items || !f.fields) continue;
+        for (const item of f.items) {
+          for (const sf of f.fields(item)) {
+            if (formValues[sf.name] === undefined) continue;
+            rawValues[sf.name] = sf.transformOut ? sf.transformOut(formValues[sf.name]) : formValues[sf.name];
+          }
+        }
       }
 
       // Transform values if transformer provided
@@ -1404,9 +1449,145 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     // Display fields — render-only, no form value
     if (field.type === "display") {
       if (field.render) {
-        return field.render({ allValues: formValues });
+        return field.render({
+          allValues: formValues,
+          setFieldValue: (name, value) => handleFieldChange(name, value),
+          setFieldError: (name, message) => updateErrors({ [name]: message }),
+        });
       }
       return null;
+    }
+
+    // fieldGroup — fixed structured groups (e.g. weekly schedules)
+    if (field.type === "fieldGroup") {
+      const items = field.items || [];
+      const fieldsFn = field.fields;
+      if (!fieldsFn) return null;
+      const groupColumns = field.columns || 1;
+      const showItemLabel = field.showItemLabel !== false;
+
+      return (
+        <Flex direction="column" gap="xs">
+          {field.label && (
+            <Text format={{ fontWeight: "demibold" }}>
+              {field.label}
+            </Text>
+          )}
+          {field.description && (
+            <Text variant="microcopy">{field.description}</Text>
+          )}
+          {items.map((item, itemIdx) => {
+            const subFields = fieldsFn(item);
+            return (
+              <Flex key={item.key || itemIdx} direction="row" gap="xs" align="end">
+                {showItemLabel && item.label && (
+                  <Box flex={1}>
+                    {itemIdx === 0 ? (
+                      <Input
+                        name={`_fieldGroup-label-${field.name}-${itemIdx}`}
+                        label="&nbsp;"
+                        value={item.label}
+                        readOnly={true}
+                        disabled={true}
+                      />
+                    ) : (
+                      <Input
+                        name={`_fieldGroup-label-${field.name}-${itemIdx}`}
+                        value={item.label}
+                        readOnly={true}
+                        disabled={true}
+                      />
+                    )}
+                  </Box>
+                )}
+                {subFields.map((sf) => {
+                  const sfValue = formValues[sf.name];
+                  const sfError = formErrors[sf.name] || null;
+                  const sfLabel = itemIdx === 0 ? sf.label : undefined;
+                  const sfReadOnly = sf.readOnly || formReadOnly;
+                  const sfDisabled = disabled || sf.disabled || formReadOnly;
+                  const sfOnChange = sf.debounce
+                    ? (v) => handleDebouncedFieldChange(sf.name, v)
+                    : (v) => handleFieldChange(sf.name, v);
+                  const sfProps = {
+                    name: sf.name,
+                    label: sfLabel,
+                    placeholder: sf.placeholder,
+                    description: itemIdx === 0 ? sf.description : undefined,
+                    readOnly: sfReadOnly,
+                    disabled: sfDisabled,
+                    error: !!sfError,
+                    validationMessage: sfError || undefined,
+                    ...(sf.fieldProps || {}),
+                  };
+
+                  let sfElement;
+                  switch (sf.type) {
+                    case "select":
+                      sfElement = (
+                        <Select
+                          {...sfProps}
+                          value={sfValue}
+                          options={resolveOptions(sf, formValues)}
+                          onChange={sfOnChange}
+                        />
+                      );
+                      break;
+                    case "number":
+                      sfElement = (
+                        <NumberInput
+                          {...sfProps}
+                          value={sfValue}
+                          onChange={sfOnChange}
+                          onBlur={(v) => handleFieldBlur(sf.name, v)}
+                        />
+                      );
+                      break;
+                    case "toggle":
+                      sfElement = (
+                        <Toggle
+                          name={sf.name}
+                          label={sfLabel || sf.label}
+                          checked={!!sfValue}
+                          size={sf.size || "md"}
+                          labelDisplay={sf.labelDisplay || "top"}
+                          readonly={sfReadOnly}
+                          disabled={sfDisabled}
+                          onChange={sfOnChange}
+                          {...(sf.fieldProps || {})}
+                        />
+                      );
+                      break;
+                    case "time":
+                      sfElement = (
+                        <TimeInput
+                          {...sfProps}
+                          value={sfValue}
+                          interval={sf.interval}
+                          onChange={sfOnChange}
+                          onBlur={(v) => handleFieldBlur(sf.name, v)}
+                        />
+                      );
+                      break;
+                    default:
+                      sfElement = (
+                        <Input
+                          {...sfProps}
+                          value={sfValue || ""}
+                          onChange={sfOnChange}
+                          onInput={(v) => handleFieldInput(sf.name, v)}
+                          onBlur={(v) => handleFieldBlur(sf.name, v)}
+                        />
+                      );
+                  }
+
+                  return <Box key={sf.name} flex={1}>{sfElement}</Box>;
+                })}
+              </Flex>
+            );
+          })}
+        </Flex>
+      );
     }
 
     // CRM data components — hands-off, HubSpot handles editing and saving
@@ -2124,15 +2305,29 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
     const flushBatch = () => {
       if (batch.length === 0) return;
-      // Chunk into rows of maxColumns when set
-      const chunks = maxColumns
-        ? Array.from({ length: Math.ceil(batch.length / maxColumns) }, (_, i) =>
-          batch.slice(i * maxColumns, i * maxColumns + maxColumns))
-        : [batch];
-      for (const chunk of chunks) {
+      if (maxColumns) {
+        // Cap columns using Flex rows so fields align across rows
+        const chunks = Array.from(
+          { length: Math.ceil(batch.length / maxColumns) },
+          (_, i) => batch.slice(i * maxColumns, i * maxColumns + maxColumns)
+        );
+        for (const chunk of chunks) {
+          const remainder = maxColumns - chunk.length;
+          elements.push(
+            <Flex key={`ag-${chunk[0].name}`} direction="row" gap={gap}>
+              {chunk.map((f) => (
+                <Box key={f.name} flex={1}>
+                  {renderField(f)}
+                </Box>
+              ))}
+              {remainder > 0 && <Box flex={remainder} />}
+            </Flex>
+          );
+        }
+      } else {
         elements.push(
-          <AutoGrid key={`ag-${chunk[0].name}`} columnWidth={columnWidth} flexible gap={gap}>
-            {chunk.map((f) => (
+          <AutoGrid key={`ag-${batch[0].name}`} columnWidth={columnWidth} flexible gap={gap}>
+            {batch.map((f) => (
               <React.Fragment key={f.name}>{renderField(f)}</React.Fragment>
             ))}
           </AutoGrid>
@@ -2243,9 +2438,13 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
       if (sectionFields.length === 0) continue;
 
+      const sectionContext = { values: formValues, errors: formErrors };
+
       const accordionContent = (
         <Flex direction="column" gap={gap}>
+          {sec.renderBefore && sec.renderBefore(sectionContext)}
           {renderFieldSubset(sectionFields)}
+          {sec.renderAfter && sec.renderAfter(sectionContext)}
         </Flex>
       );
 
