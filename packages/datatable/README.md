@@ -895,6 +895,7 @@ function ServerSideTable({ runServerlessFunction }) {
 |---|---|---|
 | `field` | string | Key in the row object |
 | `label` | string | Column header text |
+| `description` | ReactNode | Optional help text. Renders an info icon next to the label that reveals a tooltip on hover. |
 | `sortable` | boolean | Enable sorting on this column |
 | `width` | `"min"` \| `"max"` \| `"auto"` \| `number` | Column width (header + cell fallback). Numeric value is treated as fixed width in pixels. |
 | `cellWidth` | `"min"` \| `"max"` \| `"auto"` | Cell-only width override (numeric values are not supported) |

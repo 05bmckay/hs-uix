@@ -53,6 +53,7 @@ export type DataTableEditType =
 export interface DataTableColumn<Row = Record<string, unknown>> {
   field: string;
   label: ReactNode;
+  description?: ReactNode;
   sortable?: boolean;
   sortOrder?: unknown[];
   sortComparator?: (

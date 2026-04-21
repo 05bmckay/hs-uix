@@ -297,6 +297,7 @@ import {
   TextArea,
   TimeInput,
   Toggle,
+  Tooltip,
 } from "@hubspot/ui-extensions";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1523,7 +1524,7 @@ export const DataTable = ({
         <Box flex={3}>
           <Flex direction="column" gap="sm">
             {/* Row 1: Search + first 2 filters + Filters toggle */}
-            <Flex direction="row" align="end" gap="sm" wrap="wrap">
+            <Flex direction="row" align="center" gap="sm" wrap="wrap">
               {showSearch && searchFields.length > 0 && (
                 <SearchInput
                   name="datatable-search"
@@ -1546,7 +1547,7 @@ export const DataTable = ({
 
             {/* Row 2: Additional filters (toggled) */}
             {showMoreFilters && filters.length > filterInlineLimit && (
-              <Flex direction="row" align="end" gap="sm" wrap="wrap">
+              <Flex direction="row" align="center" gap="sm" wrap="wrap">
                 {filters.slice(filterInlineLimit).map(renderFilterControl)}
               </Flex>
             )}
@@ -1595,45 +1596,45 @@ export const DataTable = ({
           onDeselectAll: handleDeselectAll,
           selectionActions,
         }) : (
-        <Flex direction="row" gap="sm">
-          <Box flex={3}>
-            <Flex direction="row" align="center" gap="sm" wrap="nowrap">
-              <Text inline={true} format={{ fontWeight: "demibold" }}>{typeof resolvedSelectedLabel === "function" ? resolvedSelectedLabel(selectedIds.size, countLabel(selectedIds.size)) : resolvedSelectedLabel}</Text>
-              {selectedIds.size < (serverSide ? (totalCount || data.length) : allRowIds.length) && (
-              <Button variant="transparent" size="extra-small" onClick={handleSelectAllRows}>
-                {typeof resolvedSelectAllLabel === "function" ? resolvedSelectAllLabel(displayCount, countLabel(displayCount)) : resolvedSelectAllLabel}
-              </Button>
-              )}
-              <Button variant="transparent" size="extra-small" onClick={handleDeselectAll}>
-                {resolvedDeselectAllLabel}
-              </Button>
-              {selectionActions.map((action, i) => (
-                <Button
-                  key={i}
-                  variant={action.variant || "transparent"}
-                  size="extra-small"
-                  onClick={() => action.onClick([...selectedIds])}
-                >
-                  {action.icon && <Icon name={action.icon} size="sm" />} {action.label}
+          <Flex direction="row" gap="sm">
+            <Box flex={3}>
+              <Flex direction="row" align="center" gap="sm" wrap="nowrap">
+                <Text inline={true} format={{ fontWeight: "demibold" }}>{typeof resolvedSelectedLabel === "function" ? resolvedSelectedLabel(selectedIds.size, countLabel(selectedIds.size)) : resolvedSelectedLabel}</Text>
+                {selectedIds.size < (serverSide ? (totalCount || data.length) : allRowIds.length) && (
+                  <Button variant="transparent" size="extra-small" onClick={handleSelectAllRows}>
+                    {typeof resolvedSelectAllLabel === "function" ? resolvedSelectAllLabel(displayCount, countLabel(displayCount)) : resolvedSelectAllLabel}
+                  </Button>
+                )}
+                <Button variant="transparent" size="extra-small" onClick={handleDeselectAll}>
+                  {resolvedDeselectAllLabel}
                 </Button>
-              ))}
-            </Flex>
-          </Box>
-          {showRowCount && displayCount > 0 && (
-            <Box flex={1} alignSelf="center">
-              <Flex direction="row" justify="end">
-                <Text variant="microcopy" format={rowCountBold ? { fontWeight: "bold" } : undefined}>{recordCountLabel}</Text>
+                {selectionActions.map((action, i) => (
+                  <Button
+                    key={i}
+                    variant={action.variant || "transparent"}
+                    size="extra-small"
+                    onClick={() => action.onClick([...selectedIds])}
+                  >
+                    {action.icon && <Icon name={action.icon} size="sm" />} {action.label}
+                  </Button>
+                ))}
               </Flex>
             </Box>
-          )}
-        </Flex>
+            {showRowCount && displayCount > 0 && (
+              <Box flex={1} alignSelf="center">
+                <Flex direction="row" justify="end">
+                  <Text variant="microcopy" format={rowCountBold ? { fontWeight: "bold" } : undefined}>{recordCountLabel}</Text>
+                </Flex>
+              </Box>
+            )}
+          </Flex>
         )
       )}
 
       {/* Loading / error / table / empty state */}
       {loading ? (
         renderLoadingState ? renderLoadingState({ label: resolvedLoadingLabel }) : (
-        <LoadingSpinner label={resolvedLoadingLabel} layout="centered" />
+          <LoadingSpinner label={resolvedLoadingLabel} layout="centered" />
         )
       ) : error ? (
         renderErrorState ? renderErrorState({
@@ -1641,17 +1642,17 @@ export const DataTable = ({
           title: typeof error === "string" ? error : resolvedErrorTitle,
           message: typeof error === "string" ? resolvedRetryMessage : resolvedErrorMessage,
         }) : (
-        <ErrorState title={typeof error === "string" ? error : resolvedErrorTitle}>
-          <Text>{typeof error === "string" ? resolvedRetryMessage : resolvedErrorMessage}</Text>
-        </ErrorState>
+          <ErrorState title={typeof error === "string" ? error : resolvedErrorTitle}>
+            <Text>{typeof error === "string" ? resolvedRetryMessage : resolvedErrorMessage}</Text>
+          </ErrorState>
         )
       ) : displayRows.length === 0 ? (
         renderEmptyState ? renderEmptyState({ title: resolvedEmptyTitle, message: resolvedEmptyMessage }) : (
-        <Flex direction="column" align="center" justify="center">
-          <EmptyState title={resolvedEmptyTitle} layout="vertical">
-            <Text>{resolvedEmptyMessage}</Text>
-          </EmptyState>
-        </Flex>
+          <Flex direction="column" align="center" justify="center">
+            <EmptyState title={resolvedEmptyTitle} layout="vertical">
+              <Text>{resolvedEmptyMessage}</Text>
+            </EmptyState>
+          </Flex>
         )
       ) : (
         <Table
@@ -1665,6 +1666,7 @@ export const DataTable = ({
           showButtonLabels={showButtonLabels}
           {...(maxVisiblePageButtons != null ? { maxVisiblePageButtons } : {})}
         >
+
           <TableHead>
             <TableRow>
               {selectable && (
@@ -1687,13 +1689,21 @@ export const DataTable = ({
                     sortDirection={col.sortable ? (sortState[col.field] || "none") : "never"}
                     onSortChange={col.sortable ? () => handleSortChange(col.field) : undefined}
                   >
-                    {col.label}
+                    {col.description ? (
+                      <>
+                        {col.label}{" "}
+                        <Link inline={true} variant="dark" overlay={<Tooltip>{col.description}</Tooltip>}>
+                          <Icon name="info" screenReaderText={typeof col.description === "string" ? col.description : undefined} />
+                        </Link>
+                      </>
+                    ) : col.label}
                   </TableHeader>
                 );
               })}
               {showRowActionsColumn && <TableHeader width="min" />}
             </TableRow>
           </TableHead>
+
           <TableBody>
             {displayRows.map((item, idx) =>
               item.type === "group-header" ? (
@@ -1754,15 +1764,15 @@ export const DataTable = ({
                           const resolvedRowActions = typeof rowActions === "function" ? rowActions(item.row) : rowActions;
                           const actions = Array.isArray(resolvedRowActions) ? resolvedRowActions : [];
                           return actions.map((action, i) => (
-                          <Button
-                            key={i}
-                            variant={action.variant || "transparent"}
-                            size="extra-small"
-                            onClick={() => action.onClick(item.row)}
-                          >
-                            {action.icon && <Icon name={action.icon} size="sm" />}
-                            {action.label && ` ${action.label}`}
-                          </Button>
+                            <Button
+                              key={i}
+                              variant={action.variant || "transparent"}
+                              size="extra-small"
+                              onClick={() => action.onClick(item.row)}
+                            >
+                              {action.icon && <Icon name={action.icon} size="sm" />}
+                              {action.label && ` ${action.label}`}
+                            </Button>
                           ));
                         })()}
                       </Flex>

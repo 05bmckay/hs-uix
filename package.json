@@ -48,6 +48,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "link:demos": "npm link && cd ../hs-uix-demos/src/app/pages && npm link hs-uix",
+    "dev:demos": "npm run link:demos && npm run dev",
     "prepublishOnly": "tsup",
     "release:patch": "npm version patch && npm publish && git push origin main --tags",
     "release:minor": "npm version minor && npm publish && git push origin main --tags",
