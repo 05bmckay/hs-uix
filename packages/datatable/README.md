@@ -118,7 +118,9 @@ When more than 2 filters are defined, the first 2 appear inline and the rest are
 ```jsx
 import React from "react";
 import { Text, StatusTag, Tag, hubspot } from "@hubspot/ui-extensions";
-import { DataTable } from "hubspot-datatable";
+import { DataTable } from "hs-uix/datatable";
+import { AutoStatusTag, AutoTag, KeyValueList, SectionHeader } from "hs-uix/common-components";
+import { formatCurrency, formatDate, sumBy } from "hs-uix/utils";
 
 const DEALS = [
   { id: 1, company: "Acme Corp", status: "active", segment: "enterprise", amount: 125000, closeDate: "2026-01-15" },
@@ -127,23 +129,18 @@ const DEALS = [
   { id: 4, company: "Umbrella Corp", status: "at-risk", segment: "enterprise", amount: 230000, closeDate: "2026-03-01" },
 ];
 
-const STATUS_COLORS = { active: "success", "at-risk": "warning", churned: "danger" };
-
-const formatCurrency = (val) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(val);
-
 const COLUMNS = [
   { field: "company", label: "Company", sortable: true, footer: "Total",
     renderCell: (val) => <Text format={{ fontWeight: "demibold" }}>{val}</Text> },
   { field: "status", label: "Status", sortable: true,
-    renderCell: (val) => <StatusTag variant={STATUS_COLORS[val]}>{val}</StatusTag> },
+    renderCell: (val) => <AutoStatusTag value={val} /> },
   { field: "segment", label: "Segment", sortable: true,
-    renderCell: (val) => <Tag variant="default">{val}</Tag> },
+    renderCell: (val) => <AutoTag value={val} /> },
   { field: "amount", label: "Amount", sortable: true, align: "right",
-    footer: (rows) => formatCurrency(rows.reduce((sum, r) => sum + r.amount, 0)),
+    footer: (rows) => formatCurrency(sumBy(rows, "amount")),
     renderCell: (val) => formatCurrency(val) },
   { field: "closeDate", label: "Close Date", sortable: true,
-    renderCell: (val) => new Date(val).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) },
+    renderCell: (val) => formatDate(val) },
 ];
 
 const FILTERS = [
@@ -173,6 +170,18 @@ const FILTERS = [
     placeholder: "Close date",
   },
 ];
+
+const SUMMARY = [
+  { label: "Open deals", value: DEALS.length },
+  { label: "Pipeline", value: formatCurrency(sumBy(DEALS, "amount")) },
+];
+
+<SectionHeader
+  title="Companies"
+  description="Open deals worth tracking in the current pipeline."
+/>
+
+<KeyValueList items={SUMMARY} />
 
 hubspot.extend(() => (
   <DataTable

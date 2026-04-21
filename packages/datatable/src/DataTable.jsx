@@ -602,7 +602,9 @@ export const DataTable = ({
   // ---------------------------------------------------------------------------
   // Internal state (used in client-side mode; also drives UI in server-side)
   // ---------------------------------------------------------------------------
-  const [internalSearchTerm, setInternalSearchTerm] = useState("");
+  const [internalSearchTerm, setInternalSearchTerm] = useState(
+    () => (serverSide && searchValue != null ? searchValue : "")
+  );
   const [internalFilterValues, setInternalFilterValues] = useState(() => {
     const init = {};
     filters.forEach((f) => { init[f.name] = getEmptyFilterValue(f); });
@@ -612,8 +614,25 @@ export const DataTable = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [showMoreFilters, setShowMoreFilters] = useState(false);
 
+  // Last search term this component dispatched to the parent. Used to detect
+  // whether an external `searchValue` change originated from us (echo) or is
+  // an independent parent update (e.g. a reset) that should overwrite input.
+  const lastAppliedSearchRef = useRef(
+    serverSide && searchValue != null ? searchValue : ""
+  );
+
   // Resolve controlled vs internal state
   const searchTerm = serverSide && searchValue != null ? searchValue : internalSearchTerm;
+
+  // Sync external searchValue -> internal input when parent changes it
+  // independently of our own dispatches. This keeps the input responsive
+  // during debounce while still reflecting resets / URL-driven changes.
+  useEffect(() => {
+    if (!serverSide || searchValue == null) return;
+    if (searchValue === lastAppliedSearchRef.current) return;
+    lastAppliedSearchRef.current = searchValue;
+    setInternalSearchTerm(searchValue);
+  }, [serverSide, searchValue]);
   const filterValues = serverSide && externalFilterValues != null ? externalFilterValues : internalFilterValues;
   const externalSortState = useMemo(
     () => normalizeSortState(columns, externalSort),
@@ -668,15 +687,16 @@ export const DataTable = ({
   const handleSearchChange = useCallback((term) => {
     setInternalSearchTerm(term);
     resetPage();
-    if (searchDebounce > 0) {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        fireSearchCallback(term);
-        fireParamsChange({ search: term, page: resetPageOnChange ? 1 : undefined });
-      }, searchDebounce);
-    } else {
+    const dispatch = () => {
+      lastAppliedSearchRef.current = term;
       fireSearchCallback(term);
       fireParamsChange({ search: term, page: resetPageOnChange ? 1 : undefined });
+    };
+    if (searchDebounce > 0) {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(dispatch, searchDebounce);
+    } else {
+      dispatch();
     }
   }, [searchDebounce, fireSearchCallback, fireParamsChange, resetPage, resetPageOnChange]);
 
@@ -786,10 +806,28 @@ export const DataTable = ({
     const activeField = Object.keys(sortState).find((k) => sortState[k] !== "none");
     if (!activeField) return filteredData;
 
+    const activeCol = columns.find((c) => c.field === activeField);
+    const sortOrder = Array.isArray(activeCol?.sortOrder) ? activeCol.sortOrder : null;
+    const sortOrderIndex = (val) => {
+      const idx = sortOrder.indexOf(val);
+      return idx === -1 ? sortOrder.length : idx;
+    };
+
     return [...filteredData].sort((a, b) => {
       const dir = sortState[activeField] === "ascending" ? 1 : -1;
       const aVal = a[activeField];
       const bVal = b[activeField];
+
+      if (typeof activeCol?.sortComparator === "function") {
+        return dir * activeCol.sortComparator(aVal, bVal, a, b);
+      }
+
+      if (sortOrder) {
+        const diff = sortOrderIndex(aVal) - sortOrderIndex(bVal);
+        if (diff !== 0) return dir * diff;
+        // Tie-break unlisted/equal-ranked values with default comparison
+      }
+
       if (aVal == null && bVal == null) return 0;
       if (aVal == null) return 1;
       if (bVal == null) return -1;
@@ -797,7 +835,7 @@ export const DataTable = ({
       if (aVal > bVal) return dir;
       return 0;
     });
-  }, [filteredData, sortState, serverSide]);
+  }, [filteredData, sortState, serverSide, columns]);
 
   // ---------------------------------------------------------------------------
   // Client-side: Group (optional)
@@ -1485,12 +1523,12 @@ export const DataTable = ({
         <Box flex={3}>
           <Flex direction="column" gap="sm">
             {/* Row 1: Search + first 2 filters + Filters toggle */}
-            <Flex direction="row" align="center" gap="sm" wrap="wrap">
+            <Flex direction="row" align="end" gap="sm" wrap="wrap">
               {showSearch && searchFields.length > 0 && (
                 <SearchInput
                   name="datatable-search"
                   placeholder={searchPlaceholder}
-                  value={searchTerm}
+                  value={internalSearchTerm}
                   onChange={handleSearchChange}
                 />
               )}

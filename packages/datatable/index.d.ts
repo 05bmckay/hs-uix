@@ -54,6 +54,13 @@ export interface DataTableColumn<Row = Record<string, unknown>> {
   field: string;
   label: ReactNode;
   sortable?: boolean;
+  sortOrder?: unknown[];
+  sortComparator?: (
+    aValue: unknown,
+    bValue: unknown,
+    rowA: Row,
+    rowB: Row
+  ) => number;
   width?: DataTableColumnWidth;
   cellWidth?: DataTableWidth;
   align?: "left" | "center" | "right";

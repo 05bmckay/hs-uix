@@ -5,6 +5,8 @@ export default defineConfig({
     index: "src/index.js",
     datatable: "src/datatable.js",
     form: "src/form.js",
+    "common-components": "src/common-components/index.js",
+    utils: "src/utils/index.js",
   },
   format: ["esm", "cjs"],
   external: ["react", "@hubspot/ui-extensions", "@hubspot/ui-extensions/crm"],

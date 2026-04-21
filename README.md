@@ -14,9 +14,11 @@ npm install hs-uix
 ```jsx
 import { DataTable } from "hs-uix/datatable";
 import { FormBuilder } from "hs-uix/form";
+import { AutoStatusTag, AutoTag, KeyValueList, SectionHeader } from "hs-uix/common-components";
+import { formatCurrency, formatDate } from "hs-uix/utils";
 
 // or import everything from the root
-import { DataTable, FormBuilder } from "hs-uix";
+import { DataTable, FormBuilder, AutoStatusTag, AutoTag } from "hs-uix";
 ```
 
 Requires `react` >= 18.0.0 and `@hubspot/ui-extensions` >= 0.12.0 as peer dependencies (already present in any HubSpot UI Extensions project).
@@ -40,14 +42,30 @@ A drop-in table component for HubSpot UI Extensions. Define your columns, pass y
 
 ```jsx
 import { DataTable } from "hs-uix/datatable";
+import { AutoStatusTag, AutoTag, KeyValueList, SectionHeader } from "hs-uix/common-components";
+import { formatCurrency, formatDate } from "hs-uix/utils";
 
 const COLUMNS = [
   { field: "name", label: "Company", sortable: true, renderCell: (val) => val },
-  { field: "status", label: "Status", renderCell: (val) => <StatusTag>{val}</StatusTag> },
+  { field: "status", label: "Status", renderCell: (val) => <AutoStatusTag value={val} /> },
+  { field: "segment", label: "Segment", renderCell: (val) => <AutoTag value={val} /> },
   { field: "amount", label: "Amount", sortable: true, renderCell: (val) => formatCurrency(val) },
+  { field: "closeDate", label: "Close Date", renderCell: (val) => formatDate(val) },
 ];
 
 <DataTable data={deals} columns={COLUMNS} searchFields={["name"]} pageSize={10} />
+
+<SectionHeader
+  title="Deal Summary"
+  description="A compact summary block using common components."
+/>
+
+<KeyValueList
+  items={[
+    { label: "Open deals", value: 12 },
+    { label: "Pipeline", value: formatCurrency(245000) },
+  ]}
+/>
 ```
 
 That's a searchable, sortable, paginated table with auto-sized columns in 5 lines of config.

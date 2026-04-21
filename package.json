@@ -21,6 +21,16 @@
       "types": "./form.d.ts",
       "import": "./dist/form.mjs",
       "require": "./dist/form.js"
+    },
+    "./common-components": {
+      "types": "./common-components.d.ts",
+      "import": "./dist/common-components.mjs",
+      "require": "./dist/common-components.js"
+    },
+    "./utils": {
+      "types": "./utils.d.ts",
+      "import": "./dist/utils.mjs",
+      "require": "./dist/utils.js"
     }
   },
   "files": [
@@ -28,6 +38,8 @@
     "index.d.ts",
     "datatable.d.ts",
     "form.d.ts",
+    "common-components.d.ts",
+    "utils.d.ts",
     "README.md"
   ],
   "workspaces": [
@@ -46,7 +58,7 @@
     "react": ">=18.0.0"
   },
   "devDependencies": {
-    "@hubspot/ui-extensions": "latest",
+    "@hubspot/ui-extensions": "^0.12.3",
     "react": "^18.0.0",
     "tsup": "^8.0.0"
   },
