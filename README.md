@@ -29,6 +29,7 @@ Requires `react` >= 18.0.0 and `@hubspot/ui-extensions` >= 0.12.0 as peer depend
 |-----------|-------------|------|
 | **DataTable** | Filterable, sortable, paginated table with auto-sized columns, inline editing, row grouping, and more | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/packages/datatable/README.md) |
 | **FormBuilder** | Declarative, config-driven form with validation, multi-step wizards, and 20+ field types | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/packages/form/README.md) |
+| **Kanban** | Stage-based board with filters, sort, headline metrics, card action bars, and DataTable-parity card field config | See the [Kanban section](#kanban) below |
 | **Common Components** | Thin visual wrappers over HubSpot primitives — `AutoTag`, `AutoStatusTag`, `AvatarStack`, `SectionHeader`, `KeyValueList`, `StyledText` | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/src/common-components/README.md) |
 | **Utils** | Pure helpers for formatting, options, HubSpot value guards, and tag-variant inference | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/src/utils/README.md) |
 
@@ -194,11 +195,82 @@ const fields = [
 
 ---
 
+# Kanban
+
+A stage-based board view that shares DataTable's config vocabulary (`cardFields` ≈ `columns`, filters, sort, selection) so you can offer users a table-or-board toggle without rewriting the data layer. Drag-and-drop isn't available inside HubSpot UI Extensions, so stage changes happen through an inline `Select` (or menu) on each card.
+
+![Kanban — HubSpot Deals preset with metrics](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/kanban/assets/hubspot-deals-preset-with-metrics.png)
+
+## Quick Start
+
+```jsx
+import { Kanban } from "hs-uix/kanban";
+import { AutoTag } from "hs-uix/common-components";
+import { formatCurrencyCompact, formatDate } from "hs-uix/utils";
+
+const STAGES = [
+  { value: "qualified",     label: "Qualified",      variant: "info" },
+  { value: "proposal",      label: "Proposal",       variant: "info" },
+  { value: "negotiation",   label: "Negotiation",    variant: "warning" },
+  { value: "closed_won",    label: "Closed Won",     variant: "success", terminal: true },
+  { value: "closed_lost",   label: "Closed Lost",    variant: "default", terminal: true },
+];
+
+const CARD_FIELDS = [
+  { field: "name",      placement: "title" },
+  { field: "company",   placement: "subtitle" },
+  { field: "amount",    placement: "meta",   render: (val) => formatCurrencyCompact(val) },
+  { field: "segment",   placement: "body",   render: (val) => <AutoTag value={val} /> },
+  { field: "closeDate", placement: "footer", render: (val) => formatDate(val) },
+];
+
+<Kanban
+  data={deals}
+  stages={STAGES}
+  groupBy="stage"
+  cardFields={CARD_FIELDS}
+  onStageChange={(row, newStage) => updateDealStage(row.id, newStage)}
+/>
+```
+
+## Features
+
+- **Stage-based columns** with variant-colored headers (`success` / `warning` / `info` / `default`), collapse-to-rail, and stage-level count badges
+- **`cardFields` with placement** (`title` / `subtitle` / `meta` / `body` / `footer`) — same render/truncate/visible hooks as DataTable columns
+- **Filters and sort** with the same config shape as DataTable (`select`, `multiselect`, `dateRange`)
+- **Headline metrics** rendered above the board (deal totals, weighted pipeline, win rate) via a `metrics` prop
+- **Stage transition prompts** — async confirmation or extra-property capture before committing a stage change, declared per-stage via `stage.onEnterRequired.render`
+- **Selection bar + card actions** for bulk moves, deletes, or custom handlers (`KanbanCardActions`)
+- **Empty / loading / error render slots** that mirror DataTable's override API
+- **Paired view adapters** — use `deriveCardFieldsFromColumns` from `hs-uix/utils` to project a DataTable `columns` config into Kanban `cardFields` with a single function call
+
+## Highlights
+
+### HubSpot Deals preset
+
+![Kanban — HubSpot Deals preset with metrics](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/kanban/assets/hubspot-deals-preset-with-metrics.png)
+
+Drop-in preset shaped like HubSpot's native deals pipeline: stage-variant headers, per-stage amount totals in the header metric, and an avatar-stack footer row. Hide the summary row with `showMetrics={false}` for dashboards that already surface totals elsewhere.
+
+![Kanban — HubSpot Deals preset without metrics](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/kanban/assets/hubspot-deals-preset-no-metrics.png)
+
+### Compact lead board
+
+![Kanban — Compact lead board preset](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/kanban/assets/compact-lead-board-preset.png)
+
+`cardDensity="compact"` with trimmed `cardFields` for high-volume boards (leads, tickets, tasks) where you want to fit 8-12 cards per column on a typical viewport without horizontal scrolling.
+
+### Load-more & stage controls
+
+![Kanban — Select + load more preset](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/kanban/assets/select-load-more-preset.png)
+
+Per-stage pagination via an `onLoadMore` handler and `stageMeta.hasMore`, plus inline `Select` stage controls on each card (`stageControl="select"`). Switch to `"menu"` for action-menu style transitions, or `"none"` for read-only boards.
+
+---
+
 # Common Components
 
 Thin, composable visual wrappers built on HubSpot's native primitives — the reusable pieces that show up across DataTable rows, FormBuilder cells, and Kanban cards. Use them to skip rewriting the same status-tag / avatar-stack / label-value block on every surface.
-
-![Common Components overview](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/common-components/assets/common-components-overview.png)
 
 ## Quick Start
 
@@ -244,7 +316,9 @@ Plus low-level builders (`makeAvatarStackDataUri`, `makeStyledTextDataUri`) that
 
 ### AutoTag & AutoStatusTag
 
-![Auto tag variants](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/common-components/assets/auto-tags.png)
+![AutoTag variants](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/common-components/assets/auto-tag.png)
+
+![AutoStatusTag variants](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/common-components/assets/auto-status-tag.png)
 
 Pass a free-form status string and get a properly-colored tag back. Matching is case-insensitive and tolerates underscores / dashes / phrases (`"in_progress"`, `"on hold"`, `"at-risk"` all resolve). Override via `overrides={{ "Processing": "warning" }}` and `fallback="info"` for values that don't match built-in heuristics.
 
@@ -256,7 +330,7 @@ Overlapping avatars rendered as a single SVG via `<Image>`. T-shirt sizing (`xs`
 
 ### SectionHeader & KeyValueList
 
-![Section header + key/value list](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/common-components/assets/section-header-key-value.png)
+![KeyValueList](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/common-components/assets/key-value-list.png)
 
 Pair `SectionHeader` (title / description / action slot) with `KeyValueList` (`DescriptionList` rows) for compact summary panels. `direction="column"` on the list switches to stacked label-on-top rows.
 
@@ -319,8 +393,6 @@ sumBy(deals, "amount");               // → total
 
 ### Formatters
 
-![Formatters overview](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/utils/assets/formatters.png)
-
 ```js
 formatCurrency(9500, { currency: "EUR" });            // → "€9,500"
 formatCurrencyCompact(4160);                          // → "$4.2K"
@@ -332,8 +404,6 @@ formatPercentage(0.1567, { maximumFractionDigits: 1 });// → "15.6%"
 Every formatter treats `null` / `undefined` as safe — `formatCurrency(null)` → `"$0"`, `formatDate(null)` → `""` — so they're safe to drop into cells rendering partially-loaded data.
 
 ### Tag Variants
-
-![Tag variants mapping](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/utils/assets/tag-variants.png)
 
 The same inference that powers `AutoTag` / `AutoStatusTag`, exposed as plain functions for use in custom cells and sort comparators. Default ordering: `success → warning → danger/error → info → default`; override via `variantOrder` on `createStatusTagSortComparator`.
 
