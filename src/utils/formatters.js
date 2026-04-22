@@ -63,3 +63,30 @@ export const formatPercentage = (
     maximumFractionDigits,
     ...options,
   }).format(Number(value || 0));
+
+/**
+ * Compact-notation currency formatter — the same `$123.58M / $4.16K / $32`
+ * shorthand HubSpot uses for headline numbers (deal totals, pipeline value).
+ *
+ * Uses Intl.NumberFormat with `notation: "compact"`, which handles the
+ * localization (M vs Mio etc) automatically. Defaults to 1 significant
+ * fraction digit so the output reads cleanly across magnitudes.
+ */
+export const formatCurrencyCompact = (
+  value,
+  {
+    locale = DEFAULT_LOCALE,
+    currency = "USD",
+    maximumFractionDigits = 1,
+    compactDisplay = "short",
+    ...options
+  } = {}
+) =>
+  new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+    notation: "compact",
+    compactDisplay,
+    maximumFractionDigits,
+    ...options,
+  }).format(Number(value || 0));

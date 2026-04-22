@@ -310,10 +310,12 @@ export interface FormBuilderSection {
 }
 
 export interface FormBuilderGroupOptions {
-  /** Override the displayed group label (defaults to the group key). */
+  /** Override the displayed group label (defaults to a start-cased group key). */
   label?: string;
   /** Show the group header label. Defaults to true. */
   showLabel?: boolean;
+  /** Optional microcopy rendered underneath the group label. Ignored when `renderHeader` is provided or `showLabel` is false. */
+  description?: string;
   /** Show the divider that separates this group from the previous one. Defaults to true. */
   showDivider?: boolean;
   /** Custom header renderer. Receives group name, fields in the group, and current form values. */

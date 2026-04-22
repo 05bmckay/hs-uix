@@ -1,0 +1,52 @@
+{
+  "name": "@hs-uix/kanban",
+  "version": "0.1.0",
+  "description": "Drag-free Kanban board for HubSpot UI Extensions",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "index.d.ts",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepublishOnly": "echo 'Publish via root hs-uix package instead' && exit 1"
+  },
+  "dependencies": {
+    "fuse.js": "^7.1.0"
+  },
+  "peerDependencies": {
+    "@hubspot/ui-extensions": ">=0.12.0",
+    "react": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@hubspot/ui-extensions": "latest",
+    "react": "^18.0.0",
+    "tsup": "^8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/05bmckay/hs-uix.git",
+    "directory": "packages/kanban"
+  },
+  "homepage": "https://github.com/05bmckay/hs-uix/tree/main/packages/kanban#readme",
+  "keywords": [
+    "hubspot",
+    "ui-extensions",
+    "kanban",
+    "board",
+    "crm",
+    "hs-uix"
+  ]
+}

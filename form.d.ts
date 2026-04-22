@@ -13,6 +13,7 @@ export {
   FormBuilderValidator,
   FormBuilderDependsOnConfig,
   FormBuilderRepeaterProps,
+  FormBuilderGroupOptions,
   FormBuilderLabels,
   FormBuilderAlertConfig,
   FormBuilderButtonsRenderContext,

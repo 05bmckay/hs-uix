@@ -29,6 +29,8 @@ Requires `react` >= 18.0.0 and `@hubspot/ui-extensions` >= 0.12.0 as peer depend
 |-----------|-------------|------|
 | **DataTable** | Filterable, sortable, paginated table with auto-sized columns, inline editing, row grouping, and more | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/packages/datatable/README.md) |
 | **FormBuilder** | Declarative, config-driven form with validation, multi-step wizards, and 20+ field types | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/packages/form/README.md) |
+| **Common Components** | Thin visual wrappers over HubSpot primitives — `AutoTag`, `AutoStatusTag`, `AvatarStack`, `SectionHeader`, `KeyValueList`, `StyledText` | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/src/common-components/README.md) |
+| **Utils** | Pure helpers for formatting, options, HubSpot value guards, and tag-variant inference | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/src/utils/README.md) |
 
 ---
 
@@ -189,6 +191,155 @@ const fields = [
 ### Read-Only Mode
 
 ![Read-Only Mode](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/form/assets/readonly-autosave-dirty.png)
+
+---
+
+# Common Components
+
+Thin, composable visual wrappers built on HubSpot's native primitives — the reusable pieces that show up across DataTable rows, FormBuilder cells, and Kanban cards. Use them to skip rewriting the same status-tag / avatar-stack / label-value block on every surface.
+
+![Common Components overview](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/common-components/assets/common-components-overview.png)
+
+## Quick Start
+
+```jsx
+import {
+  AutoStatusTag,
+  AutoTag,
+  AvatarStack,
+  SectionHeader,
+  KeyValueList,
+  StyledText,
+  HS_DATE_PRESETS,
+} from "hs-uix/common-components";
+import { formatCurrency } from "hs-uix/utils";
+
+<SectionHeader
+  title="Deal Summary"
+  description="A compact summary block using common components."
+/>
+
+<KeyValueList
+  items={[
+    { label: "Status", value: <AutoStatusTag value="At risk" /> },
+    { label: "Segment", value: <AutoTag value="Enterprise" /> },
+    { label: "Owners", value: <AvatarStack items={["AR", "JK", "SP", "MB", "LM"]} maxVisible={4} /> },
+    { label: "Pipeline", value: formatCurrency(245000) },
+  ]}
+/>
+```
+
+## What's inside
+
+- `AutoStatusTag` — `StatusTag` with variant inferred from the value (`Active` → success, `At risk` → warning, `Failed` → danger, etc.)
+- `AutoTag` — `Tag` with the same inference, for non-status labels
+- `AvatarStack` — overlapping circular avatars as a single SVG (letters, image URLs, or mixed); `+N` overflow chip past `maxVisible`
+- `SectionHeader` — title + optional description + actions slot
+- `KeyValueList` — vertical list of label/value rows via `DescriptionList`
+- `StyledText` — SVG-rendered text with rotation, custom color, and pill backgrounds for cases native `<Text>` can't express
+
+Plus low-level builders (`makeAvatarStackDataUri`, `makeStyledTextDataUri`) that return `{ src, width, height }` for composing into larger SVGs, and style constants (`HS_FONT_FAMILY`, `HS_TEXT_COLOR`, `HS_SUBTLE_BG`, `HS_MUTED_TEXT`, `HS_NEUTRAL_CHIP`) that mirror HubSpot's native CSS — so custom SVGs sit alongside the rest of the UI without a color mismatch.
+
+## Highlights
+
+### AutoTag & AutoStatusTag
+
+![Auto tag variants](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/common-components/assets/auto-tags.png)
+
+Pass a free-form status string and get a properly-colored tag back. Matching is case-insensitive and tolerates underscores / dashes / phrases (`"in_progress"`, `"on hold"`, `"at-risk"` all resolve). Override via `overrides={{ "Processing": "warning" }}` and `fallback="info"` for values that don't match built-in heuristics.
+
+### AvatarStack
+
+![Avatar stack](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/common-components/assets/avatar-stack.png)
+
+Overlapping avatars rendered as a single SVG via `<Image>`. T-shirt sizing (`xs` → `xl`) or a raw pixel number. Letters auto-color from the built-in palette; image URLs get circular-clipped. Extras past `maxVisible` collapse into a neutral `+N` chip.
+
+### SectionHeader & KeyValueList
+
+![Section header + key/value list](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/common-components/assets/section-header-key-value.png)
+
+Pair `SectionHeader` (title / description / action slot) with `KeyValueList` (`DescriptionList` rows) for compact summary panels. `direction="column"` on the list switches to stacked label-on-top rows.
+
+### StyledText
+
+![Styled text](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/common-components/assets/styled-text.png)
+
+Reach for `StyledText` when native `<Text>` can't do what you need: vertical rail labels (`orientation="vertical-down"`), HubSpot-style pill badges (`background={{ preset: "tag" }}`), or a specific glyph color. Plain horizontal `preset: "tag"` usage renders through native HubSpot `Tag`; rotated/custom tag cases still use the SVG fallback. Use native `<Text>` anywhere copy-paste matters.
+
+### HS_DATE_PRESETS
+
+HubSpot's native quick-date preset list (`Today`, `Last 7 days`, `This quarter`, …) as a ready-to-use `options` array for `DataTable` / `Kanban` select filters. Values are stable identifiers (`"today"`, `"7d"`, `"this_quarter"`) — translate to date bounds via `filterFn` or server-side in `onFilterChange`.
+
+---
+
+# Utils
+
+Pure helper functions for formatting values, building option arrays, detecting HubSpot-shaped date/time objects, and inferring tag variants from raw data. Zero side effects, no JSX — drop them into `renderCell`, `sortComparator`, or a server handler.
+
+## Quick Start
+
+```jsx
+import {
+  formatCurrency,
+  formatCurrencyCompact,
+  formatDate,
+  formatDateTime,
+  formatPercentage,
+  buildOptions,
+  findOptionLabel,
+  getAutoTagVariant,
+  createStatusTagSortComparator,
+  sumBy,
+} from "hs-uix/utils";
+
+formatCurrency(1234.56);              // → "$1,235"
+formatCurrencyCompact(123_580_000);   // → "$123.6M"
+formatDate("2026-04-15");             // → "Apr 15, 2026"
+formatPercentage(0.1567);             // → "16%"
+
+const statusOptions = buildOptions(
+  [{ name: "Open", id: "o" }, { name: "Closed", id: "c" }],
+  { labelKey: "name", valueKey: "id" },
+);
+findOptionLabel(statusOptions, "o"); // → "Open"
+
+getAutoTagVariant("At risk");         // → "warning"
+sumBy(deals, "amount");               // → total
+```
+
+## What's inside
+
+- **`formatters.js`** — locale-aware `Intl`-based number / currency / date / percentage formatters. Every formatter accepts a trailing options object that spreads into the underlying `Intl` call, so anything `Intl.NumberFormat` supports (narrow symbol, specific fraction digits, grouping) is reachable without a new helper.
+- **`options.js`** — `buildOptions(items, opts?)` to shape raw arrays into `{ label, value }` for HubSpot `Select` / `MultiSelect`; `findOptionLabel(options, value, fallback?)` for the reverse lookup.
+- **`hubspotValues.js`** — type guards for HubSpot's `DateInput` / `TimeInput` / `DateTimeInput` value shapes (`isDateValueObject`, `isTimeValueObject`, `isDateTimeValueObject`). Use in `filterFn` or `sortComparator` to distinguish a HubSpot date-object from a raw string/Date.
+- **`tagVariants.js`** — heuristic mappers from free-form status strings to semantic tag variants (`getAutoTagVariant`, `getAutoStatusTagVariant`, `getAutoTagDisplayValue`) plus `createStatusTagSortComparator` for DataTable columns grouped by color, then alphabetical within each color.
+- **`collections.js`** — `sumBy(items, keyOrFn)` for total / weighted-total rows, safe against `null` / missing values.
+
+## Highlights
+
+### Formatters
+
+![Formatters overview](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/utils/assets/formatters.png)
+
+```js
+formatCurrency(9500, { currency: "EUR" });            // → "€9,500"
+formatCurrencyCompact(4160);                          // → "$4.2K"
+formatDate(Date.now(), { month: "numeric" });         // → "4/15/2026"
+formatDateTime("2026-04-15T14:30:00Z");               // → "Apr 15, 2026, 9:30 AM" (local)
+formatPercentage(0.1567, { maximumFractionDigits: 1 });// → "15.6%"
+```
+
+Every formatter treats `null` / `undefined` as safe — `formatCurrency(null)` → `"$0"`, `formatDate(null)` → `""` — so they're safe to drop into cells rendering partially-loaded data.
+
+### Tag Variants
+
+![Tag variants mapping](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/utils/assets/tag-variants.png)
+
+The same inference that powers `AutoTag` / `AutoStatusTag`, exposed as plain functions for use in custom cells and sort comparators. Default ordering: `success → warning → danger/error → info → default`; override via `variantOrder` on `createStatusTagSortComparator`.
+
+### Options & HubSpot Value Guards
+
+Build select options from CRM records, resolve labels back to values, and detect HubSpot's structured date/time value objects in one import — no more ad-hoc `.map(r => ({ label: r.name, value: r.id }))` at every call site.
 
 ---
 

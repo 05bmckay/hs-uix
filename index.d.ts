@@ -26,6 +26,37 @@ export type {
   DataTableErrorStateRenderContext,
 } from "./packages/datatable/index";
 
+export { Kanban, KanbanCardActions } from "./packages/kanban/index";
+export type {
+  KanbanProps,
+  KanbanStage,
+  KanbanStageMeta,
+  KanbanStageVariant,
+  KanbanStageControlMode,
+  KanbanCardField,
+  KanbanCardFieldPlacement,
+  KanbanCardDensity,
+  KanbanCardBodyMode,
+  KanbanCardDividers,
+  KanbanCardRenderContext,
+  KanbanFilterConfig,
+  KanbanFilterType,
+  KanbanSortOption,
+  KanbanSelectionAction,
+  KanbanCardAction,
+  KanbanCardActionsProps,
+  KanbanLabels,
+  KanbanParams,
+  KanbanStageChangeResult,
+  KanbanMetricItem,
+  KanbanSelectionBarRenderContext,
+  KanbanEmptyStateRenderContext,
+  KanbanLoadingStateRenderContext,
+  KanbanErrorStateRenderContext,
+  KanbanTransitionPromptContext,
+  KanbanOption,
+} from "./packages/kanban/index";
+
 export { FormBuilder, useFormPrefill } from "./packages/form/index";
 export type {
   FormBuilderProps,
@@ -40,6 +71,7 @@ export type {
   FormBuilderValidator,
   FormBuilderDependsOnConfig,
   FormBuilderRepeaterProps,
+  FormBuilderGroupOptions,
   FormBuilderLabels,
   FormBuilderAlertConfig,
   FormBuilderButtonsRenderContext,
@@ -53,6 +85,28 @@ export type {
 } from "./packages/form/index";
 
 export { AutoTag, AutoStatusTag, KeyValueList, SectionHeader } from "./common-components";
+export {
+  AvatarStack,
+  StyledText,
+  makeAvatarStackDataUri,
+  makeStyledTextDataUri,
+  HS_DATE_DIRECTION_LABELS,
+  HS_DATE_PRESETS,
+  HS_FONT_FAMILY,
+  HS_TEXT_COLOR,
+  HS_SUBTLE_BG,
+  HS_MUTED_TEXT,
+  HS_NEUTRAL_CHIP,
+  HS_TAG_SUBTLE_BORDER,
+  HS_TAG_TEXT_COLOR,
+  HS_TAG_FONT_SIZE,
+  HS_TAG_LINE_HEIGHT,
+  HS_TAG_PADDING_X,
+  HS_TAG_PADDING_Y,
+  HS_TAG_BORDER_RADIUS,
+  HS_TAG_BORDER_WIDTH,
+  DEFAULT_SVG_FONT_WEIGHT,
+} from "./common-components";
 export {
   getAutoTagVariant,
   getAutoStatusTagVariant,
@@ -68,7 +122,18 @@ export type {
 export type {
   AutoTagProps,
   AutoStatusTagProps,
+  AvatarStackDataUriResult,
+  AvatarStackItem,
+  AvatarStackItemObject,
+  AvatarStackProps,
+  DateDirectionLabels,
+  DatePresetOption,
   KeyValueListItem,
   KeyValueListProps,
   SectionHeaderProps,
+  StyledTextBackground,
+  StyledTextDataUriOptions,
+  StyledTextDataUriResult,
+  StyledTextFormat,
+  StyledTextProps,
 } from "./common-components";

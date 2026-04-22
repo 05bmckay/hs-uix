@@ -673,6 +673,7 @@ Per-group options:
 |---|---|---|
 | `label` | `string` | Override the displayed header text (defaults to the group key) |
 | `showLabel` | `boolean` | Hide the header entirely. Defaults to `true` |
+| `description` | `string` | Microcopy rendered underneath the group label. Ignored when `renderHeader` is provided or `showLabel` is `false` |
 | `showDivider` | `boolean` | Hide the divider above this group. Defaults to `true` |
 | `renderHeader` | `(group, fields, values) => ReactNode` | Fully custom header renderer |
 

@@ -2312,6 +2312,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
   // Helper: effective column span for a field
   const getFieldColSpan = (field) => {
+    if (field.colSpan === "full") return columns;
     if (field.colSpan != null) return Math.min(field.colSpan, columns);
     if (field.width === "full" && columns > 1) return columns;
     // Display and CRM fields default to full width — they render non-standard
@@ -2380,6 +2381,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
     // Local colSpan helper that respects the effective column count
     const colSpan = (field) => {
+      if (field.colSpan === "full") return cols;
       if (field.colSpan != null) return Math.min(field.colSpan, cols);
       if (field.width === "full" && cols > 1) return cols;
       if (cols > 1 && (field.type === "display" || field.type === "slot" || field.type === "crmPropertyList" || field.type === "crmAssociationPropertyList")) return cols;
@@ -2579,8 +2581,23 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       batch = [];
     };
 
+    // A field with colSpan: "full" (or any truthy non-1 colSpan) breaks out
+    // of the AutoGrid and renders as a standalone full-width row. Lets
+    // settings-style forms pair "normal" fields responsively while still
+    // forcing large controls (textareas, checkbox groups) to span the row.
+    const isFullSpan = (f) =>
+      f.colSpan === "full" || (typeof f.colSpan === "number" && f.colSpan > 1);
+
     for (const field of fieldList) {
       if (isDependent(field)) continue;
+
+      if (isFullSpan(field)) {
+        flushBatch();
+        elements.push(
+          <React.Fragment key={`full-${field.name}`}>{renderField(field)}</React.Fragment>
+        );
+        continue;
+      }
 
       batch.push(field);
 
@@ -2601,6 +2618,13 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   // Wraps rendered field elements with Divider + optional group label between groups.
   // Groups are determined by the `group` prop on fields.
   const wrapWithGroups = (fieldList, renderFn) => {
+    const formatGroupLabel = (groupName) =>
+      String(groupName || "")
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+
     // Check if any field has a group prop
     const hasGroups = fieldList.some((f) => f.group);
     if (!hasGroups) return renderFn(fieldList);
@@ -2628,6 +2652,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
       const opts = (chunk.group && groups && groups[chunk.group]) || {};
+      const resolvedGroupLabel = opts.label || formatGroupLabel(chunk.group);
       const showDivider = opts.showDivider !== false;
       const showLabel = opts.showLabel !== false;
 
@@ -2644,9 +2669,16 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         } else {
           elements.push(
             <Text key={`group-label-${i}`} format={{ fontWeight: "demibold" }}>
-              {opts.label || chunk.group}
+              {resolvedGroupLabel}
             </Text>
           );
+          if (opts.description) {
+            elements.push(
+              <Text key={`group-description-${i}`} variant="microcopy">
+                {opts.description}
+              </Text>
+            );
+          }
         }
       }
 

@@ -22,6 +22,11 @@
       "import": "./dist/form.mjs",
       "require": "./dist/form.js"
     },
+    "./kanban": {
+      "types": "./kanban.d.ts",
+      "import": "./dist/kanban.mjs",
+      "require": "./dist/kanban.js"
+    },
     "./common-components": {
       "types": "./common-components.d.ts",
       "import": "./dist/common-components.mjs",
@@ -38,6 +43,7 @@
     "index.d.ts",
     "datatable.d.ts",
     "form.d.ts",
+    "kanban.d.ts",
     "common-components.d.ts",
     "utils.d.ts",
     "README.md"
