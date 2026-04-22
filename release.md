@@ -1,6 +1,6 @@
 # Release Draft
 
-Current version: `1.6.0`
+Current version: `1.6.1`
 
 Recommended bump: `patch`
 
@@ -10,19 +10,14 @@ Suggested command:
 npm run release:patch
 ```
 
-Suggested next version: `1.6.1`
+Suggested next version: `1.6.2`
 
 ## GitHub Release Notes
 
 ```md
 ### Docs
-- **DataTable:** Swap the package-level README over to `hs-uix` / `hs-uix/datatable` (was still referencing the legacy `hubspot-datatable` standalone name), and document `onEditStart` / `onEditCancel`, the `labels` i18n object, `filterInlineLimit`, `showSearch` / `showSelectionBar`, and the `renderSelectionBar` / `renderEmptyState` / `renderLoadingState` / `renderErrorState` override hooks. Column Definition gains `sortOrder`, `sortComparator`, and column-level `footer`.
-- **FormBuilder:** Swap the package-level README over to `hs-uix` / `hs-uix/form` (was still referencing `@hs-uix/form`), and document `maxColumns`, `showReadOnlyAlert`, `showInlineAlerts`, `renderReadOnlyAlert`, `renderFieldError`, `defaultCurrency`, and the full set of CRM-association field props (`objectTypeId`, `associationLabels`, `filters`, `sort`).
-- **Common Components:** Document the `HS_TAG_*` style constants alongside the existing `HS_FONT_FAMILY` / `HS_TEXT_COLOR` / etc. tokens.
-- **AGENT:** Refresh `packages/datatable/AGENT.md`, `packages/form/AGENT.md`, and root `AGENTS.md` to describe the current monorepo layout (DataTable + FormBuilder + Kanban + common-components + utils), the root-only release flow, and the `hs-uix-demos` link setup.
-
-### Bug Fixes
-- **Types:** Add missing `formatCurrencyCompact` and `deriveCardFieldsFromColumns` declarations to `utils.d.ts` — the runtime exports were already shipping but TypeScript consumers couldn't import them without `@ts-ignore`.
+- **Kanban:** Add a full package-level README at `packages/kanban/README.md` mirroring the DataTable and FormBuilder docs — Quick Start, worked examples (HubSpot Deals preset + metrics, compact lead board, per-stage load more, stage transition prompts via `onEnterRequired`, selection + bulk actions, `KanbanCardActions`, sharing a config with DataTable via `deriveCardFieldsFromColumns`, sorting, server-driven boards), and a complete API reference for Kanban props, `KanbanStage`, `KanbanCardField`, `KanbanCardActions`, filters, sort options, stage meta, metric items, and labels.
+- **README:** Point the Kanban row in the root README's component table at `packages/kanban/README.md` (matching how DataTable and FormBuilder are linked).
 ```
 
 ## Pre-Release Checklist

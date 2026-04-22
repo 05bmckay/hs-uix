@@ -29,7 +29,7 @@ Requires `react` >= 18.0.0 and `@hubspot/ui-extensions` >= 0.12.0 as peer depend
 |-----------|-------------|------|
 | **DataTable** | Filterable, sortable, paginated table with auto-sized columns, inline editing, row grouping, and more | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/packages/datatable/README.md) |
 | **FormBuilder** | Declarative, config-driven form with validation, multi-step wizards, and 20+ field types | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/packages/form/README.md) |
-| **Kanban** | Stage-based board with filters, sort, headline metrics, card action bars, and DataTable-parity card field config | See the [Kanban section](#kanban) below |
+| **Kanban** | Stage-based board with filters, sort, headline metrics, card action bars, and DataTable-parity card field config | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/packages/kanban/README.md) |
 | **Common Components** | Thin visual wrappers over HubSpot primitives — `AutoTag`, `AutoStatusTag`, `AvatarStack`, `SectionHeader`, `KeyValueList`, `StyledText` | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/src/common-components/README.md) |
 | **Utils** | Pure helpers for formatting, options, HubSpot value guards, and tag-variant inference | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/src/utils/README.md) |
 
