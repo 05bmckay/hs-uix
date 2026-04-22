@@ -1,35 +1,28 @@
 # Release Draft
 
-Current version: `1.5.1`
+Current version: `1.6.0`
 
-Recommended bump: `minor`
+Recommended bump: `patch`
 
 Suggested command:
 
 ```bash
-npm run release:minor
+npm run release:patch
 ```
 
-Suggested next version: `1.6.0`
+Suggested next version: `1.6.1`
 
 ## GitHub Release Notes
 
 ```md
-### Features
-- **Kanban:** Add the new `Kanban` board package and publish it through the root package plus the `hs-uix/kanban` subpath export.
-- **Common Components:** Add reusable UI helpers including `AutoTag`, `AutoStatusTag`, `AvatarStack`, `SectionHeader`, `KeyValueList`, `StyledText`, date presets, and SVG builder utilities.
-- **FormBuilder:** Support `colSpan: "full"` on fields to force a standalone full-width row inside a multi-column section, add a `description` microcopy line to `groups` options, and default group labels to a start-cased version of the group key.
-- **Utils:** Add `formatCurrencyCompact` for HubSpot-style compact money (`$123.6M`, `$4.2K`) and new `viewAdapters` helpers (`deriveCardFieldsFromColumns`) for projecting a single DataTable column config into a Kanban `cardFields` array.
+### Docs
+- **DataTable:** Swap the package-level README over to `hs-uix` / `hs-uix/datatable` (was still referencing the legacy `hubspot-datatable` standalone name), and document `onEditStart` / `onEditCancel`, the `labels` i18n object, `filterInlineLimit`, `showSearch` / `showSelectionBar`, and the `renderSelectionBar` / `renderEmptyState` / `renderLoadingState` / `renderErrorState` override hooks. Column Definition gains `sortOrder`, `sortComparator`, and column-level `footer`.
+- **FormBuilder:** Swap the package-level README over to `hs-uix` / `hs-uix/form` (was still referencing `@hs-uix/form`), and document `maxColumns`, `showReadOnlyAlert`, `showInlineAlerts`, `renderReadOnlyAlert`, `renderFieldError`, `defaultCurrency`, and the full set of CRM-association field props (`objectTypeId`, `associationLabels`, `filters`, `sort`).
+- **Common Components:** Document the `HS_TAG_*` style constants alongside the existing `HS_FONT_FAMILY` / `HS_TEXT_COLOR` / etc. tokens.
+- **AGENT:** Refresh `packages/datatable/AGENT.md`, `packages/form/AGENT.md`, and root `AGENTS.md` to describe the current monorepo layout (DataTable + FormBuilder + Kanban + common-components + utils), the root-only release flow, and the `hs-uix-demos` link setup.
 
 ### Bug Fixes
-- **StyledText:** Add a HubSpot-style `tag` preset with semantic variants (`default`, `success`, `warning`, `error`/`danger`, `info`) so SVG-backed tags render closer to native HubSpot tags.
-- **Kanban:** Update collapsed stage count badges to use the shared HubSpot-style tag preset instead of ad hoc pill styling.
-- **Types/Exports:** Sync runtime exports with declaration files for common-components, kanban, SVG helpers, and style constants so published imports match the documented API. Adds `FormBuilderGroupOptions` to the form type exports.
-
-### Docs
-- **README:** Add root-level documentation for Common Components and Utils, plus updated examples for the new shared component surface.
-- **Common Components:** Document `AvatarStack`, `StyledText` tag presets and semantic variants, date presets, and SVG style constants for release consumers.
-- **Utils:** Expand the Utils README with `formatCurrencyCompact`, `viewAdapters`, and end-to-end examples.
+- **Types:** Add missing `formatCurrencyCompact` and `deriveCardFieldsFromColumns` declarations to `utils.d.ts` — the runtime exports were already shipping but TypeScript consumers couldn't import them without `@ts-ignore`.
 ```
 
 ## Pre-Release Checklist
@@ -37,5 +30,5 @@ Suggested next version: `1.6.0`
 - Run `npm run build`
 - Review `git diff` for any unrelated workspace changes before tagging
 - Commit the release-ready changes
-- Run `npm run release:minor`
+- Run `npm run release:patch`
 - Create the GitHub release using the notes above

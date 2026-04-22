@@ -206,7 +206,16 @@ Raw style tokens used internally by `StyledText` and `AvatarStack` so they match
 | `HS_SUBTLE_BG` | `#F5F8FA` | Tag `variant="subtle"` background |
 | `HS_MUTED_TEXT` | `#7C98B6` | Secondary / microcopy gray |
 | `HS_NEUTRAL_CHIP` | `#CBD6E2` | Neutral chip background (`+N` overflow) |
+| `HS_TAG_SUBTLE_BORDER` | — | Border color for subtle-variant tag pills |
+| `HS_TAG_TEXT_COLOR` | — | Text color inside tag pills |
+| `HS_TAG_FONT_SIZE` | — | Font size (px) for tag pill text |
+| `HS_TAG_LINE_HEIGHT` | — | Line height (px) for tag pill text |
+| `HS_TAG_PADDING_X` / `HS_TAG_PADDING_Y` | — | Horizontal / vertical padding inside tag pills |
+| `HS_TAG_BORDER_RADIUS` | — | Corner radius for tag pills |
+| `HS_TAG_BORDER_WIDTH` | — | Border width for tag pills |
 | `DEFAULT_SVG_FONT_WEIGHT` | `600` | Default demibold weight inside SVG text |
+
+The `HS_TAG_*` constants mirror the computed styles of HubSpot's native `<Tag>` so `StyledText` can draw pixel-matching pill backgrounds when the SVG fallback is needed.
 
 ---
 

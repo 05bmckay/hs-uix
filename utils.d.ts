@@ -47,7 +47,34 @@ export interface StatusTagSortComparatorOptions extends AutoStatusTagOptions {
 export declare function createStatusTagSortComparator(
   options?: StatusTagSortComparatorOptions
 ): (aValue: unknown, bValue: unknown) => number;
+export interface FormatCurrencyCompactOptions extends Intl.NumberFormatOptions {
+  locale?: string;
+  currency?: string;
+  maximumFractionDigits?: number;
+  compactDisplay?: "short" | "long";
+}
+
+export interface DeriveCardFieldsOptions<Row = Record<string, unknown>> {
+  titleField?: string;
+  titleHref?: (row: Row) => string | { url: string; external?: boolean };
+  placements?: Record<string, "title" | "subtitle" | "meta" | "body" | "footer">;
+  exclude?: string[];
+  include?: string[];
+  maxBodyFields?: number;
+}
+
+export interface DerivedCardField<Row = Record<string, unknown>> {
+  key: string;
+  field: string;
+  placement: "title" | "subtitle" | "meta" | "body" | "footer";
+  label?: unknown;
+  render?: (value: unknown, row: Row) => unknown;
+  truncate?: true | number | { maxLength?: number };
+  href?: (row: Row) => string | { url: string; external?: boolean };
+}
+
 export declare function formatCurrency(value: unknown, options?: FormatCurrencyOptions): string;
+export declare function formatCurrencyCompact(value: unknown, options?: FormatCurrencyCompactOptions): string;
 export declare function formatDate(value: unknown, options?: FormatDateOptions): string;
 export declare function formatDateTime(value: unknown, options?: FormatDateOptions): string;
 export declare function formatPercentage(value: unknown, options?: Intl.NumberFormatOptions & { locale?: string }): string;
@@ -57,3 +84,7 @@ export declare function isDateValueObject(value: unknown): boolean;
 export declare function isTimeValueObject(value: unknown): boolean;
 export declare function isDateTimeValueObject(value: unknown): boolean;
 export declare function sumBy<Item = Record<string, unknown>>(items: Item[] | null | undefined, keyOrFn: keyof Item | ((item: Item) => unknown)): number;
+export declare function deriveCardFieldsFromColumns<Row = Record<string, unknown>>(
+  columns: ReadonlyArray<Record<string, unknown>> | null | undefined,
+  options?: DeriveCardFieldsOptions<Row>
+): DerivedCardField<Row>[];

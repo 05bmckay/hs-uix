@@ -1,17 +1,17 @@
-# @hs-uix/form
+# FormBuilder (hs-uix/form)
 
 Declarative, config-driven FormBuilder for HubSpot UI Extensions. Define fields as data, get a complete form with validation, layout, multi-step wizards, and full HubSpot component integration.
 
 ![Basic Form](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/form/assets/basic-form.png)
 
 ```bash
-npm install @hs-uix/form
+npm install hs-uix
 ```
 
 ## Quick Start
 
 ```jsx
-import { FormBuilder } from "@hs-uix/form";
+import { FormBuilder } from "hs-uix/form";
 
 const fields = [
   { name: "firstName", type: "text", label: "First name", required: true },
@@ -987,7 +987,7 @@ Map CRM property values to form initial values with `useFormPrefill`.
 **Direct pass-through** — when your field names match the CRM property names exactly, no mapping is needed:
 
 ```jsx
-import { FormBuilder, useFormPrefill } from "@hs-uix/form";
+import { FormBuilder, useFormPrefill } from "hs-uix/form";
 import { useCrmProperties } from "@hubspot/ui-extensions/crm";
 
 const { properties } = useCrmProperties(["firstname", "lastname", "email"]);
@@ -1076,6 +1076,7 @@ try {
 | `renderButtons` | `(context) => ReactNode` | - | Custom button-row renderer |
 | `columns` | `number` | `1` | Fixed column count (Flex+Box grid) |
 | `columnWidth` | `number` | - | AutoGrid responsive column width (px) |
+| `maxColumns` | `number` | - | Cap on column count when `columnWidth` is set (AutoGrid mode) |
 | `layout` | `FormBuilderLayout` | - | Explicit row layout |
 | `groups` | `Record<string, FormBuilderGroupOptions>` | - | Per-group rendering options keyed by group name (`label`, `showLabel`, `showDivider`, `renderHeader`) |
 | `gap` | `string` | `"sm"` | Spacing between fields. HubSpot tokens: `"flush" \| "extra-small" \| "small" \| "medium" \| "large" \| "extra-large"` (or shorthand `"xs" \| "sm" \| "md" \| "lg" \| "xl"`) |
@@ -1087,9 +1088,14 @@ try {
 | `fieldTypes` | `Record<string, FieldTypePlugin>` | - | Custom field type registry |
 | `readOnly` | `boolean` | `false` | Lock all fields |
 | `readOnlyMessage` | `string` | - | Warning alert in read-only mode |
+| `showReadOnlyAlert` | `boolean` | `true` | Whether the read-only Alert banner renders above the form |
+| `showInlineAlerts` | `boolean` | `true` | Whether form-level `error` / `success` / read-only Alerts render inline (disable if you pipe them through `alerts.addAlert` instead) |
+| `renderReadOnlyAlert` | `({ title, message }) => ReactNode` | - | Custom renderer for the read-only alert |
+| `renderFieldError` | `(error, field) => ReactNode` | - | Custom renderer for per-field validation errors |
 | `alerts` | `{ addAlert?, readOnlyTitle?, errorTitle?, successTitle? }` | - | Grouped alert config |
 | `error` | `string \| boolean` | - | Form-level error alert |
 | `success` | `string` | - | Form-level success alert |
+| `defaultCurrency` | `string` | `"USD"` | Form-level default ISO 4217 currency code for `currency` fields |
 | `transformValues` | `(values) => values` | - | Reshape values before submit (after per-field `transformOut`) |
 | `transformInitialValues` | `(rawValues) => values` | - | Reshape raw initial values on load (before per-field `transformIn`) |
 | `onBeforeSubmit` | `(values) => boolean \| Promise` | - | Intercept submit |
@@ -1154,7 +1160,14 @@ try {
 | `timezone` | `"userTz" \| "portalTz"` | date, time, datetime | Timezone context |
 | `interval` | `number` | time, datetime | Minutes between time options |
 | `clearButtonLabel` / `todayButtonLabel` | `string` | date, datetime | Date picker button labels |
-| `render` | `(props) => ReactNode` | All | Custom render escape hatch |
+| `properties` | `string[]` | crmPropertyList, crmAssociationPropertyList | CRM property names to render |
+| `direction` | `"column" \| "row"` | crmPropertyList, crmAssociationPropertyList | Layout direction passed to the native component |
+| `objectId` | `string` | crmPropertyList | Override the CRM object ID (defaults to the current record) |
+| `objectTypeId` | `string` | crmPropertyList, crmAssociationPropertyList | Object type ID (e.g. `"0-1"` contacts, `"0-2"` companies, `"0-3"` deals) |
+| `associationLabels` | `string[]` | crmAssociationPropertyList | Limit to associations matching these labels |
+| `filters` | `Array<{ operator, property, value }>` | crmAssociationPropertyList | Filter the associated records |
+| `sort` | `Array<{ columnName, direction: 1 \| -1 }>` | crmAssociationPropertyList | Sort associated records |
+| `render` | `(props) => ReactNode` | All | Custom render escape hatch. Helpers: `{ value, onChange, error, values, setFieldValue, setFieldError }`. (`allValues` is also passed but deprecated — use `values`.) |
 | `fieldProps` | `Record<string, unknown>` | All | Pass-through to HubSpot component |
 
 ### Ref API

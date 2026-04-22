@@ -1,8 +1,8 @@
-# HubSpot DataTable
+# DataTable (hs-uix/datatable)
 
-[![npm version](https://img.shields.io/npm/v/hubspot-datatable.svg)](https://www.npmjs.com/package/hubspot-datatable)
-[![npm downloads](https://img.shields.io/npm/dm/hubspot-datatable.svg)](https://www.npmjs.com/package/hubspot-datatable)
-[![license](https://img.shields.io/npm/l/hubspot-datatable.svg)](https://github.com/05bmckay/hubspot-datatable/blob/main/LICENSE)
+[![npm version](https://img.shields.io/npm/v/hs-uix)](https://www.npmjs.com/package/hs-uix)
+[![npm downloads](https://img.shields.io/npm/dm/hs-uix)](https://www.npmjs.com/package/hs-uix)
+[![license](https://img.shields.io/npm/l/hs-uix)](https://github.com/05bmckay/hs-uix/blob/main/LICENSE)
 
 A drop-in table component for HubSpot UI Extensions. Define your columns, pass your data, and you get search, filtering, sorting, pagination, inline editing, row grouping, and auto-sized columns out of the box.
 
@@ -51,17 +51,17 @@ That's a searchable, sortable, paginated table with auto-sized columns in 5 line
 ## Installation
 
 ```bash
-npm install hubspot-datatable
+npm install hs-uix
 ```
 
 Import it in your card:
 
 ```jsx
-import { DataTable } from "hubspot-datatable";
+import { DataTable } from "hs-uix/datatable";
 ```
 
-Requires `@hubspot/ui-extensions` and `react` as peer dependencies (already present in any HubSpot UI Extensions project).
-TypeScript declarations are bundled with this package (`index.d.ts`).
+Requires `@hubspot/ui-extensions` >= 0.12.0 and `react` >= 18.0.0 as peer dependencies (already present in any HubSpot UI Extensions project).
+TypeScript declarations are bundled with `hs-uix` (`datatable.d.ts`).
 
 ---
 
@@ -74,7 +74,7 @@ Define your columns with `renderCell`, pass your data, and the table handles siz
 ```jsx
 import React from "react";
 import { Flex, Text, hubspot } from "@hubspot/ui-extensions";
-import { DataTable } from "hubspot-datatable";
+import { DataTable } from "hs-uix/datatable";
 
 const CONTACTS = [
   { id: 1, name: "Jane Smith", email: "jane@acme.com", role: "VP Sales" },
@@ -249,7 +249,7 @@ Requires `renderCell` on each column.
 ```jsx
 import React, { useState, useMemo } from "react";
 import { Flex, Heading, Text, StatusTag, hubspot } from "@hubspot/ui-extensions";
-import { DataTable } from "hubspot-datatable";
+import { DataTable } from "hs-uix/datatable";
 
 hubspot.extend(() => <SelectableTable />);
 
@@ -410,7 +410,7 @@ In discrete mode (the default), editable cells appear as dark links. Click to op
 ```jsx
 import React, { useState, useCallback } from "react";
 import { Text, StatusTag, Tag, hubspot } from "@hubspot/ui-extensions";
-import { DataTable } from "hubspot-datatable";
+import { DataTable } from "hs-uix/datatable";
 
 const STATUS_COLORS = { active: "success", "at-risk": "warning", churned: "danger" };
 const STATUS_LABELS = { active: "Active", "at-risk": "At Risk", churned: "Churned" };
@@ -518,7 +518,7 @@ Groups are collapsible. Click a group header to expand or collapse it. You can d
 ```jsx
 import React from "react";
 import { Text, StatusTag, hubspot } from "@hubspot/ui-extensions";
-import { DataTable } from "hubspot-datatable";
+import { DataTable } from "hs-uix/datatable";
 
 const STATUS_COLORS = { active: "success", "at-risk": "warning", churned: "danger" };
 
@@ -638,7 +638,7 @@ Connect live CRM data to a DataTable in two lines. The `useAssociations` hook fr
 ```jsx
 import { Text, StatusTag, hubspot } from "@hubspot/ui-extensions";
 import { useAssociations } from "@hubspot/ui-extensions/crm";
-import { DataTable } from "hubspot-datatable";
+import { DataTable } from "hs-uix/datatable";
 
 const fmt = (val) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(val);
@@ -711,7 +711,7 @@ You pass `data` with just the current page of results, and `totalCount` with the
 ```jsx
 import React, { useState, useEffect, useCallback } from "react";
 import { Text, StatusTag, hubspot } from "@hubspot/ui-extensions";
-import { DataTable } from "hubspot-datatable";
+import { DataTable } from "hs-uix/datatable";
 
 const COLUMNS = [
   { field: "name", label: "Company", sortable: true,
@@ -888,20 +888,33 @@ function ServerSideTable({ runServerlessFunction }) {
 | `onSortChange` | `(field, "ascending" \| "descending" \| "none") => void` | — | Sort callback (server-side). `"none"` indicates cleared sort. |
 | `onPageChange` | `(page) => void` | — | Page callback (server-side) |
 | `onParamsChange` | `({ search, filters, sort, page }) => void` | — | Unified callback fired on any interaction change |
+| `onEditStart` | `(row, field, currentValue) => void` | — | Fires when editing begins on a cell |
+| `onEditCancel` | `(row, field) => void` | — | Fires when editing is cancelled without commit |
+| `showSearch` | boolean | `true` | Show/hide the search input |
+| `showSelectionBar` | boolean | `true` | Show/hide the selection action bar when rows are selected |
+| `filterInlineLimit` | number | `2` | Max filters shown inline before overflow into the "Filters" button |
+| `labels` | `DataTableLabels` | — | Override hardcoded UI strings for i18n (selection bar, filter button, date range, loading/error states) |
+| `renderSelectionBar` | `(context) => ReactNode` | — | Replace the default selection action bar |
+| `renderEmptyState` | `(context) => ReactNode` | — | Replace the default empty state |
+| `renderLoadingState` | `(context) => ReactNode` | — | Replace the default loading spinner |
+| `renderErrorState` | `(context) => ReactNode` | — | Replace the default error state |
 
 ### Column Definition
 
 | Property | Type | Description |
 |---|---|---|
 | `field` | string | Key in the row object |
-| `label` | string | Column header text |
+| `label` | ReactNode | Column header text |
 | `description` | ReactNode | Optional help text. Renders an info icon next to the label that reveals a tooltip on hover. |
 | `sortable` | boolean | Enable sorting on this column |
+| `sortOrder` | `unknown[]` | Custom sort order for enum-like values. Values are sorted by their index in this array; anything not listed falls to the end. |
+| `sortComparator` | `(aValue, bValue, rowA, rowB) => number` | Custom comparator that replaces the default per-type comparator for this column. |
 | `width` | `"min"` \| `"max"` \| `"auto"` \| `number` | Column width (header + cell fallback). Numeric value is treated as fixed width in pixels. |
 | `cellWidth` | `"min"` \| `"max"` \| `"auto"` | Cell-only width override (numeric values are not supported) |
 | `align` | `"left"` \| `"center"` \| `"right"` | Text alignment (auto-stripped when inputs are visible) |
 | `renderCell` | `(value, row) => ReactNode` | Custom cell content renderer |
-| `truncate` | `true` \| `{ maxLength?: number }` | Optional text truncation helper with tooltip |
+| `truncate` | `true` \| `number` \| `{ maxLength?: number }` | Optional text truncation helper with tooltip. Number is treated as `maxLength`. |
+| `footer` | `ReactNode` \| `(rows) => ReactNode` | Column-level footer content. Static label (e.g. `"Total"`) or a function that receives the filtered rows. |
 | `editable` | boolean | Enable inline editing for this column |
 | `editType` | string | Input type (see supported types above) |
 | `editOptions` | Array | Options for select/multiselect edit types. Auto-generates Yes/No options for boolean fields if omitted. |
@@ -913,7 +926,7 @@ function ServerSideTable({ runServerlessFunction }) {
 | Property | Type | Description |
 |---|---|---|
 | `field` | string | Field to group rows by |
-| `label` | `(value, rows) => string` | Custom group header label |
+| `label` | `(value, rows) => ReactNode` | Custom group header label |
 | `sort` | `"asc"` \| `"desc"` \| `(a, b) => number` | Group sort order |
 | `defaultExpanded` | boolean | Whether groups start expanded (default `true`) |
 | `aggregations` | `{ [field]: (rows, groupKey) => ReactNode }` | Per-column aggregation functions for group headers |
@@ -1003,17 +1016,6 @@ Planned for future releases:
 - Multi-column sort with priority ordering
 
 ---
-
-## Demo
-
-A standalone demo app showcasing all features is available in a separate repo: [hubspot-datatable-demo](https://github.com/05bmckay/hubspot-datatable-demo)
-
-It includes examples of:
-
-1. Full-featured table with search, filters, sorting, pagination, footer totals, fuzzy search, record labels, and auto-width
-2. Row selection with bulk action bar, per-row action buttons, text truncation, and record labels
-3. Full-row editing with Edit/Done toggle via row actions, time and datetime inputs, and validation
-4. Scrollable wide table with many columns and single-line truncation
 
 ## License
 
