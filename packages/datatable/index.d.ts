@@ -160,6 +160,7 @@ export interface DataTableProps<Row = Record<string, unknown>, Id = string | num
   data: Row[];
   columns: DataTableColumn<Row>[];
   renderRow?: (row: Row) => ReactNode;
+  title?: ReactNode;
 
   searchFields?: string[];
   searchPlaceholder?: string;

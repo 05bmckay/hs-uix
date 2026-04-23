@@ -276,6 +276,7 @@ import {
   EmptyState,
   ErrorState,
   Flex,
+  Heading,
   Icon,
   Input,
   Link,
@@ -506,6 +507,7 @@ export const DataTable = ({
   showFirstLastButtons,         // show First/Last page buttons (default: auto when pageCount > 5)
 
   // Row count
+  title,                       // optional title shown above the table toolbar
   showRowCount = true,          // show "X records" / "X of Y records" text
   rowCountBold = false,         // bold the row count text
   rowCountText,                 // custom formatter: (shownOnPage, totalMatching) => string
@@ -1060,6 +1062,25 @@ export const DataTable = ({
   const selectedIds = externalSelectedIds != null
     ? new Set(externalSelectedIds)
     : internalSelectedIds;
+
+  const showToolbarCount =
+    showRowCount &&
+    !title &&
+    displayCount > 0 &&
+    !(showSelectionBar && selectable && selectedIds.size > 0);
+
+  const showTitleCount =
+    showRowCount &&
+    !!title &&
+    displayCount > 0 &&
+    !(showSelectionBar && selectable && selectedIds.size > 0);
+
+  const hasToolbarContent =
+    (showSearch && searchFields.length > 0) ||
+    filters.length > 0 ||
+    (activeChips.length > 0 && (showFilterBadges || showClearFiltersButton)) ||
+    showToolbarCount;
+
   const showRowActionsColumn = !!rowActions && !(
     hideRowActionsWhenSelectionActive && selectable && selectedIds.size > 0
   );
@@ -1518,71 +1539,84 @@ export const DataTable = ({
   // ---------------------------------------------------------------------------
   return (
     <Flex direction="column" gap="xs">
+      {title && (
+        <Flex direction="row" align="center" justify="between" gap="sm">
+          <Heading>{title}</Heading>
+          {showTitleCount && (
+            <Text variant="microcopy" format={rowCountBold ? { fontWeight: "bold" } : undefined}>
+              {recordCountLabel}
+            </Text>
+          )}
+        </Flex>
+      )}
+
       {/* Toolbar */}
-      <Flex direction="row" gap="sm">
-        {/* Left: Search, filters, chips (up to 75%) */}
-        <Box flex={3}>
-          <Flex direction="column" gap="sm">
-            {/* Row 1: Search + first 2 filters + Filters toggle */}
-            <Flex direction="row" align="center" gap="sm" wrap="wrap">
-              {showSearch && searchFields.length > 0 && (
-                <SearchInput
-                  name="datatable-search"
-                  placeholder={searchPlaceholder}
-                  value={internalSearchTerm}
-                  onChange={handleSearchChange}
-                />
-              )}
-              {filters.slice(0, filterInlineLimit).map(renderFilterControl)}
-              {filters.length > filterInlineLimit && (
-                <Button
-                  variant="transparent"
-                  size="small"
-                  onClick={() => setShowMoreFilters((prev) => !prev)}
-                >
-                  <Icon name="filter" size="sm" /> {resolvedFiltersButtonLabel}
-                </Button>
-              )}
-            </Flex>
-
-            {/* Row 2: Additional filters (toggled) */}
-            {showMoreFilters && filters.length > filterInlineLimit && (
+      {hasToolbarContent && (
+        <Flex direction="row" gap="sm">
+          {/* Left: Search, filters, chips (up to 75%) */}
+          <Box flex={3}>
+            <Flex direction="column" gap="sm">
+              {/* Row 1: Search + first 2 filters + Filters toggle */}
               <Flex direction="row" align="center" gap="sm" wrap="wrap">
-                {filters.slice(filterInlineLimit).map(renderFilterControl)}
-              </Flex>
-            )}
-
-            {/* Active filter chips / clear filters */}
-            {activeChips.length > 0 && (showFilterBadges || showClearFiltersButton) && (
-              <Flex direction="row" align="center" gap="sm" wrap="wrap">
-                {showFilterBadges && activeChips.map((chip) => (
-                  <Tag key={chip.key} variant="default" onDelete={() => handleFilterRemove(chip.key)}>
-                    {chip.label}
-                  </Tag>
-                ))}
-                {showClearFiltersButton && (
+                {showSearch && searchFields.length > 0 && (
+                  <SearchInput
+                    name="datatable-search"
+                    placeholder={searchPlaceholder}
+                    value={internalSearchTerm}
+                    onChange={handleSearchChange}
+                  />
+                )}
+                {filters.slice(0, filterInlineLimit).map(renderFilterControl)}
+                {filters.length > filterInlineLimit && (
                   <Button
                     variant="transparent"
-                    size="extra-small"
-                    onClick={() => handleFilterRemove("all")}
+                    size="small"
+                    onClick={() => setShowMoreFilters((prev) => !prev)}
                   >
-                    {resolvedClearAllLabel}
+                    <Icon name="filter" size="sm" /> {resolvedFiltersButtonLabel}
                   </Button>
                 )}
               </Flex>
-            )}
-          </Flex>
-        </Box>
 
-        {/* Right: Record count (up to 25%) */}
-        {showRowCount && displayCount > 0 && !(showSelectionBar && selectable && selectedIds.size > 0) && (
-          <Box flex={1} alignSelf="end">
-            <Flex direction="row" justify="end">
-              <Text variant="microcopy" format={rowCountBold ? { fontWeight: "bold" } : undefined}>{recordCountLabel}</Text>
+              {/* Row 2: Additional filters (toggled) */}
+              {showMoreFilters && filters.length > filterInlineLimit && (
+                <Flex direction="row" align="center" gap="sm" wrap="wrap">
+                  {filters.slice(filterInlineLimit).map(renderFilterControl)}
+                </Flex>
+              )}
+
+              {/* Active filter chips / clear filters */}
+              {activeChips.length > 0 && (showFilterBadges || showClearFiltersButton) && (
+                <Flex direction="row" align="center" gap="sm" wrap="wrap">
+                  {showFilterBadges && activeChips.map((chip) => (
+                    <Tag key={chip.key} variant="default" onDelete={() => handleFilterRemove(chip.key)}>
+                      {chip.label}
+                    </Tag>
+                  ))}
+                  {showClearFiltersButton && (
+                    <Button
+                      variant="transparent"
+                      size="extra-small"
+                      onClick={() => handleFilterRemove("all")}
+                    >
+                      {resolvedClearAllLabel}
+                    </Button>
+                  )}
+                </Flex>
+              )}
             </Flex>
           </Box>
-        )}
-      </Flex>
+
+          {/* Right: Record count (up to 25%) */}
+          {showToolbarCount && (
+            <Box flex={1} alignSelf="end">
+              <Flex direction="row" justify="end">
+                <Text variant="microcopy" format={rowCountBold ? { fontWeight: "bold" } : undefined}>{recordCountLabel}</Text>
+              </Flex>
+            </Box>
+          )}
+        </Flex>
+      )}
 
       {/* Selection action bar */}
       {showSelectionBar && selectable && selectedIds.size > 0 && (
