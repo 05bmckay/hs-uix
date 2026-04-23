@@ -495,6 +495,7 @@ Each step can have per-step validation:
   }}
   submitVariant="primary"
   showCancel={true}
+  submitAlign="end"
   onCancel={() => actions.closeOverlay()}
   loading={isSaving}        // controlled loading state
   disabled={!canEdit}       // disables entire form
@@ -503,6 +504,8 @@ Each step can have per-step validation:
 ```
 
 Use `submitPosition="none"` with the ref API for custom button placement.
+
+`submitAlign` controls the default single-step button row alignment (`"start" | "end" | "between"`). By default, FormBuilder preserves the existing behavior: `"between"` when `showCancel` is true, otherwise `"start"`.
 
 `labels` provides a single i18n object for button text, and `renderButtons` can fully replace the default button row.
 
@@ -1070,6 +1073,7 @@ try {
 | `showCancel` | `boolean` | `false` | Show cancel button |
 | `onCancel` | `() => void` | - | Cancel callback |
 | `submitPosition` | `"bottom" \| "none"` | `"bottom"` | Button placement |
+| `submitAlign` | `"start" \| "end" \| "between"` | auto | Default single-step button-row alignment. Defaults to `"between"` when `showCancel` is true, otherwise `"start"` |
 | `loading` | `boolean` | - | Controlled loading state |
 | `disabled` | `boolean` | `false` | Disable entire form |
 | `labels` | `{ submit?, cancel?, back?, next? }` | - | Button label i18n object |

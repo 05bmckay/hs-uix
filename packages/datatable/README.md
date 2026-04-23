@@ -627,6 +627,29 @@ Use `rowCountText` when you want full control over the row count label.
 
 In server-side mode, `totalMatching` maps to `totalCount` (or `data.length` if `totalCount` is not provided).
 
+Hide the built-in count entirely with `showRowCount={false}`:
+
+```jsx
+<DataTable
+  data={products}
+  columns={columns}
+  showRowCount={false}
+/>
+```
+
+If you want the count to sit inline with a table heading instead of the toolbar, pass `title`:
+
+```jsx
+<DataTable
+  title="Delay causes"
+  data={delayCauses}
+  columns={columns}
+  rowCountText={(shownOnPage, totalMatching) => `${totalMatching} records`}
+/>
+```
+
+When `title` is set, DataTable renders a simple header row above the toolbar and moves the built-in row count to the right side of that title row.
+
 ---
 
 ### useAssociations
@@ -835,6 +858,7 @@ function ServerSideTable({ runServerlessFunction }) {
 | `data` | Array | *required* | Array of row objects |
 | `columns` | Array | *required* | Column definitions (see below) |
 | `renderRow` | `(row) => ReactNode` | — | Renders a full `<TableRow>`. Omit to use column-based rendering via `renderCell`. |
+| `title` | `ReactNode` | — | Optional table title shown above the toolbar. When set, the built-in row count moves to the right side of the title row. |
 | `searchFields` | string[] | `[]` | Fields to search across |
 | `fuzzySearch` | boolean | `false` | Enable fuzzy matching via Fuse.js |
 | `fuzzyOptions` | object | — | Custom Fuse.js options (threshold, distance, etc.) |
