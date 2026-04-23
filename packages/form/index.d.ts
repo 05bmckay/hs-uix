@@ -121,6 +121,8 @@ export interface FormBuilderButtonsRenderContext {
   onSubmit: (e?: unknown) => Promise<void>;
 }
 
+export type FormBuilderSubmitAlign = "start" | "end" | "between";
+
 // ---------------------------------------------------------------------------
 // Layout types
 // ---------------------------------------------------------------------------
@@ -413,6 +415,12 @@ export interface FormBuilderProps {
   showCancel?: boolean;
   onCancel?: () => void;
   submitPosition?: "bottom" | "none";
+  /**
+   * Controls the default single-step action-row alignment.
+   * Defaults to `"between"` when `showCancel` is true, otherwise `"start"`.
+   * Ignored when `steps` are provided; use `renderButtons` for custom multi-step layouts.
+   */
+  submitAlign?: FormBuilderSubmitAlign;
   loading?: boolean;
   disabled?: boolean;
   labels?: FormBuilderLabels;

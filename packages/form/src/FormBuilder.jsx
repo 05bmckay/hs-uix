@@ -493,6 +493,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     showCancel = false,            // show cancel button
     onCancel,                      // () => void
     submitPosition = "bottom",     // "bottom" | "none"
+    submitAlign,                   // default single-step action row alignment
     loading: controlledLoading,    // controlled loading state
     disabled = false,              // disable entire form
     renderButtons: renderButtonsProp, // custom action row renderer
@@ -766,6 +767,11 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       console.warn(`[FormBuilder] ${message}`);
     }
   }, [isDev]);
+
+  useEffect(() => {
+    if (!isMultiStep || !submitAlign) return;
+    warnConfig("submitAlign is ignored when steps are provided. Use renderButtons for custom multi-step button layout.");
+  }, [isMultiStep, submitAlign, warnConfig]);
 
   const replaceErrors = useCallback(
     (nextErrors) => {
@@ -2798,6 +2804,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
     const isLastStep = !isMultiStep || currentStep === steps.length - 1;
     const isFirstStep = !isMultiStep || currentStep === 0;
+    const singleStepJustify = submitAlign || (showCancel ? "between" : "start");
     const buttonContext = {
       isMultiStep,
       isFirstStep,
@@ -2863,7 +2870,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
     // Single-step form buttons
     return (
-      <Flex direction="row" justify={showCancel ? "between" : "start"} gap="sm">
+      <Flex direction="row" justify={singleStepJustify} gap="sm">
         {showCancel && (
           <Button variant="secondary" onClick={onCancel} disabled={disabled}>
             {cancelButtonLabel}

@@ -75,6 +75,7 @@ export type {
   FormBuilderLabels,
   FormBuilderAlertConfig,
   FormBuilderButtonsRenderContext,
+  FormBuilderSubmitAlign,
   FormBuilderLayout,
   FormBuilderLayoutEntry,
   FormBuilderSection,
