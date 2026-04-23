@@ -637,7 +637,7 @@ Hide the built-in count entirely with `showRowCount={false}`:
 />
 ```
 
-If you want the count to sit inline with a table heading instead of the toolbar, pass `title`:
+If you want a title above the toolbar, pass `title`:
 
 ```jsx
 <DataTable
@@ -648,7 +648,7 @@ If you want the count to sit inline with a table heading instead of the toolbar,
 />
 ```
 
-When `title` is set, DataTable renders a simple header row above the toolbar and moves the built-in row count to the right side of that title row.
+When `title` is set, DataTable renders a simple demibold title row above the toolbar. The built-in row count stays inline with the toolbar controls on the right.
 
 ---
 
@@ -858,7 +858,7 @@ function ServerSideTable({ runServerlessFunction }) {
 | `data` | Array | *required* | Array of row objects |
 | `columns` | Array | *required* | Column definitions (see below) |
 | `renderRow` | `(row) => ReactNode` | — | Renders a full `<TableRow>`. Omit to use column-based rendering via `renderCell`. |
-| `title` | `ReactNode` | — | Optional table title shown above the toolbar. When set, the built-in row count moves to the right side of the title row. |
+| `title` | `ReactNode` | — | Optional table title shown as demibold text above the toolbar. When set, the built-in row count stays inline with the toolbar controls. |
 | `searchFields` | string[] | `[]` | Fields to search across |
 | `fuzzySearch` | boolean | `false` | Enable fuzzy matching via Fuse.js |
 | `fuzzyOptions` | object | — | Custom Fuse.js options (threshold, distance, etc.) |

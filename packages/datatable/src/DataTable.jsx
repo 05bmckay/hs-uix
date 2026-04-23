@@ -276,7 +276,6 @@ import {
   EmptyState,
   ErrorState,
   Flex,
-  Heading,
   Icon,
   Input,
   Link,
@@ -507,7 +506,7 @@ export const DataTable = ({
   showFirstLastButtons,         // show First/Last page buttons (default: auto when pageCount > 5)
 
   // Row count
-  title,                       // optional title shown above the table toolbar
+  title,                       // optional title shown as demibold text above the table toolbar
   showRowCount = true,          // show "X records" / "X of Y records" text
   rowCountBold = false,         // bold the row count text
   rowCountText,                 // custom formatter: (shownOnPage, totalMatching) => string
@@ -1065,13 +1064,6 @@ export const DataTable = ({
 
   const showToolbarCount =
     showRowCount &&
-    !title &&
-    displayCount > 0 &&
-    !(showSelectionBar && selectable && selectedIds.size > 0);
-
-  const showTitleCount =
-    showRowCount &&
-    !!title &&
     displayCount > 0 &&
     !(showSelectionBar && selectable && selectedIds.size > 0);
 
@@ -1541,12 +1533,7 @@ export const DataTable = ({
     <Flex direction="column" gap="xs">
       {title && (
         <Flex direction="row" align="center" justify="between" gap="sm">
-          <Heading>{title}</Heading>
-          {showTitleCount && (
-            <Text variant="microcopy" format={rowCountBold ? { fontWeight: "bold" } : undefined}>
-              {recordCountLabel}
-            </Text>
-          )}
+          <Text format={{ fontWeight: "demibold" }}>{title}</Text>
         </Flex>
       )}
 
