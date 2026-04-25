@@ -145,6 +145,8 @@ export interface FormBuilderField {
   tooltip?: string;
   required?: boolean | ((values: Record<string, unknown>) => boolean);
   readOnly?: boolean;
+  /** Escape hatch: when true, this field stays editable even if FormBuilder-level `readOnly` is set. */
+  alwaysEditable?: boolean;
   disabled?: boolean | ((values: Record<string, unknown>) => boolean);
   defaultValue?: unknown;
 
@@ -402,6 +404,14 @@ export interface FormBuilderProps {
   validateOnBlur?: boolean;
   validateOnSubmit?: boolean;
   onValidationChange?: (errors: Record<string, string>) => void;
+  /** Called when submit-time validation blocks submission. Lets callers surface their own toast/alert and inspect which field/section is invalid. */
+  onValidationFail?: (info: {
+    errors: Record<string, string>;
+    fields: { name: string; label?: string; sectionId?: string }[];
+    firstInvalidField?: { name: string; label?: string; sectionId?: string };
+  }) => void;
+  /** When true, FormBuilder auto-opens the accordion section containing the first invalid field on submit-time validation failure. */
+  openSectionOnValidationFail?: boolean;
 
   // Multi-step
   steps?: FormBuilderStep[];

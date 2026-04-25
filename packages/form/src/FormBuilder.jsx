@@ -475,6 +475,8 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     validateOnBlur = true,     // validate on blur
     validateOnSubmit = true,   // validate all before onSubmit
     onValidationChange,        // (errors) => void
+    onValidationFail,          // ({ errors, fields, firstInvalidField }) => void — called when submit-time validation blocks submission
+    openSectionOnValidationFail = false, // auto-open accordion section containing first invalid field on submit failure
   } = props;
 
   // Multi-step
@@ -602,7 +604,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   if (process.env.NODE_ENV !== "production") {
     const KNOWN_FIELD_PROPS = new Set([
       "name", "type", "label", "description", "placeholder", "tooltip", "required",
-      "readOnly", "disabled", "defaultValue", "fieldProps", "colSpan", "width",
+      "readOnly", "alwaysEditable", "disabled", "defaultValue", "fieldProps", "colSpan", "width",
       "visible", "dependsOn", "dependsOnConfig", "group", "debounce",
       "pattern", "patternMessage", "minLength", "maxLength", "min", "max",
       "validate", "validators", "validateDebounce", "useDefaultValidators",
@@ -752,6 +754,21 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     }
     return map;
   }, [fields]);
+
+  // Map field name → owning section id (for surfacing the section that contains the first invalid field on submit failure)
+  const sectionIdByFieldName = useMemo(() => {
+    const map = new Map();
+    if (Array.isArray(sections)) {
+      for (const sec of sections) {
+        if (!sec || !Array.isArray(sec.fields)) continue;
+        for (const name of sec.fields) map.set(name, sec.id);
+      }
+    }
+    return map;
+  }, [sections]);
+
+  // When openSectionOnValidationFail is on, this counter bumps to force-remount the targeted section's Accordion with defaultOpen=true
+  const [validationOpenSection, setValidationOpenSection] = useState(null);
 
   const isDev =
     typeof process === "undefined" ||
@@ -1440,11 +1457,46 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     async (e) => {
       if (e && e.preventDefault) e.preventDefault();
 
+      // Build a structured validation-failure payload for onValidationFail / openSectionOnValidationFail
+      const reportValidationFailure = (errors) => {
+        const errorNames = Object.keys(errors).filter((n) => !!errors[n]);
+        if (errorNames.length === 0) return;
+        // Preserve visible-field order so "first invalid" matches what the user sees
+        const orderedNames = allVisibleFields
+          .map((f) => f.name)
+          .filter((n) => errorNames.includes(n));
+        // Include any error-bearing names not in visible fields (e.g. async / sub-field errors)
+        for (const n of errorNames) if (!orderedNames.includes(n)) orderedNames.push(n);
+
+        const fieldInfos = orderedNames.map((name) => {
+          const f = fieldByName.get(name);
+          return {
+            name,
+            label: f?.label,
+            sectionId: sectionIdByFieldName.get(name),
+          };
+        });
+        const firstInvalidField = fieldInfos[0];
+
+        if (openSectionOnValidationFail && firstInvalidField?.sectionId) {
+          // Bump a counter so the targeted Accordion remounts with defaultOpen=true even if it was already overridden to the same id
+          setValidationOpenSection({
+            id: firstInvalidField.sectionId,
+            nonce: (validationOpenSection?.nonce || 0) + 1,
+          });
+        }
+
+        if (onValidationFail) {
+          onValidationFail({ errors, fields: fieldInfos, firstInvalidField });
+        }
+      };
+
       // Validate all visible fields (sync)
       if (validateOnSubmit) {
         const { errors, hasErrors } = validateVisibleFields(allVisibleFields);
         if (hasErrors) {
           replaceErrors(errors);
+          reportValidationFailure(errors);
           return;
         }
 
@@ -1461,7 +1513,10 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
             ]),
           ];
           await Promise.all(pendingValidations);
-          if (fieldSetHasErrors(formErrorsRef.current, allVisibleFields)) return;
+          if (fieldSetHasErrors(formErrorsRef.current, allVisibleFields)) {
+            reportValidationFailure(formErrorsRef.current);
+            return;
+          }
         }
       }
 
@@ -1518,7 +1573,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         if (controlledLoading == null) setInternalLoading(false);
       }
     },
-    [validateOnSubmit, allVisibleFields, validateVisibleFields, replaceErrors, onSubmit, values, controlledLoading, transformValues, onBeforeSubmit, onSubmitSuccess, onSubmitError, resetOnSuccess, formValues, fieldByName, getAsyncValidationTargets, runAsyncValidationTarget]
+    [validateOnSubmit, allVisibleFields, validateVisibleFields, replaceErrors, onSubmit, values, controlledLoading, transformValues, onBeforeSubmit, onSubmitSuccess, onSubmitError, resetOnSuccess, formValues, fieldByName, getAsyncValidationTargets, runAsyncValidationTarget, onValidationFail, openSectionOnValidationFail, sectionIdByFieldName, validationOpenSection]
   );
 
   // Multi-step navigation
@@ -1635,8 +1690,9 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     const fieldError = formErrors[field.name] || null;
     const hasError = !!fieldError;
     const isRequired = showRequiredIndicator && resolveRequired(field, formValues);
-    const isReadOnly = field.readOnly || formReadOnly;
-    const isDisabled = disabled || resolveDisabled(field, formValues) || formReadOnly;
+    const fieldFormReadOnly = field.alwaysEditable ? false : formReadOnly;
+    const isReadOnly = field.readOnly || fieldFormReadOnly;
+    const isDisabled = disabled || resolveDisabled(field, formValues) || fieldFormReadOnly;
 
     // Route onChange through debounce if field has debounce prop
     const fieldOnChange = field.debounce
@@ -1702,8 +1758,9 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
                   const sfValue = formValues[sf.name];
                   const sfError = formErrors[sf.name] || null;
                   const sfLabel = itemIdx === 0 ? sf.label : undefined;
-                  const sfReadOnly = sf.readOnly || formReadOnly;
-                  const sfDisabled = disabled || resolveDisabled(sf, formValues) || formReadOnly;
+                  const sfFormReadOnly = sf.alwaysEditable ? false : formReadOnly;
+                  const sfReadOnly = sf.readOnly || sfFormReadOnly;
+                  const sfDisabled = disabled || resolveDisabled(sf, formValues) || sfFormReadOnly;
                   const sfOnChange = sf.debounce
                     ? (v) => handleDebouncedFieldChange(sf.name, v)
                     : (v) => handleFieldChange(sf.name, v);
@@ -2743,12 +2800,21 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
         </Flex>
       );
 
+      const isValidationOverrideTarget =
+        validationOpenSection && validationOpenSection.id === sec.id;
+      const accordionKey = isValidationOverrideTarget
+        ? `${sec.id}::open::${validationOpenSection.nonce}`
+        : sec.id;
+      const accordionDefaultOpen = isValidationOverrideTarget
+        ? true
+        : sec.defaultOpen !== false;
+
       const accordion = (
         <Accordion
-          key={sec.id}
+          key={accordionKey}
           title={sec.label}
           size="sm"
-          defaultOpen={sec.defaultOpen !== false}
+          defaultOpen={accordionDefaultOpen}
         >
           {accordionContent}
         </Accordion>

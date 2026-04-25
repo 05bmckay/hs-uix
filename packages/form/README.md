@@ -244,6 +244,27 @@ const [errors, setErrors] = useState({});
 />
 ```
 
+### Surfacing submit-time validation failures
+
+By default, when `validateOnSubmit` is on and a required field is invalid, FormBuilder writes the errors and silently aborts the submit. If the invalid field lives inside a collapsed accordion section, the error marker is hidden and the submit button looks broken.
+
+Two opt-in props handle this:
+
+```jsx
+<FormBuilder
+  fields={fields}
+  sections={sections}
+  openSectionOnValidationFail
+  onValidationFail={({ firstInvalidField, fields, errors }) => {
+    addAlert({ type: "danger", title: "Please fix the highlighted fields." });
+  }}
+  onSubmit={save}
+/>
+```
+
+- `openSectionOnValidationFail` — auto-opens the accordion section that contains the first invalid field.
+- `onValidationFail({ errors, fields, firstInvalidField })` — fires whenever submit-time validation blocks submission, so consumers calling `formRef.current.submit()` from custom buttons can surface their own toast/alert. Each entry in `fields` includes `{ name, label, sectionId }`.
+
 ## Ref API
 
 Access form methods imperatively — essential for modals, panels, and any UI where buttons live outside the form:
@@ -739,6 +760,18 @@ Lock the entire form with an optional warning message:
 
 Sets all fields to `readOnly`, hides submit/cancel buttons, and shows a warning Alert. The ref API still works.
 
+To keep specific fields editable while the rest of the form is locked, set `alwaysEditable: true` on the field — it overrides the form-level `readOnly`:
+
+```jsx
+<FormBuilder
+  fields={[
+    { name: "owner", label: "Owner", type: "text" },
+    { name: "internalNote", label: "Internal note", type: "textarea", alwaysEditable: true },
+  ]}
+  readOnly
+/>
+```
+
 ## Async Validation
 
 ![Async Validation & Side Effects](https://raw.githubusercontent.com/05bmckay/hs-uix/main/packages/form/assets/async-validation-side-effects.png)
@@ -1064,6 +1097,8 @@ try {
 | `validateOnBlur` | `boolean` | `true` | Validate on blur |
 | `validateOnSubmit` | `boolean` | `true` | Validate all before submit |
 | `onValidationChange` | `(errors) => void` | - | Validation state callback |
+| `onValidationFail` | `({ errors, fields, firstInvalidField }) => void` | - | Called when submit-time validation blocks submission. `fields` and `firstInvalidField` carry `{ name, label, sectionId }` |
+| `openSectionOnValidationFail` | `boolean` | `false` | Auto-open the accordion section containing the first invalid field on submit-time validation failure |
 | `steps` | `FormBuilderStep[]` | - | Enables multi-step mode |
 | `step` | `number` | - | Controlled step (0-based) |
 | `onStepChange` | `(step) => void` | - | Step change callback |
@@ -1122,6 +1157,7 @@ try {
 | `tooltip` | `string` | Most | Tooltip next to label |
 | `required` | `boolean \| (values) => boolean` | All | Required validation (supports conditional) |
 | `readOnly` | `boolean` | All | Prevent editing |
+| `alwaysEditable` | `boolean` | All | Stay editable even when FormBuilder-level `readOnly` is set (per-field escape hatch) |
 | `disabled` | `boolean \| (values) => boolean` | All | Disable this field (supports function for conditional disable) |
 | `defaultValue` | `unknown` | All | Default value |
 | `colSpan` | `number` | All | Columns to span (with `columns` prop) |
