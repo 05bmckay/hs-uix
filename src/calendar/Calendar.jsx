@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  AutoGrid,
   Box,
   Button,
   Divider,
@@ -59,12 +60,7 @@ import {
   toWallClock,
   formatTimeZoneLabel,
 } from "./dateUtils.js";
-import {
-  makeDotDataUri,
-  makeSpacerDataUri,
-  makeEventChipDataUri,
-  makeMoreDataUri,
-} from "./svgChips.js";
+import { makeDotDataUri, makeSpacerDataUri } from "./svgChips.js";
 
 // ---------------------------------------------------------------------------
 // Calendar — presentational calendar surface for HubSpot UI Extensions.
@@ -196,12 +192,55 @@ const STATUS_VARIANT = {
   danger: "danger",
 };
 
+// Tag is the mirror image: it spells red "error" and has no "danger".
+const TAG_VARIANT = {
+  default: "default",
+  info: "info",
+  success: "success",
+  warning: "warning",
+  error: "error",
+  danger: "error",
+};
 
-// Month-grid line metrics. Spacer heights approximate a chip line and the "more"
-// link line so padded (empty) slots match the height of real lines.
-// Fixed per-day column width. Forced via an invisible spacer in each cell so
-// empty columns keep their width; columns use width="min" so the Table scrolls
-// horizontally (DataTable-style) when 7 columns exceed the container.
+// The two month-grid event styles. StatusTag (default) is a colored dot + text
+// matching the week/day grid; Tag is a bordered/filled pill.
+const MONTH_EVENT_STYLES = new Set(["statusTag", "tag"]);
+
+// Default month-label character budget per style. We truncate the label string
+// OURSELVES rather than leaning on the tag's native TruncateString: inside an
+// auto-sizing table cell, TruncateString measures overflow before the column
+// width settles, so identical-length labels truncate inconsistently (and a
+// Link-wrapped StatusTag, under even less width pressure, rarely truncates at
+// all). Bounding the string up front makes every token render identically; the
+// native TruncateString still trims further if a column ends up narrow. Budgets
+// are derived from MONTH_COL_WIDTH (~6.4px/char at the tag font); StatusTag
+// reserves extra room for its leading dot. Override via `monthEventMaxChars`.
+const monthLabelMaxChars = (style) => {
+  // A little extra overhead + a slightly fat per-char estimate keep the cut
+  // clear of the column edge, so the native TruncateString never overflows and
+  // appends its own "…".
+  const overhead = style === "tag" ? 34 : 46; // pill padding (+ dot for statusTag)
+  return Math.max(6, Math.floor((MONTH_COL_WIDTH - overhead) / 6.6));
+};
+
+// Hard-cut a label to `max` characters — no trailing ellipsis. Cutting cleanly
+// (rather than appending "…") keeps the chips tidy; because we cut to a budget
+// that fits the column, the tag's native TruncateString sees a fitting string
+// and doesn't add its own "…" either.
+const truncateMonthLabel = (value, max) => {
+  const s = String(value == null ? "" : value);
+  if (!max || s.length <= max) return s;
+  return s.slice(0, max).trimEnd();
+};
+
+
+// Fixed per-day column width. Cells use width="min" (DataTable-style: shrink to
+// content, OVERFLOW + horizontal scroll past the container) and a full-width
+// (1px-tall) spacer in EVERY cell sets that content width to MONTH_COL_WIDTH — so
+// all 7 columns are equal and the table scrolls when it can't fit. A NUMERIC
+// width instead let the table COMPRESS columns unequally: an empty day (whose
+// only content is the scalable spacer image) lost width to days whose StatusTags
+// resisted via their min-content, smushing the empty column to nothing.
 const MONTH_COL_WIDTH = 160;
 
 // Time-grid (week/day) day-column widths. Day columns need EQUAL fixed NUMERIC
@@ -238,11 +277,15 @@ const EventDetail = ({ event, labels }) => {
       when = `${formatDayTitle(start)} – ${formatDayTitle(end)}`;
     }
   }
+  // `truncate` sets white-space: nowrap on each line, so the popover grows to fit
+  // the title on ONE line instead of wrapping early. (Without it the popover is
+  // width-constrained by its on-screen position — floating-ui clamps it near the
+  // grid edges — so titles wrapped at inconsistent, too-narrow widths.)
   return (
     <Flex direction="column" gap="xs">
-      <Text format={{ fontWeight: "demibold" }}>{title || "--"}</Text>
-      {when ? <Text variant="microcopy">{when}</Text> : null}
-      {subtitle ? <Text>{subtitle}</Text> : null}
+      <Text format={{ fontWeight: "demibold" }} truncate={true}>{title || "--"}</Text>
+      {when ? <Text variant="microcopy" truncate={true}>{when}</Text> : null}
+      {subtitle ? <Text truncate={true}>{subtitle}</Text> : null}
       {href ? (
         <Link href={href.url} external={href.external}>
           {labels.open}
@@ -272,11 +315,13 @@ const buildOverlay = (event, mode, renderEventDetail, labels, idSuffix = "") => 
       </Panel>
     );
   }
-  // Default: experimental Popover. Despite the SDK doc claiming the renderer
-  // auto-wraps children in a Tile, in practice the content renders badly
-  // without an explicit <Tile compact> around it — so we add one.
+  // Default: experimental Popover. The "longform" variant is the widest one, so
+  // an event title (e.g. "Umbrella West – Expansion") gets enough room to sit on
+  // one line instead of wrapping early in the narrow default variant. Despite the
+  // SDK doc claiming the renderer auto-wraps children in a Tile, in practice the
+  // content renders badly without an explicit <Tile compact> around it.
   return (
-    <Popover id={id} placement="bottom">
+    <Popover id={id} placement="bottom" variant="longform">
       <Tile compact>{body}</Tile>
     </Popover>
   );
@@ -324,20 +369,25 @@ const AgendaEventRow = ({ event, day, overlayMode, renderEventDetail, onEventCli
   );
 };
 
-// Width of a month-grid chip (the cell width minus a little side padding).
-const MONTH_CHIP_WIDTH = MONTH_COL_WIDTH - 8;
-const MONTH_CHIP_HEIGHT = 24;
+// Height of one month-grid event slot. Padding spacers for empty slots use this
+// so a sparse day reserves the same vertical space as a full one. It only needs
+// to APPROXIMATE the native tag's pill height: a bordered Table stretches every
+// cell in a row to the tallest, so exact per-slot matching isn't required — this
+// just sets a sensible minimum.
+const MONTH_SLOT_HEIGHT = 24;
 
 // ---------------------------------------------------------------------------
-// MonthChip — the month-grid event token rendered as a FIXED-WIDTH SVG chip
-// (bordered, colored left accent, truncated title). A Tag sizes to its content,
-// so Tag chips render at different widths and pull their columns out of
-// alignment; a fixed-width SVG guarantees every chip — and therefore every
-// column — is exactly equal. A multi-day event renders a chip in every day it
-// spans, so each gets a day-scoped overlay id and the start time shows only on
-// the start day (other days get a "→" continuation prefix).
+// MonthChip — the month-grid event token. Rendered as a native StatusTag
+// (colored dot + truncated text, wrapped in a Link for the overlay) or a Tag
+// (bordered pill that carries the overlay itself), chosen via `monthEventStyle`.
+// Native tags TRUNCATE as the column narrows and hold a fixed pill HEIGHT, so —
+// unlike the old fixed-width SVG <Image>, which scaled down proportionally and
+// turned microscopic in a narrow column — they stay readable at any width. A
+// multi-day event renders a token in every day it spans, so each gets a
+// day-scoped overlay id and the start time shows only on the start day (other
+// days get a "→" continuation prefix).
 // ---------------------------------------------------------------------------
-const MonthChip = ({ event, day, overlayMode, renderEventDetail, onEventClick, labels }) => {
+const MonthChip = ({ event, day, overlayMode, renderEventDetail, onEventClick, labels, monthEventStyle, monthEventMaxChars }) => {
   const isStartDay = !day || !event.start || isSameDay(event.start, day);
   const overlay = buildOverlay(event, overlayMode, renderEventDetail, labels, day ? `-m${day.getTime()}` : "");
   const handleClick = onEventClick ? () => onEventClick(event.raw, event) : undefined;
@@ -346,23 +396,24 @@ const MonthChip = ({ event, day, overlayMode, renderEventDetail, onEventClick, l
     event.start && (event.start.getHours() !== 0 || event.start.getMinutes() !== 0);
   const time = isStartDay && startHasTime ? `${formatTime(event.start)} ` : "";
   const prefix = isStartDay ? "" : "→ ";
-  const chip = makeEventChipDataUri({
-    label: `${prefix}${time}${event.title || "--"}`,
-    width: MONTH_CHIP_WIDTH,
-    height: MONTH_CHIP_HEIGHT,
-    variant,
-  });
-  // Image carries `overlay` + `onClick` directly — wrapping it in a Link would
-  // add the Link's block padding and open a big gap between stacked chips.
+  const maxChars = monthEventMaxChars != null ? monthEventMaxChars : monthLabelMaxChars(monthEventStyle);
+  const label = truncateMonthLabel(`${prefix}${time}${event.title || "--"}`, maxChars);
+
+  if (monthEventStyle === "tag") {
+    // Tag carries `overlay` + `onClick` directly (it extends OverlayComponentProps)
+    // and uses the raw palette — it spells red "error", not "danger".
+    return (
+      <Tag variant={TAG_VARIANT[variant] || "default"} overlay={overlay} onClick={handleClick}>
+        {label}
+      </Tag>
+    );
+  }
+  // StatusTag has no `overlay` prop, so wrap it in a Link to open the overlay —
+  // the same pattern the week/day time grid uses. It spells red "danger".
   return (
-    <Image
-      src={chip.src}
-      width={chip.width}
-      height={chip.height}
-      alt={event.title || ""}
-      overlay={overlay}
-      onClick={handleClick}
-    />
+    <Link overlay={overlay} onClick={handleClick}>
+      <StatusTag variant={STATUS_VARIANT[variant] || "default"}>{label}</StatusTag>
+    </Link>
   );
 };
 
@@ -494,12 +545,16 @@ const MonthView = ({
   const headers = weekdayLabels(weekStartsOn, hideWeekends, true);
   const today = now || new Date();
 
-  // Uniform cell HEIGHT (so the table's vertical-centering doesn't push the day
-  // number to different heights between full and sparse cells): every cell
-  // renders the SAME number of equal-height (24px) slots — a chip, a transparent
-  // spacer, or the SVG "+N more" — and a full-width spacer also pins each column
-  // to MONTH_COL_WIDTH so the 7 columns stay equal.
-  const spacer24 = makeSpacerDataUri(MONTH_CHIP_HEIGHT, MONTH_COL_WIDTH);
+  // Column WIDTH is held by wrapping each cell's content in an AutoGrid of fixed
+  // columnWidth=MONTH_COL_WIDTH (see renderCell). AutoGrid's column is a real,
+  // non-scaling layout width — unlike a full-width spacer <Image>, which the
+  // table compressed (scaling it down) so empty days collapsed narrower than days
+  // whose StatusTags resisted via min-content.
+  //
+  // HEIGHT for empty event slots is held by slotSpacer (1px WIDE × slot tall): a
+  // full-width spacer would scale down in a narrow column and lose its height; a
+  // 1px-wide image can never exceed the column, so it always keeps its height.
+  const slotSpacer = makeSpacerDataUri(MONTH_SLOT_HEIGHT, 1);
   const renderCell = (day) => {
     const dayEvents = eventsForDay(day);
     const inMonth = isSameMonth(day, refDate);
@@ -510,35 +565,46 @@ const MonthView = ({
     const shown = dayEvents.slice(0, maxEventsPerDay);
     const hasOverflow = dayEvents.length > maxEventsPerDay;
 
+    // Every slot is forced to EXACTLY MONTH_SLOT_HEIGHT by pairing its content with
+    // a 1px-wide × slot-tall spacer in a row: a StatusTag/Tag/Link renders a hair
+    // shorter than a bare spacer, so without this, cells with events came out
+    // slightly shorter than empty cells and the table's vertical-centering pushed
+    // their day numbers to different heights. Forcing identical slot heights makes
+    // every cell the same height, so all 7 day numbers align.
+    const heightSpacer = (
+      <Image src={slotSpacer.src} width={slotSpacer.width} height={slotSpacer.height} alt="" />
+    );
+    const slotRow = (key, content) => (
+      <Flex key={key} direction="row" align="center" gap="flush">
+        {heightSpacer}
+        {content}
+      </Flex>
+    );
+
     const slots = [];
     for (let i = 0; i < maxEventsPerDay; i++) {
       if (i < shown.length) {
-        slots.push(<MonthChip key={shown[i].key} event={shown[i]} day={day} {...chipProps} />);
+        slots.push(slotRow(shown[i].key, <MonthChip event={shown[i]} day={day} {...chipProps} />));
       } else {
-        slots.push(
-          <Image key={`sp-${i}`} src={spacer24.src} width={spacer24.width} height={spacer24.height} alt="" />
-        );
+        slots.push(<Image key={`sp-${i}`} src={slotSpacer.src} width={slotSpacer.width} height={slotSpacer.height} alt="" />);
       }
     }
     if (hasOverflow) {
-      const more = makeMoreDataUri({
-        label: labels.more(dayEvents.length - maxEventsPerDay),
-        width: MONTH_COL_WIDTH,
-        height: MONTH_CHIP_HEIGHT,
-      });
+      // "+N more" as a real Link (it opens the day-overflow Popover). The old SVG
+      // <Image> here scaled down in narrow columns just like the chips did.
       slots.push(
-        <Image
-          key="more"
-          src={more.src}
-          width={more.width}
-          height={more.height}
-          alt={labels.more(dayEvents.length - maxEventsPerDay)}
+        slotRow("more",
+        <Link
           overlay={
             <Popover id={`cal-day-${day.getTime()}`} placement="top" variant="longform">
               <Tile compact>
                 <Flex direction="column" gap="sm">
-                  <Flex direction="row" align="center" gap="sm">
-                    <Heading>{String(dayEvents.length)}</Heading>
+                  {/* Count header on ONE centered line. A Heading is block-width
+                      (it would force the label onto its own line), so the count is
+                      a bold Text sitting inline beside the label; justify="center"
+                      centers the pair. */}
+                  <Flex direction="row" justify="center" align="center" gap="xs">
+                    <Text format={{ fontWeight: "bold" }}>{String(dayEvents.length)}</Text>
                     <Text format={{ fontWeight: "demibold" }}>{labels.onThisDate}</Text>
                   </Flex>
                   <Divider />
@@ -552,24 +618,32 @@ const MonthView = ({
               </Tile>
             </Popover>
           }
-        />
+        >
+          {labels.more(dayEvents.length - maxEventsPerDay)}
+        </Link>
+        )
       );
     } else {
       slots.push(
-        <Image key="more-sp" src={spacer24.src} width={spacer24.width} height={spacer24.height} alt="" />
+        <Image key="more-sp" src={slotSpacer.src} width={slotSpacer.width} height={slotSpacer.height} alt="" />
       );
     }
 
+    // AutoGrid (single fixed-width column) holds the cell to MONTH_COL_WIDTH
+    // without any spacer image — so the day number sits flush at the very top-left
+    // (nothing above it) and the column can't collapse on empty days.
     return (
-      <Flex direction="column" gap="xs">
-        <Flex direction="row" align="center" gap="xs">
-          {isToday ? <ColorDot variant="info" /> : null}
-          <Text variant="microcopy" format={{ fontWeight: inMonth ? "demibold" : "regular" }}>
-            {String(day.getDate())}
-          </Text>
+      <AutoGrid columnWidth={MONTH_COL_WIDTH} gap="flush">
+        <Flex direction="column" gap="xs">
+          <Flex direction="row" align="center" gap="xs">
+            {isToday ? <ColorDot variant="info" /> : null}
+            <Text variant="microcopy" format={{ fontWeight: inMonth ? "demibold" : "regular" }}>
+              {String(day.getDate())}
+            </Text>
+          </Flex>
+          {slots}
         </Flex>
-        {slots}
-      </Flex>
+      </AutoGrid>
     );
   };
 
@@ -683,6 +757,11 @@ const TimeGridView = ({ days, now, hours, dayStartHour, dayEndHour, eventsForDay
   const today = now || new Date();
   const centerDays = days.length === 1;
   const dayColWidth = days.length === 1 ? TIMEGRID_DAY_COL_SINGLE : TIMEGRID_DAY_COL;
+  // Week view packs 7 narrow (TIMEGRID_DAY_COL) columns, so long titles must be
+  // truncated up front (same reasoning as the month grid — the native
+  // TruncateString measures unreliably mid-layout). Day view is a single wide
+  // column, so it shows titles in full.
+  const weekTitleMaxChars = Math.max(6, Math.floor((TIMEGRID_DAY_COL - 46) / 6.6));
   // "now" marker: the gutter row for the current hour is highlighted when today
   // is one of the visible days (a true now-line can't be positioned between rows).
   const todayInView = days.some((d) => isSameDay(d, today));
@@ -746,32 +825,37 @@ const TimeGridView = ({ days, now, hours, dayStartHour, dayEndHour, eventsForDay
     }
     // Title rendered as a StatusTag (its own color dot + label) wrapped in a Link
     // for the overlay/click. The time/duration subtitle sits below as microcopy.
+    // In week view the title is truncated to the narrow column; day view shows it
+    // in full.
+    const titleLabel = centerDays
+      ? (e.title || "--")
+      : truncateMonthLabel(e.title || "--", weekTitleMaxChars);
     return (
       <Flex key={`${e.key}-${mode}-${hour}`} direction="column" gap="flush">
         <Link overlay={overlay} onClick={handleClick}>
-          <StatusTag variant={STATUS_VARIANT[variant] || "default"}>{e.title || "--"}</StatusTag>
+          <StatusTag variant={STATUS_VARIANT[variant] || "default"}>{titleLabel}</StatusTag>
         </Link>
         {sub ? <Text variant="microcopy">{sub}</Text> : null}
       </Flex>
     );
   };
 
-  // A transparent fixed-width spacer placed in EVERY day cell so empty / sparse
-  // days hold the same column width instead of collapsing to "--" width.
-  const daySpacer = makeSpacerDataUri(1, dayColWidth);
-  // Week (multi-day): width="min" + the fixed-width spacer = each column
-  // shrink-wraps to an equal width and the table scrolls if the week is wider than
-  // the container. Single day: one width="max" column that FILLS the table with
-  // left-aligned content (a lone width="min"+spacer column instead stretches and
-  // centers its content, which looks off).
+  // Week (multi-day): width="min" + an AutoGrid of fixed columnWidth=dayColWidth
+  // holds each column to an equal width (and the table scrolls if the week is
+  // wider than the container). AutoGrid's column is a real, non-scaling layout
+  // width, so empty/sparse days hold their width instead of collapsing — unlike a
+  // full-width spacer <Image>, which the table compressed/scaled down. Single day
+  // (Day view): one width="max" column that FILLS the table with left-aligned
+  // content (no AutoGrid — a fixed-width column would strand it).
   const dayCell = (key, content) => (
     <TableCell key={key} width={centerDays ? "max" : "min"} align="left">
-      <Flex direction="column" gap="xs">
-        {content}
-        {centerDays ? null : (
-          <Image src={daySpacer.src} width={daySpacer.width} height={daySpacer.height} alt="" />
-        )}
-      </Flex>
+      {centerDays ? (
+        <Flex direction="column" gap="xs">{content}</Flex>
+      ) : (
+        <AutoGrid columnWidth={dayColWidth} gap="flush">
+          <Flex direction="column" gap="xs">{content}</Flex>
+        </AutoGrid>
+      )}
     </TableCell>
   );
   // A tall spacer in each hour-row's TIME gutter pins every hour to HOUR_SLOT_HEIGHT
@@ -900,6 +984,10 @@ export const Calendar = (props) => {
     weekStartsOn = 0,
     hideWeekends = false,
     maxEventsPerDay = DEFAULT_MAX_EVENTS_PER_DAY,
+    // month-grid event token style: "statusTag" (dot + text, default) | "tag" (pill)
+    monthEventStyle = "statusTag",
+    // max characters for a month-cell label before "…" (default derived per style)
+    monthEventMaxChars,
     // time grid (week / day)
     dayStartHour = DEFAULT_DAY_START_HOUR,
     dayEndHour = DEFAULT_DAY_END_HOUR,
@@ -1175,7 +1263,15 @@ export const Calendar = (props) => {
     return formatMonthTitle(focusedDate);
   }, [view, focusedDate, weekStartsOn, hideWeekends]);
 
-  const chipProps = { overlayMode, renderEventDetail, onEventClick, labels };
+  const safeMonthEventStyle = MONTH_EVENT_STYLES.has(monthEventStyle) ? monthEventStyle : "statusTag";
+  const chipProps = {
+    overlayMode,
+    renderEventDetail,
+    onEventClick,
+    labels,
+    monthEventStyle: safeMonthEventStyle,
+    monthEventMaxChars,
+  };
 
   // ---- Timezone selector options (DST-aware labels) ----
   const timeZoneOptions = useMemo(() => {

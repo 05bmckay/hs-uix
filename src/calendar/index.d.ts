@@ -125,6 +125,19 @@ export interface CalendarProps<Event = Record<string, unknown>> {
   hideWeekends?: boolean;
   /** Max chips per day cell in month view before collapsing to "N more". */
   maxEventsPerDay?: number;
+  /**
+   * Month-cell event token style. `"statusTag"` (default) renders a colored dot +
+   * text matching the week/day grid; `"tag"` renders a bordered pill. Both
+   * truncate and hold a fixed height as columns narrow.
+   */
+  monthEventStyle?: "statusTag" | "tag";
+  /**
+   * Max characters for a month-cell event label before it's truncated with "…".
+   * Defaults to a per-style budget derived from the column width. Labels are
+   * truncated up front (not just via the tag's native TruncateString) so every
+   * token truncates consistently regardless of the table's column-sizing timing.
+   */
+  monthEventMaxChars?: number;
 
   // Time grid (week / day views)
   /** First hour row in week/day view (0–23). Default 8. */

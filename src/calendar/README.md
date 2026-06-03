@@ -230,6 +230,8 @@ How it works: each event instant is converted to a "wall-clock" `Date` in the ac
 | `weekStartsOn` | `0 \| 1` | `0` | 0 = Sunday, 1 = Monday. |
 | `hideWeekends` | `boolean` | `false` | Hide Sat/Sun in month + week views. |
 | `maxEventsPerDay` | `number` | `3` | Chips per month cell before "+N more". |
+| `monthEventStyle` | `"statusTag" \| "tag"` | `"statusTag"` | Month-cell event token: `statusTag` (colored dot + text, matches week/day) or `tag` (bordered pill). Both truncate and hold a fixed height as columns narrow. |
+| `monthEventMaxChars` | `number` | per-style, from column width | Max characters for a month-cell label before "…". Labels are truncated up front so every token truncates consistently (the tag's native truncation measures unreliably while the table is still sizing columns). |
 | `dayStartHour` | `number` | `8` | First hour row in week/day (0–23). |
 | `dayEndHour` | `number` | `20` | Last hour row in week/day (0–23). |
 | `timeZone` | `string` | — | Controlled IANA zone (e.g. `"America/Chicago"`). Setting it opts into the tz layer; all times/placement/grouping resolve here. |
