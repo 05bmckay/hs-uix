@@ -4,6 +4,7 @@ import {
   AutoGrid,
   Box,
   Button,
+  DateInput,
   Divider,
   EmptyState,
   Flex,
@@ -61,6 +62,18 @@ import {
   formatTimeZoneLabel,
 } from "./dateUtils.js";
 import { makeDotDataUri, makeSpacerDataUri } from "./svgChips.js";
+import {
+  applyDatePick,
+  normalizeRescheduleOptions,
+  rescheduleToStart,
+  resolveRescheduleTarget,
+} from "./rescheduleUtils.js";
+import {
+  buildResourceLanes,
+  eventsIntersectingRange,
+  laneEventsForDay,
+  resolveResourceId,
+} from "./resourceLanes.js";
 
 // ---------------------------------------------------------------------------
 // Calendar — presentational calendar surface for HubSpot UI Extensions.
@@ -72,17 +85,25 @@ import { makeDotDataUri, makeSpacerDataUri } from "./svgChips.js";
 // view switcher is a Select, never a Tabs bar.
 //
 // Views: Month (7-column day grid), Week/Day (hour-row time grid, an honest
-// non-proportional approximation), and Agenda (week-of events grouped by day).
+// non-proportional approximation), Agenda (week-of events grouped by day), and
+// Resource (rows = resources via `resources`/`resourceField`, columns = the
+// focused week's days; only offered in the switcher when lanes are possible).
 //
 // Event interactivity rides the standard `overlay` prop on a Tag/Link trigger:
 //   overlayMode="popover" (default, experimental) | "modal" | "panel" | "none"
 // plus a `renderEventDetail` escape hatch for the overlay body and an
-// `onEventClick` callback that always fires regardless of overlay mode.
+// `onEventClick` callback that always fires regardless of overlay mode. With
+// `rescheduleOptions` set, the default overlay body also offers drag-free
+// reschedule presets + a date picker that EMIT onEventReschedule — the
+// component never mutates its own events.
 // ---------------------------------------------------------------------------
 
 const DEFAULT_MAX_EVENTS_PER_DAY = 3;
 
 const ALL_VIEWS = ["month", "week", "day", "agenda"];
+// The resource view only joins the switcher when the caller provides
+// `resources` / `resourceField` — without a way to lane events it's noise.
+const ALL_VIEWS_WITH_RESOURCE = ["month", "week", "day", "resource", "agenda"];
 
 const DEFAULT_DAY_START_HOUR = 8;
 const DEFAULT_DAY_END_HOUR = 20;
@@ -130,6 +151,7 @@ const VIEW_LABELS = {
   week: "Week",
   day: "Day",
   agenda: "Agenda",
+  resource: "Resource",
 };
 
 const DEFAULT_LABELS = {
@@ -148,6 +170,10 @@ const DEFAULT_LABELS = {
   dayDetailTitle: (label) => label,
   open: "Open",
   allDay: "All day",
+  reschedule: "Reschedule",
+  pickDate: "Pick date",
+  unassigned: "Unassigned",
+  resource: "Resource",
 };
 
 const DEFAULT_EVENT_FIELDS = {
@@ -258,8 +284,15 @@ const HOUR_SLOT_HEIGHT = 64;
 // Event detail body — the default overlay contents. Kept compact (a title, the
 // date/time line, an optional subtitle, an optional Open link) so it works in a
 // Popover without scrolling. Callers override via `renderEventDetail`.
+//
+// When `reschedule` is provided (the `rescheduleOptions` prop), a drag-free
+// reschedule section is appended: a row of preset buttons ("+1 hour", "+1 day",
+// "Next week", …) plus a "Pick date" DateInput. Clicking a preset / picking a
+// date EMITS onEventReschedule(raw, { start, end }, event) — the Calendar never
+// mutates its own events (presentational contract; the consumer persists and
+// passes updated events back in).
 // ---------------------------------------------------------------------------
-const EventDetail = ({ event, labels }) => {
+const EventDetail = ({ event, labels, reschedule, idSuffix = "" }) => {
   const { start, end, title, subtitle, href } = event;
   let when = "";
   if (start) {
@@ -291,15 +324,49 @@ const EventDetail = ({ event, labels }) => {
           {labels.open}
         </Link>
       ) : null}
+      {reschedule ? (
+        <>
+          <Divider />
+          <Text variant="microcopy" format={{ fontWeight: "demibold" }}>
+            {labels.reschedule}
+          </Text>
+          {reschedule.options.length > 0 ? (
+            <Flex direction="row" gap="xs" wrap="wrap">
+              {reschedule.options.map((option, i) => (
+                <Button
+                  key={`${option.label}-${i}`}
+                  size="xs"
+                  variant="secondary"
+                  onClick={() => reschedule.onPreset(event, option)}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </Flex>
+          ) : null}
+          <DateInput
+            name={`cal-resched-${event.key}${idSuffix}`}
+            label={labels.pickDate}
+            onChange={(value) => reschedule.onPick(event, value)}
+          />
+        </>
+      ) : null}
     </Flex>
   );
 };
 
 // Build the overlay node for a given mode. Popover children must NOT be wrapped
 // in a Tile — the renderer auto-wraps them in <Tile compact>.
-const buildOverlay = (event, mode, renderEventDetail, labels, idSuffix = "") => {
+// `reschedule` (when rescheduleOptions is set) flows into the default
+// EventDetail body; a custom renderEventDetail REPLACES the whole body,
+// reschedule section included.
+const buildOverlay = (event, mode, renderEventDetail, labels, idSuffix = "", reschedule = null) => {
   if (mode === "none") return undefined;
-  const body = renderEventDetail ? renderEventDetail(event) : <EventDetail event={event} labels={labels} />;
+  const body = renderEventDetail ? (
+    renderEventDetail(event)
+  ) : (
+    <EventDetail event={event} labels={labels} reschedule={reschedule} idSuffix={idSuffix} />
+  );
   const id = `cal-evt-${event.key}${idSuffix}`;
   if (mode === "modal") {
     return (
@@ -333,11 +400,11 @@ const buildOverlay = (event, mode, renderEventDetail, labels, idSuffix = "") => 
 // owner/subtitle on the right. No bordered Tag chip — those read as cluttered
 // boxes and stretch full-width for all-day events.
 // ---------------------------------------------------------------------------
-const AgendaEventRow = ({ event, day, overlayMode, renderEventDetail, onEventClick, labels }) => {
+const AgendaEventRow = ({ event, day, overlayMode, renderEventDetail, onEventClick, labels, reschedule }) => {
   const variant = VALID_VARIANTS.has(event.color) ? event.color : "default";
   // Day-scoped suffix: a multi-day event appears under several day headers, so
   // each instance needs its own overlay id.
-  const overlay = buildOverlay(event, overlayMode, renderEventDetail, labels, day ? `-ag${day.getTime()}` : "");
+  const overlay = buildOverlay(event, overlayMode, renderEventDetail, labels, day ? `-ag${day.getTime()}` : "", reschedule);
   const handleClick = onEventClick ? () => onEventClick(event.raw, event) : undefined;
   const timeLabel = isAllDayEvent(event) ? labels.allDay : formatTime(event.start);
   return (
@@ -387,9 +454,9 @@ const MONTH_SLOT_HEIGHT = 24;
 // day-scoped overlay id and the start time shows only on the start day (other
 // days get a "→" continuation prefix).
 // ---------------------------------------------------------------------------
-const MonthChip = ({ event, day, overlayMode, renderEventDetail, onEventClick, labels, monthEventStyle, monthEventMaxChars }) => {
+const MonthChip = ({ event, day, overlayMode, renderEventDetail, onEventClick, labels, monthEventStyle, monthEventMaxChars, reschedule, idScope = "" }) => {
   const isStartDay = !day || !event.start || isSameDay(event.start, day);
-  const overlay = buildOverlay(event, overlayMode, renderEventDetail, labels, day ? `-m${day.getTime()}` : "");
+  const overlay = buildOverlay(event, overlayMode, renderEventDetail, labels, day ? `-m${idScope}${day.getTime()}` : "", reschedule);
   const handleClick = onEventClick ? () => onEventClick(event.raw, event) : undefined;
   const variant = VALID_VARIANTS.has(event.color) ? event.color : "default";
   const startHasTime =
@@ -422,9 +489,9 @@ const MonthChip = ({ event, day, overlayMode, renderEventDetail, onEventClick, l
 // Link appends. It opens the same event-detail overlay the in-cell chips use
 // (day-scoped suffix so it doesn't collide with the chip's overlay id) and still
 // navigates via href / fires onEventClick.
-const DayListItem = ({ event, day, overlayMode, renderEventDetail, onEventClick, labels }) => {
+const DayListItem = ({ event, day, overlayMode, renderEventDetail, onEventClick, labels, reschedule, idScope = "" }) => {
   const handleClick = onEventClick ? () => onEventClick(event.raw, event) : undefined;
-  const overlay = buildOverlay(event, overlayMode, renderEventDetail, labels, day ? `-more${day.getTime()}` : "-more");
+  const overlay = buildOverlay(event, overlayMode, renderEventDetail, labels, day ? `-more${idScope}${day.getTime()}` : "-more", reschedule);
   const href = event.href;
   return (
     <Button variant="transparent" size="sm" href={href ? href.url : undefined} overlay={overlay} onClick={handleClick}>
@@ -526,6 +593,94 @@ const Toolbar = ({
 };
 
 // ---------------------------------------------------------------------------
+// DayChipStack — the event-chip stack for one day cell: up to `maxEventsPerDay`
+// MonthChips, each slot height-pinned to MONTH_SLOT_HEIGHT, then either a
+// "+N more" Link opening the day-overflow Popover or a trailing spacer.
+// Shared by MonthView and ResourceView so the chip/overflow machinery isn't
+// forked. `idScope` namespaces the overflow Popover id (and the chip/list
+// overlay ids) — in the resource view the SAME day renders once per lane, so an
+// unscoped `cal-day-<ms>` id would collide across rows.
+// ---------------------------------------------------------------------------
+const DayChipStack = ({ day, events, maxEventsPerDay, chipProps, labels, idScope = "" }) => {
+  // HEIGHT for empty event slots is held by slotSpacer (1px WIDE × slot tall): a
+  // full-width spacer would scale down in a narrow column and lose its height; a
+  // 1px-wide image can never exceed the column, so it always keeps its height.
+  const slotSpacer = makeSpacerDataUri(MONTH_SLOT_HEIGHT, 1);
+  const shown = events.slice(0, maxEventsPerDay);
+  const hasOverflow = events.length > maxEventsPerDay;
+
+  // Every slot is forced to EXACTLY MONTH_SLOT_HEIGHT by pairing its content with
+  // a 1px-wide × slot-tall spacer in a row: a StatusTag/Tag/Link renders a hair
+  // shorter than a bare spacer, so without this, cells with events came out
+  // slightly shorter than empty cells and the table's vertical-centering pushed
+  // their day numbers to different heights. Forcing identical slot heights makes
+  // every cell the same height, so all 7 day numbers align.
+  const heightSpacer = (
+    <Image src={slotSpacer.src} width={slotSpacer.width} height={slotSpacer.height} alt="" />
+  );
+  const slotRow = (key, content) => (
+    <Flex key={key} direction="row" align="center" gap="flush">
+      {heightSpacer}
+      {content}
+    </Flex>
+  );
+
+  const slots = [];
+  for (let i = 0; i < maxEventsPerDay; i++) {
+    if (i < shown.length) {
+      slots.push(slotRow(shown[i].key, <MonthChip event={shown[i]} day={day} idScope={idScope} {...chipProps} />));
+    } else {
+      slots.push(<Image key={`sp-${i}`} src={slotSpacer.src} width={slotSpacer.width} height={slotSpacer.height} alt="" />);
+    }
+  }
+  if (hasOverflow) {
+    // "+N more" as a real Link (it opens the day-overflow Popover). The old SVG
+    // <Image> here scaled down in narrow columns just like the chips did.
+    slots.push(
+      slotRow("more",
+      <Link
+        overlay={
+          <Popover id={`cal-day-${idScope}${day.getTime()}`} placement="top" variant="longform">
+            <Tile compact>
+              <Flex direction="column" gap="sm">
+                {/* Count header on ONE centered line. A Heading is block-width
+                    (it would force the label onto its own line), so the count is
+                    a bold Text sitting inline beside the label; justify="center"
+                    centers the pair. */}
+                <Flex direction="row" justify="center" align="center" gap="xs">
+                  <Text format={{ fontWeight: "bold" }}>{String(events.length)}</Text>
+                  <Text format={{ fontWeight: "demibold" }}>{labels.onThisDate}</Text>
+                </Flex>
+                <Divider />
+                {events.map((event, i) => (
+                  <React.Fragment key={event.key}>
+                    <DayListItem event={event} day={day} idScope={idScope} {...chipProps} />
+                    {i < events.length - 1 ? <Divider /> : null}
+                  </React.Fragment>
+                ))}
+              </Flex>
+            </Tile>
+          </Popover>
+        }
+      >
+        {labels.more(events.length - maxEventsPerDay)}
+      </Link>
+      )
+    );
+  } else {
+    slots.push(
+      <Image key="more-sp" src={slotSpacer.src} width={slotSpacer.width} height={slotSpacer.height} alt="" />
+    );
+  }
+
+  return (
+    <Flex direction="column" gap="xs">
+      {slots}
+    </Flex>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // MonthView — Flex column of week rows, each a Flex row of equal-width day
 // cells (Box flex={1}). Tile per cell gives the boxed gridline look. Overflow
 // beyond maxEventsPerDay collapses into a "N more" Link that opens a day Panel.
@@ -550,84 +705,12 @@ const MonthView = ({
   // non-scaling layout width — unlike a full-width spacer <Image>, which the
   // table compressed (scaling it down) so empty days collapsed narrower than days
   // whose StatusTags resisted via min-content.
-  //
-  // HEIGHT for empty event slots is held by slotSpacer (1px WIDE × slot tall): a
-  // full-width spacer would scale down in a narrow column and lose its height; a
-  // 1px-wide image can never exceed the column, so it always keeps its height.
-  const slotSpacer = makeSpacerDataUri(MONTH_SLOT_HEIGHT, 1);
   const renderCell = (day) => {
     const dayEvents = eventsForDay(day);
     const inMonth = isSameMonth(day, refDate);
     const isToday = isSameDay(day, today);
 
     if (renderDayCell) return renderDayCell(day, dayEvents);
-
-    const shown = dayEvents.slice(0, maxEventsPerDay);
-    const hasOverflow = dayEvents.length > maxEventsPerDay;
-
-    // Every slot is forced to EXACTLY MONTH_SLOT_HEIGHT by pairing its content with
-    // a 1px-wide × slot-tall spacer in a row: a StatusTag/Tag/Link renders a hair
-    // shorter than a bare spacer, so without this, cells with events came out
-    // slightly shorter than empty cells and the table's vertical-centering pushed
-    // their day numbers to different heights. Forcing identical slot heights makes
-    // every cell the same height, so all 7 day numbers align.
-    const heightSpacer = (
-      <Image src={slotSpacer.src} width={slotSpacer.width} height={slotSpacer.height} alt="" />
-    );
-    const slotRow = (key, content) => (
-      <Flex key={key} direction="row" align="center" gap="flush">
-        {heightSpacer}
-        {content}
-      </Flex>
-    );
-
-    const slots = [];
-    for (let i = 0; i < maxEventsPerDay; i++) {
-      if (i < shown.length) {
-        slots.push(slotRow(shown[i].key, <MonthChip event={shown[i]} day={day} {...chipProps} />));
-      } else {
-        slots.push(<Image key={`sp-${i}`} src={slotSpacer.src} width={slotSpacer.width} height={slotSpacer.height} alt="" />);
-      }
-    }
-    if (hasOverflow) {
-      // "+N more" as a real Link (it opens the day-overflow Popover). The old SVG
-      // <Image> here scaled down in narrow columns just like the chips did.
-      slots.push(
-        slotRow("more",
-        <Link
-          overlay={
-            <Popover id={`cal-day-${day.getTime()}`} placement="top" variant="longform">
-              <Tile compact>
-                <Flex direction="column" gap="sm">
-                  {/* Count header on ONE centered line. A Heading is block-width
-                      (it would force the label onto its own line), so the count is
-                      a bold Text sitting inline beside the label; justify="center"
-                      centers the pair. */}
-                  <Flex direction="row" justify="center" align="center" gap="xs">
-                    <Text format={{ fontWeight: "bold" }}>{String(dayEvents.length)}</Text>
-                    <Text format={{ fontWeight: "demibold" }}>{labels.onThisDate}</Text>
-                  </Flex>
-                  <Divider />
-                  {dayEvents.map((event, i) => (
-                    <React.Fragment key={event.key}>
-                      <DayListItem event={event} day={day} {...chipProps} />
-                      {i < dayEvents.length - 1 ? <Divider /> : null}
-                    </React.Fragment>
-                  ))}
-                </Flex>
-              </Tile>
-            </Popover>
-          }
-        >
-          {labels.more(dayEvents.length - maxEventsPerDay)}
-        </Link>
-        )
-      );
-    } else {
-      slots.push(
-        <Image key="more-sp" src={slotSpacer.src} width={slotSpacer.width} height={slotSpacer.height} alt="" />
-      );
-    }
 
     // AutoGrid (single fixed-width column) holds the cell to MONTH_COL_WIDTH
     // without any spacer image — so the day number sits flush at the very top-left
@@ -641,7 +724,13 @@ const MonthView = ({
               {String(day.getDate())}
             </Text>
           </Flex>
-          {slots}
+          <DayChipStack
+            day={day}
+            events={dayEvents}
+            maxEventsPerDay={maxEventsPerDay}
+            chipProps={chipProps}
+            labels={labels}
+          />
         </Flex>
       </AutoGrid>
     );
@@ -716,6 +805,89 @@ const AgendaView = ({ rangeStart, rangeEnd, eventsForDay, chipProps, labels, ren
         </Flex>
       ))}
     </Flex>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// ResourceView — rows = resources (owners / rooms / teams), columns = the days
+// of the focused week (same week math as the time grid). Each cell stacks the
+// lane's events for that day with the SAME MonthChip tokens and "+N more"
+// overflow Popover as the month grid (via DayChipStack — not a fork). Lane
+// partitioning lives in resourceLanes.js: declared resources render in order
+// (even when empty), undeclared ids found in the data get appended derived
+// lanes, and id-less events land in a trailing "Unassigned" lane
+// (showUnassignedLane). Cell ids are lane-scoped because the same day renders
+// once per row.
+// ---------------------------------------------------------------------------
+const ResourceView = ({ days, now, lanes, maxEventsPerDay, chipProps, labels, renderEmptyState }) => {
+  const today = now || new Date();
+
+  if (!lanes || lanes.length === 0) {
+    if (renderEmptyState) return renderEmptyState({});
+    return (
+      <EmptyState title={labels.noEventsTitle}>
+        <Text>{labels.noEventsMessage}</Text>
+      </EmptyState>
+    );
+  }
+
+  const rangeStart = startOfDay(days[0]);
+  const rangeEnd = endOfDay(days[days.length - 1]);
+
+  return (
+    <Table bordered={true} flush={true}>
+      <TableHead>
+        <TableRow>
+          <TableHeader width="min">{String(labels.resource).toUpperCase()}</TableHeader>
+          {days.map((day) => {
+            const isToday = isSameDay(day, today);
+            const label = `${formatWeekdayShort(day)} ${formatMonthShort(day)} ${day.getDate()}`;
+            return (
+              <TableHeader key={day.getTime()} width="min" align="center">
+                {isToday ? `${label} · Today` : label}
+              </TableHeader>
+            );
+          })}
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {lanes.map((lane, laneIndex) => {
+          // Count only what's visible this week — the lane holds ALL its events.
+          const visible = eventsIntersectingRange(lane.events, rangeStart, rangeEnd);
+          return (
+            <TableRow key={lane.key}>
+              <TableCell width="min">
+                <Flex direction="column" gap="flush">
+                  <Text format={{ fontWeight: "demibold" }} truncate={true}>
+                    {lane.label}
+                  </Text>
+                  <Text variant="microcopy">
+                    {`${visible.length} ${visible.length === 1 ? "event" : "events"}`}
+                  </Text>
+                </Flex>
+              </TableCell>
+              {days.map((day) => (
+                <TableCell key={day.getTime()} width="min">
+                  {/* Same equal-width column trick as the month grid: a fixed
+                      AutoGrid column holds MONTH_COL_WIDTH so sparse lanes don't
+                      collapse and chips truncate on the same budget. */}
+                  <AutoGrid columnWidth={MONTH_COL_WIDTH} gap="flush">
+                    <DayChipStack
+                      day={day}
+                      events={laneEventsForDay(visible, day)}
+                      maxEventsPerDay={maxEventsPerDay}
+                      chipProps={chipProps}
+                      labels={labels}
+                      idScope={`r${laneIndex}-`}
+                    />
+                  </AutoGrid>
+                </TableCell>
+              ))}
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 };
 
@@ -799,7 +971,8 @@ const TimeGridView = ({ days, now, hours, dayStartHour, dayEndHour, eventsForDay
       chipProps.overlayMode,
       chipProps.renderEventDetail,
       chipProps.labels,
-      `-tg${mode}${hour}-${dayMs}`
+      `-tg${mode}${hour}-${dayMs}`,
+      chipProps.reschedule
     );
     const handleClick = chipProps.onEventClick ? () => chipProps.onEventClick(e.raw, e) : undefined;
     const variant = VALID_VARIANTS.has(e.color) ? e.color : "default";
@@ -991,6 +1164,14 @@ export const Calendar = (props) => {
     // time grid (week / day)
     dayStartHour = DEFAULT_DAY_START_HOUR,
     dayEndHour = DEFAULT_DAY_END_HOUR,
+    // resource / lane view (rows = resources, columns = the focused week's days)
+    resources,
+    resourceField,
+    resourceLabels,
+    showUnassignedLane = true,
+    // drag-free reschedule (presets + date picker in the event-detail overlay)
+    rescheduleOptions,
+    onEventReschedule,
     // timezone
     timeZone: controlledTimeZone,
     defaultTimeZone,
@@ -1033,10 +1214,13 @@ export const Calendar = (props) => {
   const [internalView, setInternalView] = useState(defaultView);
   const view = controlledView != null ? controlledView : internalView;
 
+  // The resource view is only offered when the caller can lane events.
+  const resourceEnabled = (resources && resources.length > 0) || resourceField != null;
   const enabledViews = useMemo(() => {
-    const base = viewsProp && viewsProp.length > 0 ? viewsProp : ALL_VIEWS;
-    return base.filter((v) => ALL_VIEWS.includes(v));
-  }, [viewsProp]);
+    const all = resourceEnabled ? ALL_VIEWS_WITH_RESOURCE : ALL_VIEWS;
+    const base = viewsProp && viewsProp.length > 0 ? viewsProp : all;
+    return base.filter((v) => all.includes(v));
+  }, [viewsProp, resourceEnabled]);
 
   const setView = useCallback(
     (next) => {
@@ -1079,7 +1263,9 @@ export const Calendar = (props) => {
   // ---- Navigation ----
   const stepFor = useCallback(
     (dir) => {
-      if (view === "week" || view === "agenda") return addDays(focusedDate, dir * 7);
+      if (view === "week" || view === "agenda" || view === "resource") {
+        return addDays(focusedDate, dir * 7);
+      }
       if (view === "day") return addDays(focusedDate, dir);
       return addMonths(focusedDate, dir); // month
     },
@@ -1111,7 +1297,8 @@ export const Calendar = (props) => {
         rangeEnd: endOfDay(flat[flat.length - 1]),
       };
     }
-    if (view === "week") {
+    if (view === "week" || view === "resource") {
+      // Resource view shares the week's column math (and honors hideWeekends).
       const days = buildWeekDays(focusedDate, weekStartsOn, hideWeekends);
       return {
         weeks: null,
@@ -1199,14 +1386,21 @@ export const Calendar = (props) => {
   const normalized = useMemo(
     () =>
       (events || []).map((raw, index) => {
-        const start = toWallClock(toDate(resolveField(raw, fields.start)), timeZone);
-        const endRaw = toWallClock(toDate(resolveField(raw, fields.end)), timeZone);
+        // sourceStart/sourceEnd are the UN-converted instants from the caller's
+        // data. Reschedule math runs on THESE (not the wall-clock display dates)
+        // so onEventReschedule emits dates in the caller's own time domain.
+        const sourceStart = toDate(resolveField(raw, fields.start));
+        const sourceEnd = toDate(resolveField(raw, fields.end));
+        const start = toWallClock(sourceStart, timeZone);
+        const endRaw = toWallClock(sourceEnd, timeZone);
         const id = resolveField(raw, fields.id);
         return {
           key: id != null ? String(id) : `evt-${index}`,
           id,
           start,
           end: endRaw || start,
+          sourceStart,
+          sourceEnd: sourceEnd || sourceStart,
           title: resolveField(raw, fields.title),
           subtitle: resolveField(raw, fields.subtitle),
           color: resolveField(raw, fields.color),
@@ -1254,14 +1448,47 @@ export const Calendar = (props) => {
   // ---- Title ----
   const title = useMemo(() => {
     if (view === "day") return formatDayTitle(focusedDate);
-    if (view === "week" || view === "agenda") {
-      // Agenda is a 1-week view too. Honor hideWeekends for the week grid so the
-      // title endpoints match the rendered range (agenda always spans the full week).
-      const days = buildWeekDays(focusedDate, weekStartsOn, view === "week" && hideWeekends);
+    if (view === "week" || view === "agenda" || view === "resource") {
+      // Agenda is a 1-week view too. Honor hideWeekends for the week/resource
+      // grids so the title endpoints match the rendered range (agenda always
+      // spans the full week).
+      const days = buildWeekDays(focusedDate, weekStartsOn, view !== "agenda" && hideWeekends);
       return formatRangeTitle(days[0], days[days.length - 1]);
     }
     return formatMonthTitle(focusedDate);
   }, [view, focusedDate, weekStartsOn, hideWeekends]);
+
+  // ---- Drag-free reschedule. The Calendar computes the shifted { start, end }
+  // (duration preserved, DST-safe — see rescheduleUtils.js) and EMITS it; the
+  // consumer persists and passes updated events back in. We never mutate. ----
+  const handleReschedulePreset = useCallback(
+    (event, option) => {
+      const target = resolveRescheduleTarget(
+        { start: event.sourceStart, end: event.sourceEnd },
+        option,
+        event
+      );
+      if (target && onEventReschedule) onEventReschedule(event.raw, target, event);
+    },
+    [onEventReschedule]
+  );
+  const handleReschedulePick = useCallback(
+    (event, value) => {
+      const newStart = applyDatePick(event.sourceStart, value);
+      if (!newStart) return;
+      const target = rescheduleToStart({ start: event.sourceStart, end: event.sourceEnd }, newStart);
+      if (target && onEventReschedule) onEventReschedule(event.raw, target, event);
+    },
+    [onEventReschedule]
+  );
+  const reschedule = useMemo(() => {
+    if (!rescheduleOptions) return null;
+    return {
+      options: normalizeRescheduleOptions(rescheduleOptions),
+      onPreset: handleReschedulePreset,
+      onPick: handleReschedulePick,
+    };
+  }, [rescheduleOptions, handleReschedulePreset, handleReschedulePick]);
 
   const safeMonthEventStyle = MONTH_EVENT_STYLES.has(monthEventStyle) ? monthEventStyle : "statusTag";
   const chipProps = {
@@ -1271,7 +1498,20 @@ export const Calendar = (props) => {
     labels,
     monthEventStyle: safeMonthEventStyle,
     monthEventMaxChars,
+    reschedule,
   };
+
+  // ---- Resource lanes (resource view only) ----
+  const resourceLaneData = useMemo(() => {
+    if (view !== "resource") return null;
+    return buildResourceLanes(queried, {
+      resources,
+      resourceLabels,
+      getId: (e) => resolveResourceId(e.raw, resourceField),
+      showUnassignedLane,
+      unassignedLabel: labels.unassigned,
+    });
+  }, [view, queried, resources, resourceLabels, resourceField, showUnassignedLane, labels]);
 
   // ---- Timezone selector options (DST-aware labels) ----
   const timeZoneOptions = useMemo(() => {
@@ -1348,6 +1588,18 @@ export const Calendar = (props) => {
         chipProps={chipProps}
         renderDayCell={renderDayCell}
         labels={labels}
+      />
+    );
+  } else if (view === "resource") {
+    body = (
+      <ResourceView
+        days={gridDays}
+        now={nowWall}
+        lanes={resourceLaneData}
+        maxEventsPerDay={maxEventsPerDay}
+        chipProps={chipProps}
+        labels={labels}
+        renderEmptyState={renderEmptyState}
       />
     );
   } else if (view === "week" || view === "day") {

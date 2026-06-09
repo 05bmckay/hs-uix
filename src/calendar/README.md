@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/hs-uix)](https://www.npmjs.com/package/hs-uix)
 [![license](https://img.shields.io/npm/l/hs-uix)](https://github.com/05bmckay/hs-uix/blob/main/LICENSE)
 
-A presentational calendar surface for HubSpot UI Extensions. Hand it an array of records plus an `eventFields` map and it renders a **Month**, **Week**, **Day**, or **Agenda** view with a Today / ‹ › / view-switcher toolbar, optional search + filters, and click-to-open event overlays (Popover, Modal, or Panel). Like Kanban and Feed, the calendar is data-driven and presentational — the caller owns fetching.
+A presentational calendar surface for HubSpot UI Extensions. Hand it an array of records plus an `eventFields` map and it renders a **Month**, **Week**, **Day**, **Agenda**, or **Resource** view with a Today / ‹ › / view-switcher toolbar, optional search + filters, click-to-open event overlays (Popover, Modal, or Panel), and an optional drag-free **reschedule** affordance. Like Kanban and Feed, the calendar is data-driven and presentational — the caller owns fetching *and persisting*: even a reschedule only **emits** the new `{ start, end }`, it never mutates the events you passed in.
 
 ```jsx
 import { Calendar } from "hs-uix/calendar";
@@ -36,7 +36,8 @@ const fields = {
 
 ## Features
 
-- Four stable views behind a `Select` switcher: **Month** (7-column day grid), **Week** / **Day** (hour-row time grid), and **Agenda** (day-grouped list)
+- Five views behind a `Select` switcher: **Month** (7-column day grid), **Week** / **Day** (hour-row time grid), **Agenda** (day-grouped list), and **Resource** (rows = owners/rooms/teams × the focused week's days — only offered when `resources` / `resourceField` is provided)
+- **Drag-free reschedule** (the platform has no drag-and-drop): `rescheduleOptions` adds preset buttons ("+1 hour", "+1 day", "Next week", custom shifts or accessors) plus a "Pick date" `DateInput` to the event-detail overlay; `onEventReschedule` emits the shifted `{ start, end }` with the event's duration preserved (DST-safe) — you persist, the Calendar never moves events itself
 - Controlled or uncontrolled `view` and `focusedDate`, with `onViewChange` / `onNavigate`
 - Date coercion for every shape a HubSpot field arrives in: `Date`, epoch ms (number **or** string), ISO string, or a `DateInput` value object (`{ year, month, date }`, 0-indexed month) — date-only strings are parsed as **local** midnight so events never land a day early
 - Multi-day events render across each day they touch; timed events show their start time
@@ -73,6 +74,7 @@ Requires `@hubspot/ui-extensions` >= 0.14.0 and `react` >= 18.0.0 as peer depend
 | `week` | An hour-row time grid for the focused week, plus an all-day band. | ± 1 week |
 | `day` | The single-day hour schedule (the same grid as week, one wide column) with an all-day band and a "now" current-hour marker. | ± 1 day |
 | `agenda` | The focused week's events grouped under day headers (time · title · owner rows). | ± 1 week |
+| `resource` | Rows = resources (owners / rooms / teams), columns = the focused week's days. Each cell stacks the same chips as a month cell, with the same "+N more" overflow popover. **Only joins the switcher when `resources` or `resourceField` is provided.** | ± 1 week |
 
 The view switcher is a `Select` (not `Tabs`) because the platform caches `Tabs` bodies and they won't re-render on data changes.
 
@@ -129,6 +131,67 @@ A rep's week in an hour-row grid, Monday start, 8 AM–6 PM, opening a Panel per
   overlayMode="panel"
 />
 ```
+
+### Resource lanes (owners / rooms / teams)
+
+Rows = resources, columns = the focused week. `resourceField` (a key or accessor on **your** record) lanes each event; events whose id matches no declared resource get an appended derived lane (labeled from `resourceLabels` or the raw id), and events with **no** id land in a trailing "Unassigned" lane.
+
+```jsx
+<Calendar
+  events={meetings}
+  eventFields={{ id: "id", start: "start", end: "end", title: "title", color: "color" }}
+  defaultView="resource"
+  resources={[
+    { id: "u1", label: "Ana Souza" },
+    { id: "u2", label: "Ben Liu" },
+    { id: "room-a", label: "Conference Room A" },
+  ]}
+  resourceField="ownerId"            // or (meeting) => meeting.owner?.id
+  resourceLabels={{ "u3": "Cara Diaz" }} // labels for derived (undeclared) lanes
+  showUnassignedLane                 // default true; false omits id-less events
+  weekStartsOn={1}
+  hideWeekends
+/>
+```
+
+- Declared `resources` always render, in order, even with zero events — so a free room reads as *free*.
+- Ids are matched by `String(id)`, so a numeric `7` and a string `"7"` are the same lane.
+- The "Unassigned" lane renders only when it has events; relabel it via `labels.unassigned`.
+- The view appears in the switcher **only** when `resources` or `resourceField` is provided.
+
+### Drag-free reschedule
+
+The platform has no drag-and-drop, so rescheduling is explicit: `rescheduleOptions` adds preset buttons and a "Pick date" `DateInput` to the event-detail overlay. The Calendar computes the new range — **both** endpoints shifted, duration preserved — and **emits** it. You persist and pass updated `events` back in; the Calendar never mutates its own events (the same presentational contract as Kanban).
+
+```jsx
+// true → "+1 hour" / "+1 day" / "Next week" + the date picker:
+<Calendar
+  events={tasks}
+  eventFields={fields}
+  rescheduleOptions
+  onEventReschedule={async (raw, { start, end }, event) => {
+    await patchTask(raw.id, { start, end }); // you persist…
+    refetch();                               // …and feed updated events back in
+  }}
+/>
+
+// Custom presets — relative shifts, or accessors returning the new start:
+<Calendar
+  events={tasks}
+  eventFields={fields}
+  overlayMode="panel" // roomier home for the picker than the experimental popover
+  rescheduleOptions={[
+    { label: "+30 min", shift: { minutes: 30 } },
+    { label: "+2 days", shift: { days: 2 } },
+    { label: "Next sprint", shift: (event) => nextSprintStart(event.raw) },
+  ]}
+  onEventReschedule={persistRange}
+/>
+```
+
+DST semantics (tested against America/Chicago): day/week shifts are **calendar** shifts — a 9 AM meeting moved across the spring-forward weekend is still 9 AM, and a midnight-to-midnight all-day span stays anchored to midnight; hour/minute shifts are **exact clock durations** ("+1 hour" always moves the instant 60 real minutes). "Pick date…" keeps the event's original time-of-day. When the timezone layer is engaged, the math runs on your **original** instants (`event.sourceStart` / `sourceEnd`), not the converted display dates, so the emitted range stays in your data's time domain.
+
+A custom `renderEventDetail` replaces the whole overlay body, reschedule section included — wire your own buttons there if you override it.
 
 ### Server-driven data
 
@@ -223,7 +286,7 @@ How it works: each event instant is converted to a "wall-clock" `Date` in the ac
 | `view` | `CalendarView` | — | Controlled current view. |
 | `defaultView` | `CalendarView` | `"month"` | Uncontrolled initial view. |
 | `onViewChange` | `(view) => void` | — | Fires when the view changes. |
-| `views` | `CalendarView[]` | all | Which views to expose in the switcher (month / week / day / agenda). |
+| `views` | `CalendarView[]` | all | Which views to expose in the switcher (month / week / day / agenda / resource — resource still requires `resources`/`resourceField`). |
 | `focusedDate` | `CalendarDateInput` | — | Controlled focused date. |
 | `defaultFocusedDate` | `CalendarDateInput` | today | Uncontrolled initial date. |
 | `onNavigate` | `(date, { view }) => void` | — | Fires on prev / next / today. |
@@ -234,6 +297,12 @@ How it works: each event instant is converted to a "wall-clock" `Date` in the ac
 | `monthEventMaxChars` | `number` | per-style, from column width | Max characters for a month-cell label before "…". Labels are truncated up front so every token truncates consistently (the tag's native truncation measures unreliably while the table is still sizing columns). |
 | `dayStartHour` | `number` | `8` | First hour row in week/day (0–23). |
 | `dayEndHour` | `number` | `20` | Last hour row in week/day (0–23). |
+| `resources` | `(id \| { id, label? })[]` | — | Declared resource lanes, in order. Always render, even when empty. Providing this (or `resourceField`) adds the `resource` view to the switcher. |
+| `resourceField` | `string \| (event) => id` | — | How to read an event's resource id from your record. `null` / `""` ⇒ unassigned. Ids matched by `String(id)`; undeclared ids get appended derived lanes. |
+| `resourceLabels` | `{ [id]: label }` | — | Labels for resources declared without one and for derived lanes. Falls back to `String(id)`. |
+| `showUnassignedLane` | `boolean` | `true` | Trailing "Unassigned" lane for id-less events (rendered only when non-empty). `false` omits those events from the resource view. |
+| `rescheduleOptions` | `true \| (option \| fn)[]` | — | Adds reschedule presets + a "Pick date" `DateInput` to the event overlay. `true` ⇒ "+1 hour" / "+1 day" / "Next week". Entries: `{ label, shift: { days?, weeks?, hours?, minutes? } }`, `{ label, shift: (event) => newStart }`, or a bare `(event) => newStart`. |
+| `onEventReschedule` | `(raw, { start, end }, event) => void` | — | Fires when a reschedule affordance is used. Both endpoints shifted, duration preserved (DST-safe), computed from your original instants. **You persist** — the Calendar never mutates its events. |
 | `timeZone` | `string` | — | Controlled IANA zone (e.g. `"America/Chicago"`). Setting it opts into the tz layer; all times/placement/grouping resolve here. |
 | `defaultTimeZone` | `string` | — | Uncontrolled initial zone. Opts into the tz layer; the layer itself starts at `"UTC"` if engaged without this. |
 | `onTimeZoneChange` | `(tz) => void` | — | Fires when the zone changes. |
@@ -277,10 +346,10 @@ How it works: each event instant is converted to a "wall-clock" `Date` in the ac
 Render callbacks (`renderEventDetail`, `onEventClick`, `renderDayCell`) receive the normalized event:
 
 ```ts
-{ key, id, start: Date | null, end: Date | null, title, subtitle, color, href, raw }
+{ key, id, start: Date | null, end: Date | null, sourceStart, sourceEnd, title, subtitle, color, href, raw }
 ```
 
-`raw` is your original record.
+`raw` is your original record. `start` / `end` are the dates the calendar *displays* (wall-clock converted when the timezone layer is engaged); `sourceStart` / `sourceEnd` are your **original** instants, which is what the reschedule math runs on.
 
 ---
 

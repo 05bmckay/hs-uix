@@ -4,7 +4,7 @@ import type { ReactElement, ReactNode } from "react";
 // Primitives
 // ---------------------------------------------------------------------------
 
-export type CalendarView = "month" | "week" | "day" | "agenda";
+export type CalendarView = "month" | "week" | "day" | "agenda" | "resource";
 export type CalendarOverlayMode = "popover" | "modal" | "panel" | "none";
 export type CalendarFilterType = "select" | "multiselect" | "dateRange";
 
@@ -54,11 +54,71 @@ export interface CalendarNormalizedEvent<Event = Record<string, unknown>> {
   id: string | number | undefined;
   start: Date | null;
   end: Date | null;
+  /** The UN-converted start instant from your data (no timezone-layer wall-clock
+   * conversion). Reschedule math runs on this, so emitted dates stay in your
+   * data's time domain. */
+  sourceStart: Date | null;
+  /** The UN-converted end instant (mirrors `sourceStart` when the event has no end). */
+  sourceEnd: Date | null;
   title: ReactNode;
   subtitle: ReactNode;
   color: string | undefined;
   href: { url: string; external: boolean } | null;
   raw: Event;
+}
+
+// ---------------------------------------------------------------------------
+// Resource / lane view
+// ---------------------------------------------------------------------------
+
+/** A declared resource lane: `{ id, label? }`, or a bare id. Declared lanes
+ * always render (in order), even with zero events. */
+export type CalendarResource =
+  | string
+  | number
+  | { id: string | number; label?: ReactNode };
+
+/** How to read an event's resource id: a key on the raw event, or an accessor.
+ * `null` / `undefined` / `""` mean unassigned. Ids are matched by `String(id)`. */
+export type CalendarResourceField<Event = Record<string, unknown>> =
+  | string
+  | ((event: Event) => string | number | null | undefined);
+
+// ---------------------------------------------------------------------------
+// Drag-free reschedule
+// ---------------------------------------------------------------------------
+
+/** A relative shift. Days/weeks are CALENDAR shifts (wall-clock time-of-day
+ * preserved on both endpoints, DST-safe); hours/minutes are exact clock
+ * durations. */
+export interface CalendarRescheduleShift {
+  days?: number;
+  weeks?: number;
+  hours?: number;
+  minutes?: number;
+}
+
+/** One reschedule affordance: a labeled relative shift, a labeled accessor
+ * returning the new start (any `CalendarDateInput` shape), or a bare accessor
+ * (labeled from `fn.name`, falling back to "Reschedule"). */
+export type CalendarRescheduleOption<Event = Record<string, unknown>> =
+  | {
+      label: string;
+      shift:
+        | CalendarRescheduleShift
+        | ((event: CalendarNormalizedEvent<Event>) => CalendarDateInput | null | undefined);
+    }
+  | {
+      label: string;
+      getStart: (event: CalendarNormalizedEvent<Event>) => CalendarDateInput | null | undefined;
+    }
+  | ((event: CalendarNormalizedEvent<Event>) => CalendarDateInput | null | undefined);
+
+/** The new range emitted by `onEventReschedule` — BOTH endpoints shifted, the
+ * event's duration/shape preserved (DST-safe). */
+export interface CalendarRescheduleRange {
+  start: Date;
+  end: Date;
 }
 
 export interface CalendarRange {
@@ -101,6 +161,10 @@ export interface CalendarLabels {
   errorMessage?: string;
   open?: string;
   allDay?: string;
+  reschedule?: string;
+  pickDate?: string;
+  unassigned?: string;
+  resource?: string;
 }
 
 export interface CalendarProps<Event = Record<string, unknown>> {
@@ -144,6 +208,36 @@ export interface CalendarProps<Event = Record<string, unknown>> {
   dayStartHour?: number;
   /** Last hour row in week/day view (0–23). Default 20. */
   dayEndHour?: number;
+
+  // Resource / lane view — rows = resources, columns = the focused week's days.
+  // The "resource" view only joins the view switcher when `resources` or
+  // `resourceField` is provided.
+  /** Declared lanes, in display order. Always render, even when empty. */
+  resources?: CalendarResource[];
+  /** How to read an event's resource id (key on the raw event, or accessor).
+   * Ids found in the data but never declared get appended derived lanes. */
+  resourceField?: CalendarResourceField<Event>;
+  /** `{ [id]: label }` lookup for resources declared without a label and for
+   * derived lanes. Falls back to `String(id)`. */
+  resourceLabels?: Record<string, ReactNode>;
+  /** Append a trailing "Unassigned" lane for events with no resource id
+   * (rendered only when non-empty). When false those events are omitted from
+   * the resource view. Default `true`. */
+  showUnassignedLane?: boolean;
+
+  // Drag-free reschedule — adds preset buttons + a "Pick date" DateInput to the
+  // default event-detail overlay. `true` = "+1 hour" / "+1 day" / "Next week".
+  // The Calendar EMITS the shifted range and never mutates its own events.
+  rescheduleOptions?: true | CalendarRescheduleOption<Event>[];
+  /** Fires when a reschedule affordance is used. `range` has BOTH endpoints
+   * shifted (duration preserved, DST-safe), computed from the event's original
+   * (`sourceStart`/`sourceEnd`) instants. Persist it and pass updated `events`
+   * back in — the Calendar will not move the event on its own. */
+  onEventReschedule?: (
+    raw: Event,
+    range: CalendarRescheduleRange,
+    event: CalendarNormalizedEvent<Event>
+  ) => void;
 
   // Timezone — OFF by default: with none of these props set, events render exactly
   // as provided (no conversion, browser-local). Opt in via `timeZone`,
