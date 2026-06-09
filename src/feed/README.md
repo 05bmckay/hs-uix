@@ -75,6 +75,8 @@ If the primary mental model is “what happened, and when?”, use Feed. If the 
 - Built-in item count (`5 of 12 events`) with custom `recordLabel` / `itemCountText`
 - View-more pagination (`pageSize`) plus server/external load-more (`hasMore`, `onLoadMore`)
 - Client-side or server-side mode (`serverSide`) with unified `onParamsChange`
+- Real-time append: `newItemsBehavior="pill"` buffers live arrivals behind a "Show N new items" pill; `highlightNew` marks fresh items with an info `Tag`
+- Per-type display presets (`typePresets` + `DEFAULT_FEED_TYPE_PRESETS`) covering HubSpot's standard activity types with verified native icon names
 - Built-in loading, error, and empty states with render overrides
 - Tile-backed outer/item containers and divider mode
 - Render escape hatches for item, toolbar, and individual item regions
@@ -183,6 +185,64 @@ Feed shows `pageSize` items initially and a transparent “View more” button w
 />
 ```
 
+## Real-time append
+
+Live feeds prepend items while the user is reading. By default (`newItemsBehavior="immediate"`) new items just render. Set `newItemsBehavior="pill"` to hold items that arrive **newer than the previously-newest visible timestamp** in a buffer and show a centered "Show N new items" pill instead — clicking it flushes the buffer into the list:
+
+```jsx
+<Feed
+  items={liveActivity}            // parent prepends as events stream in
+  newItemsBehavior="pill"
+  onNewItemsFlush={(flushed) => console.log(`released ${flushed.length} items`)}
+  highlightNew={30000}            // flushed items carry a "New" tag for 30s
+  sortOptions={[{ value: "newest", label: "Newest first", field: "timestamp", direction: "desc" }]}
+  defaultSort="newest"
+/>
+```
+
+Behavior details (all decided by the pure, exhaustively-tested `partitionNewItems` / `flushBuffer` kernel in `feedLiveBuffer.js`):
+
+- The **first load never buffers** — there is no previous watermark.
+- Only items **strictly newer** than the watermark buffer; equal timestamps and unparseable/missing timestamps stay visible.
+- **Updates to already-visible items (matched by key) never buffer**, even if their timestamp moved forward — a visible row must not vanish into the pill. Give live items stable `id`s; index-based fallback keys defeat update detection.
+- The pill renders even when the visible list is empty (the buffer may hold the only items), and the item count reflects visible items only.
+- `highlightNew={ms}` marks flushed (pill) or freshly-prepended (immediate) items with an info `Tag` ("New") for that window, then clears automatically. `false` (default) disables it. Custom `renderItem` rows bypass the marker.
+- Labels: `labels.newItems` (string or `(count) => string`) and `labels.newItemTag`.
+
+`partitionNewItems(prevNewestTs, items, getTs, { knownIds, getId })`, `flushBuffer(visible, buffered, getTs)`, and `toTimestampMs(value)` are exported for server adapters and tests.
+
+## Per-type presets
+
+Stop repeating `iconName: "calling"` on every call row. `typePresets` maps `item.type` machine values to display defaults, merged **under** item-level values (the item always wins):
+
+```jsx
+import { Feed, DEFAULT_FEED_TYPE_PRESETS } from "hs-uix/feed";
+
+// Built-in HubSpot activity-type presets:
+<Feed items={engagements} typePresets />            // or typePresets={DEFAULT_FEED_TYPE_PRESETS}
+
+// Extend or override:
+<Feed
+  items={engagements}
+  typePresets={{
+    ...DEFAULT_FEED_TYPE_PRESETS,
+    call: { ...DEFAULT_FEED_TYPE_PRESETS.call, statusVariant: "info" },
+    deploy: { icon: "rotate", label: "Deployment" },
+  }}
+/>
+```
+
+A preset fills these item keys when missing: `icon` → `iconName`, `color` → `iconColor`, `label` → `typeLabel`, `statusVariant` → `statusVariant`. Lookup by `type` is case-insensitive and snake_case-normalized, so API values like `"EMAIL"` or `"Postal Mail"` resolve.
+
+`DEFAULT_FEED_TYPE_PRESETS` covers `call`, `email`, `incoming_email`, `forwarded_email`, `meeting`, `note`, `task`, `sms`, `whatsapp`, `linkedin_message`, `postal_mail`, and `conversation` — every icon name is verified against the native HubSpot icon whitelist by a unit test (invalid native icon names render **nothing**).
+
+| Preset key | Description |
+|---|---|
+| `icon` | Native HubSpot icon name (verify against the whitelist — invalid names render nothing) |
+| `color` | Icon color: native enum (`alert`/`warning`/`success`/`inherit`) or any CSS color (SVG fallback) |
+| `label` | Display label used as `typeLabel` |
+| `statusVariant` | `StatusTag` variant fallback: `default`, `info`, `success`, `warning`, `danger` |
+
 ## Server-side mode
 
 Use `serverSide` when the parent/API owns filtering, sorting, searching, and pagination. Feed renders the toolbar and calls back with params, but does not mutate `items`.
@@ -222,5 +282,14 @@ Use `serverSide` when the parent/API owns filtering, sorting, searching, and pag
 - `renderEmptyState`, `renderLoadingState`, `renderErrorState` mirror DataTable/Kanban state override APIs
 
 ## Props
+
+Live-append and preset props:
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `newItemsBehavior` | `"immediate" \| "pill"` | `"immediate"` | `"pill"` buffers strictly-newer arrivals behind a "Show N new items" Button (variant `secondary`, centered) |
+| `onNewItemsFlush` | `(items) => void` | — | Fired with the released items when the pill is clicked |
+| `highlightNew` | `number \| false` | `false` | Window (ms) during which flushed/prepended items carry an info `Tag` "New" marker; initial load is never marked |
+| `typePresets` | `object \| true` | — | `{ [type]: { icon, color, label, statusVariant } }` merged under item values; `true` uses `DEFAULT_FEED_TYPE_PRESETS` |
 
 See `feed.d.ts` for the full typed API.

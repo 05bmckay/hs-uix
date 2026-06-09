@@ -25,6 +25,8 @@ import { CollectionSortSelect } from "../common-components/CollectionSortSelect.
 import { CollectionToolbar } from "../common-components/CollectionToolbar.js";
 import { Icon } from "../common-components/Icon.js";
 import { buildActiveFilterChips, resetFilterValues } from "../utils/query.js";
+import { flushBuffer, partitionNewItems } from "./feedLiveBuffer.js";
+import { DEFAULT_FEED_TYPE_PRESETS, applyTypePreset } from "./feedTypePresets.js";
 
 const DEFAULT_LABELS = {
   search: "Search activity...",
@@ -38,6 +40,8 @@ const DEFAULT_LABELS = {
   loadingMessage: "This should only take a moment.",
   loadingMore: "Loading...",
   loadMore: "View more",
+  newItems: (count) => (count === 1 ? "Show 1 new item" : `Show ${count} new items`),
+  newItemTag: "New",
   collapseAll: "Collapse all",
   expandAll: "Expand all",
   emptyTitle: "No activity yet",
@@ -51,6 +55,21 @@ const DEFAULT_LABELS = {
 const DEFAULT_RECORD_LABEL = { singular: "item", plural: "items" };
 const DEFAULT_SEARCH_FIELDS = ["title", "subject", "body", "description", "content", "preview", "type", "typeLabel", "actorName", "author"];
 const DEFAULT_PAGE_SIZE = 5;
+
+// Shared frozen-empty sentinels keep memo/dep identities stable across renders.
+const EMPTY_ITEMS = [];
+// Live-append bookkeeping for newItemsBehavior / highlightNew. `source` is the
+// last items array we partitioned (identity check), `watermark` the newest
+// VISIBLE timestamp, `bufferedKeys` the held-back item keys, `knownKeys` the
+// keys currently rendered (so id-keyed UPDATES never buffer), and `newKeys`
+// `{ key, at }` entries backing the temporary "New" Tag marker.
+const INITIAL_LIVE_STATE = {
+  source: null,
+  watermark: null,
+  bufferedKeys: EMPTY_ITEMS,
+  knownKeys: EMPTY_ITEMS,
+  newKeys: EMPTY_ITEMS,
+};
 
 const hasValue = (value) => value != null && value !== false && value !== "";
 
@@ -207,7 +226,7 @@ const FeedTypeIcon = ({ item, iconSize }) => {
   if (hasValue(item?.icon) && typeof item.icon !== "string") return item.icon;
   const iconName = typeof item?.icon === "string" ? item.icon : item?.iconName;
   if (!hasValue(iconName)) return null;
-  return <Icon name={iconName} size={iconSize} purpose="decorative" />;
+  return <Icon name={iconName} size={iconSize} color={item?.iconColor} purpose="decorative" />;
 };
 
 const FeedActions = ({ actions }) => {
@@ -314,6 +333,8 @@ const DefaultFeedItem = ({
   collapsible,
   expanded,
   onToggleExpanded,
+  isNew,
+  newItemTagLabel,
   renderActor,
   renderTimestamp,
   renderMeta,
@@ -364,6 +385,11 @@ const DefaultFeedItem = ({
       ) : null}
       {typeIcon}
       {titleText}
+      {isNew ? (
+        <Box flex="none">
+          <Tag variant="info">{newItemTagLabel ?? "New"}</Tag>
+        </Box>
+      ) : null}
     </Flex>
   );
 
@@ -667,9 +693,23 @@ export const Feed = ({
   onCollapsedIdsChange,
   showCollapseToggle = true,
   alignToolbarWithGroups = "auto",
+  newItemsBehavior = "immediate",
+  onNewItemsFlush,
+  highlightNew = false,
+  typePresets,
 }) => {
-  const labels = { ...DEFAULT_LABELS, ...(labelOverrides || {}) };
-  const safeItems = Array.isArray(items) ? items : [];
+  const labels = useMemo(() => ({ ...DEFAULT_LABELS, ...(labelOverrides || {}) }), [labelOverrides]);
+  const safeItems = Array.isArray(items) ? items : EMPTY_ITEMS;
+
+  // Per-type presets fill icon / label / status-variant holes from the item's
+  // `type`; item-level values always win. `typePresets: true` opts into the
+  // built-in HubSpot activity-type defaults. Identity is preserved when no
+  // presets apply so downstream identity checks (live buffer) stay cheap.
+  const resolvedTypePresets = typePresets === true ? DEFAULT_FEED_TYPE_PRESETS : typePresets;
+  const presetItems = useMemo(
+    () => (resolvedTypePresets ? safeItems.map((item) => applyTypePreset(item, resolvedTypePresets)) : safeItems),
+    [safeItems, resolvedTypePresets]
+  );
 
   const [internalTab, setInternalTab] = useState(tabValue ?? defaultTab ?? "all");
   const [internalSearch, setInternalSearch] = useState(searchValue ?? "");
@@ -684,6 +724,65 @@ export const Feed = ({
     return [];
   };
   const [internalCollapsedIds, setInternalCollapsedIds] = useState(computeInitialCollapsed);
+
+  // ── Real-time append (newItemsBehavior / highlightNew) ────────────────────
+  const bufferNewItems = newItemsBehavior === "pill";
+  const highlightMs = typeof highlightNew === "number" && highlightNew > 0 ? highlightNew : 0;
+  const trackNewItems = bufferNewItems || highlightMs > 0;
+  const [liveState, setLiveState] = useState(INITIAL_LIVE_STATE);
+  const liveKeyOf = (item, index) => getItemKey(item, index, getKey);
+
+  // Render-phase derived state (React's "adjusting state when props change"
+  // pattern): when the items array identity changes, re-partition it against
+  // the previous newest-visible watermark via the pure feedLiveBuffer kernel.
+  // Items that arrived strictly newer than the watermark are held back behind
+  // the pill ("pill") or rendered immediately and marked new ("immediate" +
+  // highlightNew). Guarded by `source !== presetItems`, so it converges after
+  // one synchronous re-render and never loops.
+  if (trackNewItems && liveState.source !== presetItems) {
+    const firstLoad = liveState.source === null;
+    const partition = partitionNewItems(liveState.watermark, presetItems, pickTimestamp, {
+      knownIds: new Set(liveState.knownKeys),
+      getId: liveKeyOf,
+    });
+    const now = Date.now();
+    const keptNewKeys = highlightMs > 0
+      ? liveState.newKeys.filter((entry) => now - entry.at < highlightMs)
+      : EMPTY_ITEMS;
+
+    if (bufferNewItems) {
+      setLiveState({
+        source: presetItems,
+        watermark: partition.newestTs,
+        bufferedKeys: partition.bufferedIds,
+        knownKeys: partition.visibleIds,
+        newKeys: keptNewKeys,
+      });
+    } else {
+      // "immediate": nothing is held back — arrivals render right away and
+      // (optionally) get the "New" marker for the highlight window.
+      const { newestTs } = flushBuffer(partition.visible, partition.buffered, pickTimestamp);
+      setLiveState({
+        source: presetItems,
+        watermark: newestTs ?? partition.newestTs,
+        bufferedKeys: EMPTY_ITEMS,
+        knownKeys: [...partition.visibleIds, ...partition.bufferedIds],
+        newKeys: highlightMs > 0 && !firstLoad
+          ? [...keptNewKeys, ...partition.bufferedIds.map((key) => ({ key, at: now }))]
+          : keptNewKeys,
+      });
+    }
+  }
+
+  const bufferedKeySet = useMemo(() => new Set(liveState.bufferedKeys), [liveState.bufferedKeys]);
+  const newKeySet = useMemo(
+    () => new Set(liveState.newKeys.map((entry) => entry.key)),
+    [liveState.newKeys]
+  );
+  const sourceItems = useMemo(() => {
+    if (!bufferNewItems || bufferedKeySet.size === 0) return presetItems;
+    return presetItems.filter((item, index) => !bufferedKeySet.has(getItemKey(item, index, getKey)));
+  }, [presetItems, bufferNewItems, bufferedKeySet, getKey]);
 
   const activeTab = tabValue !== undefined ? tabValue : internalTab;
   const activeSearch = searchValue !== undefined ? searchValue : internalSearch;
@@ -712,6 +811,20 @@ export const Feed = ({
   useEffect(() => {
     if (Array.isArray(collapsedIds)) setInternalCollapsedIds(collapsedIds);
   }, [collapsedIds]);
+
+  // Clear expired "New" markers even when no further items arrive to trigger
+  // a re-partition. One timer, scheduled for the earliest expiry.
+  useEffect(() => {
+    if (!highlightMs || liveState.newKeys.length === 0) return undefined;
+    const earliestAt = Math.min(...liveState.newKeys.map((entry) => entry.at));
+    const timer = setTimeout(() => {
+      setLiveState((prev) => ({
+        ...prev,
+        newKeys: prev.newKeys.filter((entry) => Date.now() - entry.at < highlightMs),
+      }));
+    }, Math.max(16, earliestAt + highlightMs - Date.now()));
+    return () => clearTimeout(timer);
+  }, [highlightMs, liveState.newKeys]);
 
   const emitParamsChange = (next) => {
     if (typeof onParamsChange === "function") {
@@ -779,13 +892,43 @@ export const Feed = ({
 
   const handleExpandAll = () => setCollapsedIds([]);
 
+  const handleFlushNewItems = () => {
+    const flushedItems = [];
+    const flushedKeys = [];
+    const keptItems = [];
+    presetItems.forEach((item, index) => {
+      const key = getItemKey(item, index, getKey);
+      if (bufferedKeySet.has(key)) {
+        flushedItems.push(item);
+        flushedKeys.push(key);
+      } else {
+        keptItems.push(item);
+      }
+    });
+    const { newestTs } = flushBuffer(keptItems, flushedItems, pickTimestamp);
+    const now = Date.now();
+    setLiveState((prev) => ({
+      source: presetItems,
+      watermark: newestTs ?? prev.watermark,
+      bufferedKeys: EMPTY_ITEMS,
+      knownKeys: presetItems.map((item, index) => getItemKey(item, index, getKey)),
+      newKeys: highlightMs > 0
+        ? [
+            ...prev.newKeys.filter((entry) => now - entry.at < highlightMs),
+            ...flushedKeys.map((key) => ({ key, at: now })),
+          ]
+        : prev.newKeys,
+    }));
+    onNewItemsFlush?.(flushedItems);
+  };
+
   const processedItems = useMemo(() => {
-    if (serverSide) return safeItems;
-    const tabbed = applyTab(safeItems, activeTab, tabField);
+    if (serverSide) return sourceItems;
+    const tabbed = applyTab(sourceItems, activeTab, tabField);
     const searched = applySearch(tabbed, activeSearch, searchFields);
     const filtered = applyFilters(searched, filters, activeFilters);
     return applySort(filtered, activeSort, sortOptions);
-  }, [safeItems, activeTab, tabField, activeSearch, searchFields, filters, activeFilters, activeSort, sortOptions, serverSide]);
+  }, [sourceItems, activeTab, tabField, activeSearch, searchFields, filters, activeFilters, activeSort, sortOptions, serverSide]);
 
   const visibleItems = useMemo(
     () => processedItems.slice(0, Math.max(0, resolvedMaxItems)),
@@ -818,8 +961,8 @@ export const Feed = ({
   const shouldShowExternalLoadMore = hasMore && onLoadMore;
 
   const normalizedTabs = useMemo(
-    () => normalizeTabs(tabs, safeItems, tabField, labels),
-    [tabs, safeItems, tabField, labels]
+    () => normalizeTabs(tabs, presetItems, tabField, labels),
+    [tabs, presetItems, tabField, labels]
   );
   const resolvedShowTabs = showTabs ?? normalizedTabs.length > 1;
 
@@ -938,6 +1081,20 @@ export const Feed = ({
 
   if (toolbarNode) bodyContent.push(<React.Fragment key="toolbar">{toolbarNode}</React.Fragment>);
 
+  // "Show N new items" pill — buffered live arrivals wait here until the
+  // reader opts in, so rows never shove down mid-read. Rendered even when the
+  // visible list is empty (the buffer may hold the only items).
+  const pendingNewCount = bufferNewItems ? liveState.bufferedKeys.length : 0;
+  if (pendingNewCount > 0 && !loading && !error) {
+    bodyContent.push(
+      <Flex key="new-items-pill" direction="row" justify="center">
+        <Button variant="secondary" size="small" onClick={handleFlushNewItems}>
+          {typeof labels.newItems === "function" ? labels.newItems(pendingNewCount) : labels.newItems}
+        </Button>
+      </Flex>
+    );
+  }
+
   if (loading) {
     bodyContent.push(
       renderLoadingState ? renderLoadingState({ label: labels.loading }) : (
@@ -992,7 +1149,7 @@ export const Feed = ({
               )
             )}
             {group.items.map((item, index) => {
-              const globalIndex = safeItems.indexOf(item);
+              const globalIndex = presetItems.indexOf(item);
               const itemIndex = globalIndex >= 0 ? globalIndex : index;
               const key = getItemKey(item, itemIndex, getKey);
               const node = renderItem
@@ -1008,6 +1165,8 @@ export const Feed = ({
                     collapsible={collapsible !== false && itemHasExpandableContent(item, fields)}
                     expanded={!activeCollapsedIds.includes(key)}
                     onToggleExpanded={() => toggleItemExpanded(key)}
+                    isNew={highlightMs > 0 && newKeySet.has(key)}
+                    newItemTagLabel={labels.newItemTag}
                     renderActor={renderActor}
                     renderTimestamp={renderTimestamp}
                     renderMeta={renderMeta}
