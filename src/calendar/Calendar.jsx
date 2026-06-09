@@ -276,6 +276,9 @@ const MONTH_COL_WIDTH = 160;
 // The single-day (Day view) column is widened so it doesn't look stranded.
 const TIMEGRID_DAY_COL = 150;
 const TIMEGRID_DAY_COL_SINGLE = 560;
+// Resource labels should shrink-wrap like DataTable's cellWidth="min" columns.
+// Keeping the Text un-truncated lets HubSpot size the cell to the full label.
+const RESOURCE_LABEL_COL_WIDTH = "min";
 // Min height of every hour slot (occupied or empty), so the grid reads as evenly
 // spaced, scannable time blocks.
 const HOUR_SLOT_HEIGHT = 64;
@@ -837,7 +840,7 @@ const ResourceView = ({ days, now, lanes, maxEventsPerDay, chipProps, labels, re
     <Table bordered={true} flush={true}>
       <TableHead>
         <TableRow>
-          <TableHeader width="min">{String(labels.resource).toUpperCase()}</TableHeader>
+          <TableHeader width={RESOURCE_LABEL_COL_WIDTH}>{String(labels.resource).toUpperCase()}</TableHeader>
           {days.map((day) => {
             const isToday = isSameDay(day, today);
             const label = `${formatWeekdayShort(day)} ${formatMonthShort(day)} ${day.getDate()}`;
@@ -855,9 +858,9 @@ const ResourceView = ({ days, now, lanes, maxEventsPerDay, chipProps, labels, re
           const visible = eventsIntersectingRange(lane.events, rangeStart, rangeEnd);
           return (
             <TableRow key={lane.key}>
-              <TableCell width="min">
+              <TableCell width={RESOURCE_LABEL_COL_WIDTH}>
                 <Flex direction="column" gap="flush">
-                  <Text format={{ fontWeight: "demibold" }} truncate={true}>
+                  <Text format={{ fontWeight: "demibold" }}>
                     {lane.label}
                   </Text>
                   <Text variant="microcopy">
