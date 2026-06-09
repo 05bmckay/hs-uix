@@ -87,8 +87,8 @@ Low-risk, mostly-built code that closes real gaps. Ship as one "harvest" release
 
 | Component | Subpath | Stream | Source | Effort |
 |---|---|---|---|---|
-| **Safe wrappers** — hardened drop-ins that turn native silent-fails / throw-blanks-page into safe degrades: Icon alias-repair, EmptyState `imageName` fallback, StatisticsTrend `direction` aliasing, Popover compact-Tile padding, required-array coercion on collection props. | `hs-uix/safe` | 🅑 | `renderer/components.js` safety-net layer | S |
 | ✅ **`applyPatches`** — RFC-6902 JSON Patch subset (add/replace/remove/move/copy), permissive path-creation, structural sharing. Generic streaming-UI utility. | `hs-uix/utils` | 🅑 | `renderer/apply-patch.js` | XS |
+| ✅ **Safe wrappers** — hardened drop-ins that turn native silent-fails / throw-blanks-page into safe degrades: Icon alias-repair, EmptyState `imageName` fallback, StatisticsTrend `direction` aliasing, Popover compact-Tile padding, required-array coercion on collection props. | `hs-uix/safe` | 🅑 | `renderer/components.js` safety-net layer | S |
 
 > **Not building: Toaster.** The SDK's native [`actions.addAlert`](https://developers.hubspot.com/docs/apps/developer-platform/add-features/ui-extensions/ui-extensions-sdk/actions#display-alert-banners)
 > already renders host toast banners in every extension point (`settings`, `home`,

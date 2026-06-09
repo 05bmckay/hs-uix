@@ -56,6 +56,11 @@
       "types": "./utils.d.ts",
       "import": "./dist/utils.mjs",
       "require": "./dist/utils.js"
+    },
+    "./safe": {
+      "types": "./safe.d.ts",
+      "import": "./dist/safe.mjs",
+      "require": "./dist/safe.js"
     }
   },
   "files": [
@@ -70,6 +75,7 @@
     "wizard.d.ts",
     "common-components.d.ts",
     "utils.d.ts",
+    "safe.d.ts",
     "src/**/*.d.ts",
     "README.md"
   ],
