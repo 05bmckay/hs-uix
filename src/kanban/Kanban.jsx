@@ -8,6 +8,15 @@ import {
   searchRows,
 } from "../utils/query.js";
 import { useDebouncedDispatch, useSelectionReset } from "../utils/interactionHooks.js";
+import {
+  bucketRowsByStage,
+  sortBuckets,
+  partitionLanes,
+  resolveLaneLabel,
+  computeStageCounts,
+  evaluateWip,
+  findNewlyExceededWip,
+} from "./kanbanLanes.js";
 import { CollectionSortSelect } from "../common-components/CollectionSortSelect.js";
 import { CollectionToolbar } from "../common-components/CollectionToolbar.js";
 import { makeStyledTextDataUri } from "../common-components/StyledText.js";
@@ -32,6 +41,7 @@ import {
   Statistics,
   StatisticsItem,
   StatisticsTrend,
+  StatusTag,
   Tag,
   Text,
   Tile,
@@ -39,6 +49,11 @@ import {
 
 // ---------------------------------------------------------------------------
 // Kanban — drag-free board component for HubSpot UI Extensions.
+// v0.3: WIP limits (per-stage `wipLimit` / top-level `wipLimits` override,
+// "count / limit" headers, Over WIP StatusTag, onWipExceeded transition
+// callback) and swimlanes (`swimlaneBy` vertical grouping into stacked lane
+// sections, each with its own stage-column row; collapsible lanes; optional
+// per-lane metrics). Pure lane/WIP logic lives in kanbanLanes.js.
 // v0.2: DataTable-parity toolbar (debounced search, fuzzy matching,
 // select/multiselect/dateRange filters, active-filter chips, overflow toggle,
 // Clear all) plus DataTable-parity selection bar (icon-in-action-button,
@@ -99,6 +114,12 @@ const DEFAULT_LABELS = {
   errorTitle: "Something went wrong.",
   errorMessage: "An error occurred while loading data.",
   cardCount: (n) => String(n),
+  // "5 / 4" — count vs WIP limit in the stage header. The slash format is the
+  // standard kanban convention; override for tighter ("5/4") or verbose forms.
+  wipCount: (count, limit) => `${count} / ${limit}`,
+  overWip: "Over WIP",
+  laneCount: (n) => String(n),
+  unassignedLane: "Unassigned",
   moveTo: "Move",
   clearAll: "Clear all",
   selectAll: (count, label) => `Select all ${count} ${label}`,
@@ -514,12 +535,21 @@ const KanbanColumn = ({
   onToggleCollapsed,
   columnFooter,
   countDisplay,
+  wip,
+  compactEmpty,
   labels,
   children,
 }) => {
   // Prefer server-side totalCount (the true stage total) over bucketCount
   // (what's currently loaded). Falls back to bucketCount when no meta is set.
-  const countLabel = labels.cardCount(totalCount != null ? totalCount : bucketCount);
+  // When the stage has a WIP limit, the count renders as "count / limit"
+  // (wip.count is the same totalCount-else-loaded number, computed upstream).
+  const hasWipLimit = wip != null && wip.limit != null;
+  const countLabel = hasWipLimit
+    ? labels.wipCount(wip.count, wip.limit)
+    : labels.cardCount(totalCount != null ? totalCount : bucketCount);
+  const overWipNode =
+    wip && wip.exceeded ? <StatusTag variant="warning">{labels.overWip}</StatusTag> : null;
   const countNode =
     countDisplay === "text" ? (
       <Text format={{ fontWeight: "demibold" }}>{countLabel}</Text>
@@ -568,6 +598,24 @@ const KanbanColumn = ({
     );
   }
 
+  // Compact rendering for empty lane×stage cells: a swimlane board multiplies
+  // columns by lanes, so empty cells render as a single header row (label +
+  // emptyColumn placeholder) instead of the full header/divider/body stack.
+  if (compactEmpty && !loading && rows.length === 0 && bucketCount === 0) {
+    return (
+      <Tile compact>
+        <Flex direction="row" align="center" justify="between" gap="xs">
+          <Text variant="microcopy" format={{ fontWeight: "demibold" }}>
+            {stage.shortLabel || stage.label}
+          </Text>
+          <Text variant="microcopy" format={{ italic: true }}>
+            {labels.emptyColumn}
+          </Text>
+        </Flex>
+      </Tile>
+    );
+  }
+
   const footerContent = stage.footer ? stage.footer(rows) : columnFooter ? columnFooter(rows, stage) : null;
 
   return (
@@ -577,6 +625,7 @@ const KanbanColumn = ({
           <Flex direction="row" align="center" gap="xs">
             <Text format={{ fontWeight: "demibold" }}>{stage.shortLabel || stage.label}</Text>
             {countNode}
+            {overWipNode}
             {loading ? <LoadingSpinner size="xs" /> : null}
           </Flex>
           <Button variant="transparent" size="sm" onClick={onToggleCollapsed} tooltip="Collapse">
@@ -682,14 +731,14 @@ const KanbanToolbar = ({
   sortOptions,
   sortValue,
   onSortChange,
-  metrics,
-  showMetrics,
+  showMetricsButton,
+  metricsPanel,
   onToggleMetrics,
   labels,
   toolbarLeftFlex,
   toolbarRightFlex,
 }) => {
-  const rightControls = (sortOptions?.length > 0 || metrics) ? (
+  const rightControls = (sortOptions?.length > 0 || showMetricsButton) ? (
     <>
       {sortOptions && sortOptions.length > 0 ? (
         <CollectionSortSelect
@@ -700,7 +749,7 @@ const KanbanToolbar = ({
           onChange={onSortChange}
         />
       ) : null}
-      {metrics ? (
+      {showMetricsButton ? (
         <Button variant="secondary" size="small" onClick={onToggleMetrics}>
           <Icon name="gauge" size="sm" /> {labels.metricsButton}
         </Button>
@@ -733,7 +782,7 @@ const KanbanToolbar = ({
         onRemove: onFilterRemove,
       }}
       right={rightControls}
-      footer={showMetrics && metrics ? renderMetricsPanel(metrics) : null}
+      footer={metricsPanel}
       labels={labels}
       leftFlex={toolbarLeftFlex}
       rightFlex={toolbarRightFlex}
@@ -829,6 +878,20 @@ export const Kanban = ({
   stageMeta,
   onLoadMore,
 
+  // --- WIP limits ---
+  wipLimits,
+  onWipExceeded,
+
+  // --- Swimlanes ---
+  swimlaneBy,
+  swimlaneLabels,
+  swimlaneOrder,
+  collapseLanes = true,
+  collapsedLanes,
+  defaultCollapsedLanes,
+  onCollapsedLanesChange,
+  metricsPerLane = false,
+
   // --- Selection ---
   selectable = false,
   selectedIds,
@@ -899,6 +962,9 @@ export const Kanban = ({
   const [internalFilters, setInternalFilters] = useState(() => getEmptyFilterValues(filters));
   const [internalSort, setInternalSort] = useState(defaultSort || (sortOptions?.[0]?.value ?? ""));
   const [internalCollapsed, setInternalCollapsed] = useState([]);
+  const [internalCollapsedLanes, setInternalCollapsedLanes] = useState(
+    () => defaultCollapsedLanes || []
+  );
   const [internalExpanded, setInternalExpanded] = useState([]);
   const [internalSelection, setInternalSelection] = useState([]);
   const [internalShowMetrics, setInternalShowMetrics] = useState(false);
@@ -920,6 +986,7 @@ export const Kanban = ({
   const resolvedFilters = filterValues != null ? filterValues : internalFilters;
   const resolvedSort = sort != null ? sort : internalSort;
   const resolvedCollapsed = collapsedStages != null ? collapsedStages : internalCollapsed;
+  const resolvedCollapsedLanes = collapsedLanes != null ? collapsedLanes : internalCollapsedLanes;
   const resolvedExpanded = expandedStages != null ? expandedStages : internalExpanded;
   const resolvedSelection = selectedIds != null ? selectedIds : internalSelection;
   const searchEnabled = showSearch && Array.isArray(searchFields) && searchFields.length > 0;
@@ -939,8 +1006,10 @@ export const Kanban = ({
       sort: overrides.sort != null ? overrides.sort : resolvedSort || null,
       collapsedStages:
         overrides.collapsedStages != null ? overrides.collapsedStages : resolvedCollapsed,
+      collapsedLanes:
+        overrides.collapsedLanes != null ? overrides.collapsedLanes : resolvedCollapsedLanes,
     });
-  }, [onParamsChange, resolvedCollapsed, resolvedFilters, resolvedSearch, resolvedSort]);
+  }, [onParamsChange, resolvedCollapsed, resolvedCollapsedLanes, resolvedFilters, resolvedSearch, resolvedSort]);
 
   // --- Search debounce ---
   const lastAppliedSearchRef = useRef(searchValue != null ? searchValue : "");
@@ -1010,6 +1079,18 @@ export const Kanban = ({
       fireParamsChange({ collapsedStages: next });
     },
     [fireParamsChange, resolvedCollapsed, collapsedStages, onCollapsedStagesChange]
+  );
+
+  const handleLaneCollapsed = useCallback(
+    (laneKey) => {
+      const next = resolvedCollapsedLanes.includes(laneKey)
+        ? resolvedCollapsedLanes.filter((k) => k !== laneKey)
+        : [...resolvedCollapsedLanes, laneKey];
+      if (onCollapsedLanesChange) onCollapsedLanesChange(next);
+      if (collapsedLanes == null) setInternalCollapsedLanes(next);
+      fireParamsChange({ collapsedLanes: next });
+    },
+    [fireParamsChange, resolvedCollapsedLanes, collapsedLanes, onCollapsedLanesChange]
   );
 
   const handleExpanded = useCallback(
@@ -1097,20 +1178,13 @@ export const Kanban = ({
     return result;
   }, [data, resolvedSearch, resolvedFilters, filters, searchEnabled, searchFields, fuzzySearch, fuzzyOptions]);
 
-  const buckets = useMemo(() => {
-    const map = {};
-    for (const stage of stages) map[stage.value] = [];
-    for (const row of filteredData) {
-      const key = getStageFor(row);
-      if (map[key]) {
-        map[key].push(row);
-      } else if (stages.length > 0) {
-        if (!map.__unknown) map.__unknown = [];
-        map.__unknown.push(row);
-      }
-    }
-    return map;
-  }, [filteredData, stages, getStageFor]);
+  // Global per-stage buckets. Computed across ALL lanes even in swimlane mode
+  // because WIP limits are per stage (a limit of 5 on "In progress" applies to
+  // the stage total, not to each lane's slice).
+  const buckets = useMemo(
+    () => bucketRowsByStage(filteredData, stages, getStageFor),
+    [filteredData, stages, getStageFor]
+  );
 
   const sortComparator = useMemo(() => {
     if (!sortOptions || !resolvedSort) return null;
@@ -1118,14 +1192,54 @@ export const Kanban = ({
     return opt?.comparator || null;
   }, [sortOptions, resolvedSort]);
 
-  const sortedBuckets = useMemo(() => {
-    if (!sortComparator) return buckets;
+  const sortedBuckets = useMemo(() => sortBuckets(buckets, sortComparator), [buckets, sortComparator]);
+
+  // --- Swimlanes ---
+  const hasLanes = swimlaneBy != null;
+
+  const laneData = useMemo(() => {
+    if (!hasLanes) return null;
+    return partitionLanes(filteredData, { swimlaneBy, swimlaneOrder });
+  }, [hasLanes, filteredData, swimlaneBy, swimlaneOrder]);
+
+  // Per-lane sorted stage buckets — same bucket/sort pipeline as the flat
+  // board, applied to each lane's slice of the filtered data.
+  const laneBuckets = useMemo(() => {
+    if (!laneData) return null;
     const out = {};
-    for (const key of Object.keys(buckets)) {
-      out[key] = [...buckets[key]].sort(sortComparator);
+    for (const laneKey of laneData.laneKeys) {
+      out[laneKey] = sortBuckets(
+        bucketRowsByStage(laneData.rowsByLane[laneKey] || [], stages, getStageFor),
+        sortComparator
+      );
     }
     return out;
-  }, [buckets, sortComparator]);
+  }, [laneData, stages, getStageFor, sortComparator]);
+
+  // --- WIP limits ---
+  // Evaluated against the same number the column header shows: server-truth
+  // stageMeta.totalCount when present, else the loaded (filtered) bucket size.
+  const wipByStage = useMemo(
+    () => evaluateWip(stages, computeStageCounts(stages, buckets, stageMeta), wipLimits),
+    [stages, buckets, stageMeta, wipLimits]
+  );
+
+  // onWipExceeded fires only on the TRANSITION into the exceeded state (incl.
+  // a board that mounts already over a limit — that reports once on mount),
+  // never on every render. Transitions that would exceed a limit still
+  // complete: the component is stateless on the write path and the caller's
+  // server is the source of truth, so blocking client-side would only desync
+  // the board from reality and prevent legitimate over-limit moves
+  // (expedites, reassignment churn). WIP limits here are a signal, not a gate.
+  const prevWipRef = useRef({});
+  useEffect(() => {
+    const newlyExceeded = findNewlyExceededWip(prevWipRef.current, wipByStage);
+    prevWipRef.current = wipByStage;
+    if (!onWipExceeded) return;
+    for (const event of newlyExceeded) {
+      onWipExceeded(event.stageId, event.count, event.limit);
+    }
+  }, [wipByStage, onWipExceeded]);
 
   // --- Filter chips ---
   const activeChips = useMemo(
@@ -1273,6 +1387,76 @@ export const Kanban = ({
     labels,
   };
 
+  // --- Metrics resolution (global vs per-lane) ---
+  // `metrics` accepts a function `(rows, laneKey) => items | node` so per-lane
+  // metrics can recompute from each lane's rows. With metricsPerLane off (or
+  // no lanes) a metrics function is called once with all filtered rows.
+  const metricsProvided = metrics != null && (!Array.isArray(metrics) || metrics.length > 0);
+  const perLaneMetricsActive = hasLanes && metricsPerLane && typeof metrics === "function";
+  const globalMetricsContent =
+    metricsProvided && !perLaneMetricsActive
+      ? typeof metrics === "function"
+        ? metrics(filteredData, null)
+        : metrics
+      : null;
+
+  // --- Stage-column row ---
+  // One row of stage columns: the whole board in flat mode, one lane's row in
+  // swimlane mode. In a lane, per-stage pagination meta is omitted (stageMeta
+  // counts/load-more describe the flat stage, not a lane slice), empty cells
+  // render compactly, and the WIP fraction is replaced by the Over WIP badge
+  // alone (cell counts are lane-local; the limit applies to the stage total).
+  const renderStageColumns = (bucketMap, laneKey) => {
+    const inLane = laneKey != null;
+    return (
+      <Flex direction="row" gap="sm" wrap="nowrap">
+        {stages.map((stage) => {
+          const stageRows = bucketMap[stage.value] || [];
+          const meta = inLane ? undefined : stageMeta?.[stage.value];
+          const isExpanded = resolvedExpanded.includes(stage.value);
+          const clamp = isExpanded ? maxCardsExpanded : maxCardsPerColumn;
+          const visibleRows = stageRows.slice(0, clamp);
+          const isCollapsed = resolvedCollapsed.includes(stage.value);
+          const stageWip = wipByStage[stage.value];
+          const wip = inLane
+            ? stageWip?.exceeded
+              ? { count: stageWip.count, limit: null, exceeded: true }
+              : null
+            : stageWip;
+
+          return (
+            <AutoGrid
+              key={inLane ? `${laneKey}::${stage.value}` : stage.value}
+              columnWidth={isCollapsed ? 72 : effectiveColumnWidth}
+            >
+              <KanbanColumn
+                stage={stage}
+                rows={visibleRows}
+                bucketCount={stageRows.length}
+                totalCount={meta?.totalCount}
+                hasMore={meta?.hasMore}
+                loading={meta?.loading}
+                error={meta?.error}
+                onLoadMore={inLane ? undefined : onLoadMore}
+                expanded={isExpanded}
+                onToggleExpanded={() => handleExpanded(stage.value)}
+                collapsed={isCollapsed}
+                onToggleCollapsed={() => handleCollapsed(stage.value)}
+                columnFooter={columnFooter}
+                countDisplay={countDisplay}
+                wip={wip}
+                compactEmpty={inLane}
+                labels={labels}
+              >
+                {visibleRows.map((row) => renderCardNode(row, stage))}
+              </KanbanColumn>
+            </AutoGrid>
+          );
+        })}
+      </Flex>
+    );
+  };
+
   const mainContent = error ? (
     renderErrorState ? renderErrorState({
       error,
@@ -1308,41 +1492,57 @@ export const Kanban = ({
         </Flex>
       </Tile>
     )
-  ) : (
-    <Flex direction="row" gap="sm" wrap="nowrap">
-      {stages.map((stage) => {
-        const stageRows = sortedBuckets[stage.value] || [];
-        const meta = stageMeta?.[stage.value];
-        const isExpanded = resolvedExpanded.includes(stage.value);
-        const clamp = isExpanded ? maxCardsExpanded : maxCardsPerColumn;
-        const visibleRows = stageRows.slice(0, clamp);
-        const isCollapsed = resolvedCollapsed.includes(stage.value);
+  ) : hasLanes ? (
+    <Flex direction="column" gap="md">
+      {(laneData?.laneKeys || []).map((laneKey, laneIndex) => {
+        const laneRows = laneData.rowsByLane[laneKey] || [];
+        const laneLabel = resolveLaneLabel(laneKey, swimlaneLabels, laneRows, labels.unassignedLane);
+        // Tooltips need plain strings; custom label functions may return nodes.
+        const laneLabelText = typeof laneLabel === "string" ? laneLabel : String(laneKey);
+        const isLaneCollapsed = collapseLanes && resolvedCollapsedLanes.includes(laneKey);
+        const laneCountLabel = labels.laneCount(laneRows.length);
+        const laneCountNode =
+          countDisplay === "none" ? null : countDisplay === "text" ? (
+            <Text format={{ fontWeight: "demibold" }}>{laneCountLabel}</Text>
+          ) : (
+            <Tag variant="default">{laneCountLabel}</Tag>
+          );
+        const laneMetricsNode =
+          !isLaneCollapsed && perLaneMetricsActive && resolvedShowMetrics
+            ? renderMetricsPanel(metrics(laneRows, laneKey))
+            : null;
 
         return (
-          <AutoGrid key={stage.value} columnWidth={isCollapsed ? 72 : effectiveColumnWidth}>
-            <KanbanColumn
-              stage={stage}
-              rows={visibleRows}
-              bucketCount={stageRows.length}
-              totalCount={meta?.totalCount}
-              hasMore={meta?.hasMore}
-              loading={meta?.loading}
-              error={meta?.error}
-              onLoadMore={onLoadMore}
-              expanded={isExpanded}
-              onToggleExpanded={() => handleExpanded(stage.value)}
-              collapsed={isCollapsed}
-              onToggleCollapsed={() => handleCollapsed(stage.value)}
-              columnFooter={columnFooter}
-              countDisplay={countDisplay}
-              labels={labels}
-            >
-              {visibleRows.map((row) => renderCardNode(row, stage))}
-            </KanbanColumn>
-          </AutoGrid>
+          <Flex key={laneKey} direction="column" gap="xs">
+            {laneIndex > 0 ? <Divider /> : null}
+            <Flex direction="row" align="center" gap="xs">
+              {collapseLanes ? (
+                <Button
+                  variant="transparent"
+                  size="sm"
+                  onClick={() => handleLaneCollapsed(laneKey)}
+                  tooltip={isLaneCollapsed ? `Expand ${laneLabelText}` : `Collapse ${laneLabelText}`}
+                >
+                  <Icon
+                    name={isLaneCollapsed ? "right" : "down"}
+                    size="sm"
+                    screenReaderText={
+                      isLaneCollapsed ? `Expand ${laneLabelText}` : `Collapse ${laneLabelText}`
+                    }
+                  />
+                </Button>
+              ) : null}
+              <Text format={{ fontWeight: "demibold" }}>{laneLabel}</Text>
+              {laneCountNode}
+            </Flex>
+            {laneMetricsNode}
+            {!isLaneCollapsed ? renderStageColumns(laneBuckets?.[laneKey] || {}, laneKey) : null}
+          </Flex>
         );
       })}
     </Flex>
+  ) : (
+    renderStageColumns(sortedBuckets, null)
   );
 
   // "Clear all" follows the chips unless explicitly set: hiding the filter
@@ -1367,8 +1567,12 @@ export const Kanban = ({
         sortOptions={sortOptions}
         sortValue={resolvedSort}
         onSortChange={handleSort}
-        metrics={metrics}
-        showMetrics={resolvedShowMetrics}
+        showMetricsButton={metricsProvided}
+        metricsPanel={
+          resolvedShowMetrics && globalMetricsContent
+            ? renderMetricsPanel(globalMetricsContent)
+            : null
+        }
         onToggleMetrics={toggleMetrics}
         labels={labels}
         toolbarLeftFlex={toolbarLeftFlex}

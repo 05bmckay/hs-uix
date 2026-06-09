@@ -1,6 +1,18 @@
 export { DataTable } from "./datatable/index.js";
 export { FormBuilder, useFormPrefill, fieldsFromHubSpotProperties } from "./form/index.js";
-export { Kanban, KanbanCardActions } from "./kanban/index.js";
+export {
+  Kanban,
+  KanbanCardActions,
+  UNASSIGNED_LANE_KEY,
+  getLaneKey,
+  orderLaneKeys,
+  partitionLanes,
+  resolveLaneLabel,
+  resolveWipLimit,
+  computeStageCounts,
+  evaluateWip,
+  findNewlyExceededWip,
+} from "./kanban/index.js";
 export { Feed } from "./feed/index.js";
 export { Calendar } from "./calendar/index.js";
 export { Wizard, OnboardingChecklist } from "./wizard/index.js";
