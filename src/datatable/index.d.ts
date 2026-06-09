@@ -5,6 +5,7 @@ export type DataTableWidth = "min" | "max" | "auto";
 export type DataTableColumnWidth = DataTableWidth | number;
 export type DataTableEditMode = "discrete" | "inline";
 export type DataTableFilterType = "select" | "multiselect" | "dateRange";
+export type DataTableExpandOn = "icon" | "row";
 
 export interface DataTableDateValue {
   year: number;
@@ -228,6 +229,13 @@ export interface DataTableProps<Row = Record<string, unknown>, Id = string | num
 
   rowActions?: DataTableRowAction<Row>[] | ((row: Row) => DataTableRowAction<Row>[]);
   hideRowActionsWhenSelectionActive?: boolean;
+
+  renderExpandedRow?: (row: Row) => ReactNode; // Enables expandable detail rows (full-span row under the data row)
+  expandedRowIds?: Id[]; // Controlled expansion state — array of expanded row IDs
+  defaultExpandedRowIds?: Id[]; // Uncontrolled initial expansion state
+  onExpandedRowsChange?: (expandedRowIds: Id[]) => void; // Called with the next expanded id array on every toggle
+  expandOn?: DataTableExpandOn; // "icon" (chevron toggle column, default) | "row" (click row content)
+  expandSingle?: boolean; // Accordion mode — expanding a row collapses the others (default false)
 
   editMode?: DataTableEditMode;
   editingRowId?: Id;
