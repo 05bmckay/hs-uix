@@ -13,11 +13,12 @@ Reusable UI wrappers built on top of HubSpot UI Extensions primitives.
 - `SectionHeader` — title + optional description row
 - `KeyValueList` — vertical list of label/value rows
 - `StyledText` — SVG-rendered text with rotation, custom colors, pill backgrounds
+- `Skeleton` (+ `SkeletonText`, `SkeletonBox`, `SkeletonCircle`, `SkeletonTable`) — gray content placeholders for loading states
 - `Spinner` — animated unicode/braille loading indicator
 
 Plus utilities + constants:
 
-- `makeAvatarStackDataUri`, `makeStyledTextDataUri`, `makeIconDataUri` — low-level builders that return `{ src, width, height }` for composing into larger SVGs
+- `makeAvatarStackDataUri`, `makeStyledTextDataUri`, `makeIconDataUri`, `makeSkeletonDataUri` — low-level builders that return `{ src, width, height }` for composing into larger SVGs
 - `ICONS`, `ICON_NAMES`, `NATIVE_ICON_NAME_LIST`, `svgToIconEntry` — the custom icon registry and helpers behind `Icon`
 - `SPINNERS`, `SPINNER_NAMES` — spinner presets and registry
 - `HS_DATE_PRESETS`, `HS_DATE_DIRECTION_LABELS` — HubSpot's native quick-date preset list
@@ -301,6 +302,87 @@ For `background={{ preset: "tag" }}` specifically: plain horizontal tags now ren
 
 ---
 
+## Skeleton
+
+Content placeholders for loading states. `Spinner` says "something is happening"; `Skeleton` holds the **shape** of the incoming content so the layout doesn't jump when data lands. There is no native skeleton component and CSS is forbidden, so each placeholder is a gray rounded-rect SVG data URI rendered through the native `<Image>` — the same technique as `StyledText` and `AvatarStack`.
+
+Prefer the presets — they cover the common shapes:
+
+```jsx
+import {
+  Skeleton,
+  SkeletonText,
+  SkeletonBox,
+  SkeletonCircle,
+  SkeletonTable,
+} from "hs-uix/common-components";
+import { Flex } from "@hubspot/ui-extensions";
+
+// Paragraph: 3 lines, shorter last line
+{loading ? <SkeletonText lines={3} width="md" /> : <Text>{description}</Text>}
+
+// Card header: avatar + two text lines
+<Flex direction="row" align="center" gap="sm">
+  <SkeletonCircle size={40} />
+  <SkeletonText lines={2} width="sm" />
+</Flex>
+
+// Chart / image block
+<SkeletonBox width="lg" height={160} />
+
+// Table placeholder: 5 rows × 4 columns
+<SkeletonTable rows={5} columns={4} width="lg" />
+
+// Base component for custom shapes
+<Skeleton variant="text" lines={4} width={280} height={10} gap={6} lastLineWidth={0.4} />
+```
+
+Width tokens: anywhere a skeleton takes a `width` you can pass a pixel number or `"sm"` (120) / `"md"` (240) / `"lg"` (360).
+
+### `<Skeleton>` props
+
+| Prop | Type | Default | Notes |
+| ---- | ---- | ------- | ----- |
+| `variant` | `"text"` \| `"box"` \| `"circle"` | `"text"` | `text` = stacked lines, `box` = solid block, `circle` = avatar disc. |
+| `width` | number \| `"sm"` \| `"md"` \| `"lg"` | `"md"` (240) | Pixel width or token. |
+| `height` | number | per variant | Per-line height for `text` (12), block height for `box` (96), diameter for `circle` (40). |
+| `lines` | number | `1` | `text` only: stacked line count. |
+| `lastLineWidth` | number \| token | `0.6` | `text` only, when `lines > 1`. Values in `(0, 1]` are a fraction of `width`; larger numbers are px. |
+| `gap` | number | `8` | `text` only: px between lines. |
+| `radius` | number | `3` | Corner radius px (ignored for `circle`). |
+| `columns` | number | `1` | `box` only: split the block into N equal cells (what `SkeletonTable` rows use). |
+| `columnGap` | number | `16` | `box` only: px between cells. |
+| `fill` | string | `SKELETON_FILL` | Placeholder color. |
+| `alt` | string | `"Loading"` | Accessibility label; `...rest` forwards to the underlying `<Image>`. |
+
+### Presets
+
+| Component | Props | Defaults |
+| --------- | ----- | -------- |
+| `SkeletonText` | `lines`, `width`, + any `Skeleton` prop | `lines=3`, `width="md"` |
+| `SkeletonBox` | `width`, `height`, + any `Skeleton` prop | `width="md"`, `height=96` |
+| `SkeletonCircle` | `size`, + any `Skeleton` prop | `size=40` (avatar `md`) |
+| `SkeletonTable` | `rows`, `columns`, `width`, `rowHeight`, `columnGap`, `gap` (Flex token between rows), `radius`, `fill`, `alt` | `rows=4`, `columns=3`, `width="lg"`, `rowHeight=16`, `columnGap=16`, `gap="sm"` |
+
+`SkeletonTable` renders a `Flex` column of row skeletons; each row is one SVG split into `columns` equal cells, so rows stay pixel-aligned without fighting Flex gap tokens. `...rest` forwards to the wrapping `Flex`.
+
+### Low-level builder
+
+```js
+import { makeSkeletonDataUri, SKELETON_WIDTH_TOKENS } from "hs-uix/common-components";
+
+const { src, width, height } = makeSkeletonDataUri({ variant: "text", lines: 3, width: "md" });
+// → paint anywhere an <Image> is valid; SKELETON_WIDTH_TOKENS = { sm: 120, md: 240, lg: 360 }
+```
+
+### Guidelines
+
+- Match the skeleton to the layout it replaces — same widths, same row counts — so nothing shifts on load.
+- Skeletons are static by design (no shimmer; UI Extensions can't animate CSS). If you need motion, pair a `Spinner` line above a skeleton block.
+- For card/panel-level loading where shape preservation doesn't matter, the native `LoadingSpinner` is still the default.
+
+---
+
 ## CrmLookupSelect
 
 A CRM-backed `Select` (or `MultiSelect` when `multiple`) that searches live as the user types. It wraps HubSpot's CRM search so you point it at an object type and properties and get a debounced, paginated lookup — no manual data-source wiring.
@@ -379,6 +461,7 @@ Raw style tokens used internally by `StyledText` and `AvatarStack` so they match
 | `HS_SUBTLE_BG` | `#F5F8FA` | Tag `variant="subtle"` background |
 | `HS_MUTED_TEXT` | `#7C98B6` | Secondary / microcopy gray |
 | `HS_NEUTRAL_CHIP` | `#CBD6E2` | Neutral chip background (`+N` overflow) |
+| `SKELETON_FILL` | `#DFE3EB` | Skeleton placeholder gray |
 | `HS_TAG_SUBTLE_BORDER` | — | Border color for subtle-variant tag pills |
 | `HS_TAG_TEXT_COLOR` | — | Text color inside tag pills |
 | `HS_TAG_FONT_SIZE` | — | Font size (px) for tag pill text |
