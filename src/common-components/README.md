@@ -10,6 +10,7 @@ Reusable UI wrappers built on top of HubSpot UI Extensions primitives.
 - `Icon` — superset of HubSpot's native `<Icon>`: custom glyphs, any CSS color, pixel sizes
 - `CrmLookupSelect` — CRM-backed `Select` / `MultiSelect` with live, debounced search
 - `CollectionToolbar`, `CollectionFilterControl`, `ActiveFilterChips`, `CollectionSortSelect`, `CollectionCount` — shared search/filter/sort/count primitives used by DataTable, Kanban, Feed, and Calendar
+- `DateRangePicker` — standalone from/to date-range control with HubSpot's quick-preset dropdown; emits the same `{ from, to }` shape as `dateRange` filters
 - `SectionHeader` — title + optional description row
 - `KeyValueList` — vertical list of label/value rows
 - `StyledText` — SVG-rendered text with rotation, custom colors, pill backgrounds
@@ -21,6 +22,7 @@ Plus utilities + constants:
 - `ICONS`, `ICON_NAMES`, `NATIVE_ICON_NAME_LIST`, `svgToIconEntry` — the custom icon registry and helpers behind `Icon`
 - `SPINNERS`, `SPINNER_NAMES` — spinner presets and registry
 - `HS_DATE_PRESETS`, `HS_DATE_DIRECTION_LABELS` — HubSpot's native quick-date preset list
+- `presetToRange`, `toHsDateValue`, `compareHsDateValues`, `isValidDateRange`, `DATE_RANGE_CUSTOM_VALUE` — the pure date-range math behind `DateRangePicker`
 - `HS_FONT_FAMILY`, `HS_TEXT_COLOR`, `HS_SUBTLE_BG`, `HS_MUTED_TEXT`, `HS_NEUTRAL_CHIP` — style constants matching native HubSpot CSS
 
 ## Purpose
@@ -40,6 +42,7 @@ import {
   CrmLookupSelect,
   CollectionToolbar,
   CollectionSortSelect,
+  DateRangePicker,
   SectionHeader,
   KeyValueList,
   StyledText,
@@ -125,6 +128,62 @@ const activeChips = buildActiveFilterChips(filters, filterValues);
 ```
 
 `CollectionFilterControl` also supports `includeAll`, `allValue`, `allLabel`, `fromLabel`, and `toLabel` for advanced cases. Prefer `emptyValue` for new filter configs; the library default is `""` for select filters. Feed keeps its legacy `"all"` empty value internally for compatibility, but custom shared configs should generally use `emptyValue: ""`.
+
+---
+
+## DateRangePicker
+
+HubSpot only ships a single-date `DateInput`. `DateRangePicker` is the from/to pair done right: a quick-preset `Select` (HubSpot's native Today / Last 7 days / This quarter list), two `DateInput`s, and an optional Clear link — in one control. Its value is the exact `{ from, to }` shape that `dateRange` filters use across DataTable, Kanban, Feed, and Calendar, so the `onChange` payload plugs straight into those filter pipelines (and into `filterRows` / `dateToTimestamp` from `hs-uix/utils`).
+
+```jsx
+import { DateRangePicker } from "hs-uix/common-components";
+
+const [range, setRange] = useState({ from: null, to: null });
+
+<DateRangePicker
+  label="Close date"
+  name="close-date"
+  value={range}
+  onChange={setRange}
+  clearable
+/>
+```
+
+Features:
+
+- **Presets that actually fill dates.** Picking "Last quarter" computes real `{ from, to }` bounds via `presetToRange` and fires `onChange` — no more "the preset value is just a string, translate it yourself".
+- **Custom flips automatically.** Editing either date by hand (or changing `value` externally to a range no preset produced) flips the Select to "Custom".
+- **Only valid ranges escape.** If an edit would make `from > to`, the invalid half is held locally — shown in the input with an error message — and `onChange` is NOT called until the user fixes either side. Your state never sees a backwards range.
+- **Controlled or uncontrolled** via `value` / `defaultValue` / `onChange`.
+- **Open-ended ranges** are first-class: either side may stay `null`.
+
+| Prop | Type | Default | Notes |
+| ---- | ---- | ------- | ----- |
+| `value` | `{ from, to }` | — | Controlled range of HubSpot date objects (`{ year, month, date }`, month 0-indexed). Either side may be `null`. |
+| `defaultValue` | `{ from, to }` | `{ from: null, to: null }` | Initial range for uncontrolled usage. |
+| `onChange` | `(range, { preset }) => void` | — | Fires only with valid ranges. `preset` is the preset key when the change came from the Select, else `null`. |
+| `label` | `ReactNode` | — | Group label rendered above the control. |
+| `name` | `string` | `"date-range"` | Base for inner input names (`-from`, `-to`, `-preset` suffixes). |
+| `presets` | `boolean \| array` | `true` | `true` = `HS_DATE_PRESETS`; `false` = no preset Select; or a custom `{ label, value, getRange? }` array — `value` is a `presetToRange` key, or supply `getRange(now)` for fully custom presets. |
+| `direction` | `"row" \| "column"` | `"row"` | Row uses placeholders on the date inputs; column uses labels. |
+| `clearable` | `boolean` | `false` | Show a Clear link when the range is non-empty. Clearing commits `{ from: null, to: null }`. |
+| `min` / `max` | date object | — | Passed through to both `DateInput`s. |
+| `fromLabel` / `toLabel` | `string` | `"From"` / `"To"` | Date input text. |
+| `format` | `string` | `"medium"` | `DateInput` display format. |
+| `presetPlaceholder` | `string` | `"Date range"` | Placeholder for the preset Select. |
+| `customPresetLabel` | `string` | `"Custom"` | Label for the appended Custom option. |
+| `clearLabel` | `ReactNode` | `"Clear"` | Clear link text. |
+| `invalidRangeMessage` | `string` | `"Start date must be on or before end date"` | Shown on the held invalid input. |
+| `readOnly` | `boolean` | `false` | Pass-through to all inner controls (also hides the Clear link). |
+| `gap` | `string` | `"xs"` row / `"sm"` column | Flex gap between controls. |
+
+### Pure helpers (`dateRangePresets.js`)
+
+- `presetToRange(presetKey, now?)` — translate an `HS_DATE_PRESETS` key into `{ from, to }` HubSpot date objects. Weeks run Sunday–Saturday; `7d`/`30d`/`90d` are rolling windows ending (and including) today; months/quarters/years are full calendar units. Returns `null` for unknown/`"custom"`/empty keys. Pass a fixed `now` Date for determinism.
+- `toHsDateValue(date)` — JS `Date` → `{ year, month, date }` (or `null`).
+- `compareHsDateValues(a, b)` — sort-style comparator; `null` sides compare as `0`.
+- `isValidDateRange(range)` — `true` when open-ended or `from <= to`.
+- `DATE_RANGE_CUSTOM_VALUE` — the `"custom"` sentinel used by the preset Select.
 
 ---
 
@@ -362,7 +421,7 @@ filters={[
 ]}
 ```
 
-The preset values are stable identifiers (`"today"`, `"7d"`, `"this_quarter"`, etc.) — it's up to the consumer to translate them into actual date bounds (via `filterFn` on the filter config or server-side in `onFilterChange`).
+The preset values are stable identifiers (`"today"`, `"7d"`, `"this_quarter"`, etc.). To translate them into actual date bounds, use `presetToRange(presetKey, now?)` from this module (see [DateRangePicker](#daterangepicker)) — or do it yourself via `filterFn` on the filter config / server-side in `onFilterChange`.
 
 Also exports `HS_DATE_DIRECTION_LABELS` (`{ asc: "Ascending", desc: "Descending" }`) for pairing with direction-specific sort UIs.
 

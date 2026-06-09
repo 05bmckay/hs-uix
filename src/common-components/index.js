@@ -8,6 +8,8 @@ export * from "./CollectionFilterControl.js";
 export * from "./CollectionSortSelect.js";
 export * from "./CollectionToolbar.js";
 export * from "./datePresets.js";
+export * from "./dateRangePresets.js";
+export * from "./DateRangePicker.js";
 export * from "./Icon.js";
 export * from "./KeyValueList.js";
 export * from "./SectionHeader.js";
