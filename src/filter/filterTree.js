@@ -239,6 +239,47 @@ export const removeFilter = (tree, path, options = {}) => {
   return next;
 };
 
+// Deep structural copy of a node so a duplicate shares no references with the
+// original. `value` may hold arrays (IN/NOT_IN) or plain objects (DateInput) —
+// both clone; anything else passes through by reference.
+const cloneNode = (node) => {
+  if (Array.isArray(node)) return node.map(cloneNode);
+  if (node !== null && typeof node === "object") {
+    const copy = {};
+    for (const key of Object.keys(node)) copy[key] = cloneNode(node[key]);
+    return copy;
+  }
+  return node;
+};
+
+/**
+ * Duplicate the node at `path` (condition or group, with all descendants),
+ * inserting the copy immediately after the original in its parent group.
+ * Immutable; throws on the root path `[]` — clone the whole tree yourself.
+ *
+ * @param {object} tree root group
+ * @param {number[]} path non-empty path to the node to duplicate
+ * @returns {object} new tree
+ */
+export const duplicateFilter = (tree, path) => {
+  if (!path || path.length === 0) {
+    throw new Error("filterTree: cannot duplicate the root group");
+  }
+  const parentPath = path.slice(0, -1);
+  const index = path[path.length - 1];
+  return updateNodeAtPath(tree, parentPath, (group) => {
+    if (!isGroupNode(group)) {
+      throw new Error("filterTree: duplicateFilter parent is not a group node");
+    }
+    if (typeof index !== "number" || index < 0 || index >= group.filters.length) {
+      throw new Error(`filterTree: no filter at index ${index} (group has ${group.filters.length})`);
+    }
+    const filters = group.filters.slice();
+    filters.splice(index + 1, 0, cloneNode(group.filters[index]));
+    return { ...group, filters };
+  });
+};
+
 /** Count condition nodes in a tree (groups themselves don't count). */
 export const countConditions = (node) => {
   if (isConditionNode(node)) return 1;

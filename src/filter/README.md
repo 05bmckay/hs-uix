@@ -2,7 +2,7 @@
 
 The HubSpot list/workflow segment-builder pattern as one component: nested AND/OR groups of property → operator → value rows. If your extension needs "show me deals where amount > 10k AND (stage is X OR stage is Y)", this is the component — stop hand-rolling three Selects in a Flex row with an ad-hoc state shape. The tree it emits converts directly to HubSpot CRM search `filterGroups` via `toCrmSearchFilterGroups`.
 
-Renders entirely with native components: `Select` / `MultiSelect` / `Input` / `NumberInput` / `DateInput` rows inside `Flex`, nested groups in `Tile`, `Button` to add filters/groups, `Link` to remove.
+Renders entirely with native components: `Select` / `MultiSelect` / `Input` / `NumberInput` / `DateInput` rows inside `Flex`, nested groups in `Tile`. Every action is a `Button` carrying HubSpot's segment-builder iconography — add (`+`) for "Add filter" / "Add filter group", a remove (`x`) icon button on each condition row, and copy / trash icon buttons on each group header for clone / delete.
 
 ## Quick Start
 
@@ -73,6 +73,7 @@ const SegmentEditor = () => {
 - Controlled (`value` + `onChange`) or uncontrolled (`defaultValue`) tree state
 - Nested groups to `maxDepth` (default 2 — root plus one level, matching HubSpot's builder)
 - Per-group AND/OR toggle rendered between rows; changing any separator updates the whole group
+- Nested groups get a numbered heading ("Group 1", "Group 2", …) with clone (copy icon) and delete (trash icon) buttons, matching HubSpot's builder
 - Property changes keep the operator when still valid for the new type, otherwise reset it; values are always cleared
 - Operator changes keep values whose shape still fits (scalar→scalar, `IN`↔`NOT_IN`)
 - Removing a group's last row prunes the now-empty group (root always survives)
@@ -118,7 +119,7 @@ Empty nested groups throw — run `validateTree` first and gate your search butt
 | `defaultValue` | `FilterGroupNode` | empty AND group | Initial tree for uncontrolled mode. |
 | `onChange` | `(tree) => void` | — | Fired with the full new tree after every edit. |
 | `maxDepth` | `number` | `2` | Max group nesting; root counts as 1. `1` disables "Add filter group". |
-| `labels` | `FilterBuilderLabels` | built-in copy | Overrides for `addFilter`, `addGroup`, `remove`, `removeGroup`, `and`, `or`, `property`, `operator`, `value`, `values`, `between`, `empty`, `true`, `false`. |
+| `labels` | `FilterBuilderLabels` | built-in copy | Overrides for `addFilter`, `addGroup`, `remove`, `removeGroup`, `cloneGroup`, `group`, `and`, `or`, `property`, `operator`, `value`, `values`, `between`, `empty`, `true`, `false`. `remove` / `removeGroup` / `cloneGroup` are screen-reader text on the icon buttons; `group` prefixes group headings. |
 | `operatorLabels` | `Record<operator, string>` | — | Per-operator label overrides for the operator dropdowns. |
 | `readOnly` | `boolean` | `false` | Render without edit affordances. |
 | `namePrefix` | `string` | `"filter-builder"` | Prefix for native input `name`s; set when rendering two builders on one surface. |
@@ -138,6 +139,7 @@ Empty nested groups throw — run `validateTree` first and gate your search butt
 | `addFilter` | `(tree, groupPath, node) => tree` | Immutable append; throws if the path isn't a group. |
 | `updateFilter` | `(tree, path, patch \| fn) => tree` | Object patch merges; function patch replaces the node. |
 | `removeFilter` | `(tree, path, { pruneEmptyGroups? }) => tree` | Throws on the root path; prune cascades upward but never removes the root. |
+| `duplicateFilter` | `(tree, path) => tree` | Deep-clones the node at `path` (condition or group) and inserts the copy right after it. Throws on the root path. |
 | `countConditions` | `(node) => number` | Conditions only; groups don't count. |
 | `changeConditionProperty` | `(condition, propertyDef) => condition` | Keeps a still-valid operator, clears values. |
 | `changeConditionOperator` | `(condition, operator) => condition` | Keeps shape-compatible values. |

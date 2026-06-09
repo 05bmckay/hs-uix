@@ -57,8 +57,14 @@ export type FilterNode = FilterConditionNode | FilterGroupNode;
 export interface FilterBuilderLabels {
   addFilter?: string;
   addGroup?: string;
+  /** Screen-reader text on the condition row's remove (x) icon button. */
   remove?: string;
+  /** Screen-reader text on the group header's delete (trash) icon button. */
   removeGroup?: string;
+  /** Screen-reader text on the group header's clone (copy) icon button. */
+  cloneGroup?: string;
+  /** Group heading prefix — rendered as "Group 1", "Group 2", … */
+  group?: string;
   and?: string;
   or?: string;
   property?: string;
@@ -178,6 +184,11 @@ export declare function removeFilter(
   tree: FilterGroupNode,
   path: FilterTreePath,
   options?: FilterRemoveOptions
+): FilterGroupNode;
+
+export declare function duplicateFilter(
+  tree: FilterGroupNode,
+  path: FilterTreePath
 ): FilterGroupNode;
 
 export declare function countConditions(node: FilterNode): number;

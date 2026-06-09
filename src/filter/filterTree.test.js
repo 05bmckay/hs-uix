@@ -13,6 +13,7 @@ import {
   addFilter,
   updateFilter,
   removeFilter,
+  duplicateFilter,
   countConditions,
   changeConditionProperty,
   changeConditionOperator,
@@ -296,6 +297,45 @@ describe("removeFilter", () => {
     ]);
     const next = removeFilter(tree, [0, 0], { pruneEmptyGroups: true });
     expect(next.filters[0].filters).toHaveLength(1);
+  });
+});
+
+// ── duplicateFilter ──────────────────────────────────────────────────────────
+describe("duplicateFilter", () => {
+  it("inserts a copy of a condition immediately after the original", () => {
+    const a = cond("dealname", "EQ", "x");
+    const b = cond("amount", "GT", 1);
+    const tree = createGroup("AND", [a, b]);
+    const next = duplicateFilter(tree, [0]);
+    expect(next.filters).toHaveLength(3);
+    expect(next.filters[0]).toEqual(a);
+    expect(next.filters[1]).toEqual(a);
+    expect(next.filters[2]).toEqual(b);
+    expect(tree.filters).toHaveLength(2); // input untouched
+  });
+
+  it("deep-clones a group so the copy shares no references", () => {
+    const inner = createGroup("OR", [cond("dealstage", "IN", ["qualifiedtobuy"])]);
+    const tree = createGroup("AND", [inner]);
+    const next = duplicateFilter(tree, [0]);
+    expect(next.filters).toHaveLength(2);
+    expect(next.filters[1]).toEqual(inner);
+    expect(next.filters[1]).not.toBe(inner);
+    expect(next.filters[1].filters[0]).not.toBe(inner.filters[0]);
+    expect(next.filters[1].filters[0].value).not.toBe(inner.filters[0].value);
+  });
+
+  it("duplicates a nested node in place", () => {
+    const inner = createGroup("OR", [cond("amount", "GT", 1), cond("amount", "LT", 9)]);
+    const tree = createGroup("AND", [inner]);
+    const next = duplicateFilter(tree, [0, 0]);
+    expect(next.filters[0].filters.map((f) => f.operator)).toEqual(["GT", "GT", "LT"]);
+  });
+
+  it("throws on the root path and bad indices", () => {
+    expect(() => duplicateFilter(createGroup(), [])).toThrow(/root/);
+    expect(() => duplicateFilter(createGroup("AND", [cond("dealname", "EQ", "x")]), [4]))
+      .toThrow(/no filter at index/);
   });
 });
 

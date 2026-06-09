@@ -13,6 +13,7 @@ export {
   addFilter,
   updateFilter,
   removeFilter,
+  duplicateFilter,
   countConditions,
   changeConditionProperty,
   changeConditionOperator,

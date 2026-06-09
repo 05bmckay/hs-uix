@@ -7,7 +7,9 @@
 // state shape). FilterBuilder standardizes the tree contract
 // ({ type: "group", operator, filters }) and renders it with ONLY native
 // components — Select / MultiSelect / Input / NumberInput / DateInput rows
-// inside Flex, nested groups in Tiles, Button to add, Link to remove.
+// inside Flex, nested groups in Tiles. Every action is a Button carrying
+// HubSpot's segment-builder iconography: add (+) to add filters/groups,
+// remove (x) on condition rows, copy/delete on group headers.
 //
 // All tree manipulation and interpretation (operators per type, value arity,
 // immutable updates, validation, CRM-search conversion) lives in the pure
@@ -21,7 +23,6 @@ import {
   DateInput,
   Flex,
   Input,
-  Link,
   MultiSelect,
   NumberInput,
   Select,
@@ -34,6 +35,7 @@ import {
   changeConditionProperty,
   createCondition,
   createGroup,
+  duplicateFilter,
   getOperatorOptions,
   isGroupNode,
   operatorExpectsHighValue,
@@ -42,12 +44,15 @@ import {
   removeFilter,
   updateFilter,
 } from "./filterTree.js";
+import { Icon } from "../common-components/Icon.js";
 
 const DEFAULT_LABELS = {
-  addFilter: "+ Add filter",
-  addGroup: "+ Add filter group",
-  remove: "Remove",
-  removeGroup: "Remove group",
+  addFilter: "Add filter",
+  addGroup: "Add filter group",
+  remove: "Remove filter",
+  removeGroup: "Delete group",
+  cloneGroup: "Clone group",
+  group: "Group",
   and: "AND",
   or: "OR",
   property: "Select a property",
@@ -172,7 +177,7 @@ const ValueEditor = ({ condition, propertyDef, path, namePrefix, labels, readOnl
       <>
         <Box flex={1}>
           <DateInput
-            label=""
+            label={labels.value}
             name={pathName(namePrefix, path, "value")}
             format="medium"
             value={condition.value ?? null}
@@ -185,7 +190,7 @@ const ValueEditor = ({ condition, propertyDef, path, namePrefix, labels, readOnl
             <Text variant="microcopy">{labels.between}</Text>
             <Box flex={1}>
               <DateInput
-                label=""
+                label={labels.values}
                 name={pathName(namePrefix, path, "high-value")}
                 format="medium"
                 value={condition.highValue ?? null}
@@ -213,7 +218,15 @@ const ValueEditor = ({ condition, propertyDef, path, namePrefix, labels, readOnl
   );
 };
 
-// property Select → operator Select → value editor(s) → remove Link.
+// Icon-only transparent Button — the affordance HubSpot's builder uses for
+// every row/group action. The label rides along as screen-reader text.
+const IconButton = ({ icon, label, onClick }) => (
+  <Button size="extra-small" variant="transparent" onClick={onClick}>
+    <Icon name={icon} screenReaderText={label} />
+  </Button>
+);
+
+// property Select → operator Select → value editor(s) → remove (x) button.
 const ConditionRow = ({
   condition,
   path,
@@ -264,7 +277,9 @@ const ConditionRow = ({
         readOnly={readOnly}
         onPatch={onPatch}
       />
-      {!readOnly && <Link onClick={() => onRemove(path)}>{labels.remove}</Link>}
+      {!readOnly && (
+        <IconButton icon="remove" label={labels.remove} onClick={() => onRemove(path)} />
+      )}
     </Flex>
   );
 };
@@ -299,11 +314,37 @@ const GroupEditor = ({ group, path, depth, ctx }) => {
   const isRoot = path.length === 0;
   const filters = Array.isArray(group.filters) ? group.filters : [];
 
+  // HubSpot numbers groups ("Group 1", "Group 2") counting only group
+  // siblings, skipping interleaved condition rows.
+  let groupNumber = 0;
+
   const children = filters.map((child, index) => {
     const childPath = [...path, index];
+    if (isGroupNode(child)) groupNumber += 1;
     const row = isGroupNode(child) ? (
       <Tile compact={true}>
-        <GroupEditor group={child} path={childPath} depth={depth + 1} ctx={ctx} />
+        <Flex direction="column" gap="sm">
+          <Flex direction="row" justify="between" align="center">
+            <Text format={{ fontWeight: "demibold" }}>
+              {`${labels.group} ${groupNumber}`}
+            </Text>
+            {!readOnly && (
+              <Flex direction="row" gap="xs" justify="end">
+                <IconButton
+                  icon="copy"
+                  label={labels.cloneGroup}
+                  onClick={() => handlers.onDuplicate(childPath)}
+                />
+                <IconButton
+                  icon="delete"
+                  label={labels.removeGroup}
+                  onClick={() => handlers.onRemove(childPath)}
+                />
+              </Flex>
+            )}
+          </Flex>
+          <GroupEditor group={child} path={childPath} depth={depth + 1} ctx={ctx} />
+        </Flex>
       </Tile>
     ) : (
       <ConditionRow
@@ -352,7 +393,7 @@ const GroupEditor = ({ group, path, depth, ctx }) => {
             variant="transparent"
             onClick={() => handlers.onAddCondition(path)}
           >
-            {labels.addFilter}
+            <Icon name="add" /> {labels.addFilter}
           </Button>
           {depth < maxDepth && (
             <Button
@@ -360,11 +401,8 @@ const GroupEditor = ({ group, path, depth, ctx }) => {
               variant="transparent"
               onClick={() => handlers.onAddGroup(path)}
             >
-              {labels.addGroup}
+              <Icon name="add" /> {labels.addGroup}
             </Button>
-          )}
-          {!isRoot && (
-            <Link onClick={() => handlers.onRemove(path)}>{labels.removeGroup}</Link>
           )}
         </Flex>
       )}
@@ -388,8 +426,10 @@ const GroupEditor = ({ group, path, depth, ctx }) => {
  * - onChange: `(tree) => void`, called with the new tree after every edit.
  * - maxDepth: maximum group nesting (default 2 — the root plus one level of
  *   nested groups, matching HubSpot's builder). 1 disables "Add filter group".
- * - labels: copy overrides ({ addFilter, addGroup, remove, removeGroup, and,
- *   or, property, operator, value, values, between, empty, true, false }).
+ * - labels: copy overrides ({ addFilter, addGroup, remove, removeGroup,
+ *   cloneGroup, group, and, or, property, operator, value, values, between,
+ *   empty, true, false }). `remove` / `removeGroup` / `cloneGroup` are
+ *   screen-reader text on the icon buttons; `group` prefixes group headings.
  * - operatorLabels: per-operator label overrides ({ EQ: "is", ... }) applied
  *   to the operator dropdowns.
  * - readOnly: render the current tree without any add/remove/edit affordances.
@@ -429,6 +469,7 @@ export const FilterBuilder = ({
     onAddGroup: (groupPath) =>
       commit(addFilter(tree, groupPath, createGroup("AND", [createCondition()]))),
     onRemove: (path) => commit(removeFilter(tree, path, { pruneEmptyGroups: true })),
+    onDuplicate: (path) => commit(duplicateFilter(tree, path)),
     onGroupOperatorChange: (groupPath, operator) =>
       commit(updateFilter(tree, groupPath, { operator })),
     onPropertyChange: (path, name) => {
