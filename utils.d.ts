@@ -247,6 +247,23 @@ export interface DerivedCardField<Row = Record<string, unknown>> {
   href?: (row: Row) => string | { url: string; external?: boolean };
 }
 
+export type JsonPatchOp = "add" | "replace" | "remove" | "move" | "copy" | "test";
+
+export interface JsonPatchOperation {
+  /** Supported: add / replace / remove / move / copy. Others (incl. `test`) are skipped with a warning. */
+  op: JsonPatchOp;
+  /** JSON Pointer (RFC 6901), e.g. "/elements/hero/props/title". "" or "/" addresses the document root. */
+  path: string;
+  /** Source pointer for "move" / "copy". */
+  from?: string;
+  value?: unknown;
+}
+
+export declare function applyPatches<Doc = unknown>(
+  doc: Doc | null | undefined,
+  patches: ReadonlyArray<JsonPatchOperation> | null | undefined
+): Doc;
+
 export declare function formatCurrency(value: unknown, options?: FormatCurrencyOptions): string;
 export declare function formatCurrencyCompact(value: unknown, options?: FormatCurrencyCompactOptions): string;
 export declare function formatDate(value: unknown, options?: FormatDateOptions): string;

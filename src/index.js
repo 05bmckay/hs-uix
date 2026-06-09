@@ -42,6 +42,7 @@ export {
   StyledText,
 } from "./common-components/index.js";
 export {
+  applyPatches,
   buildCrmSearchConfig,
   crmSearchResultToOption,
   buildOptions,

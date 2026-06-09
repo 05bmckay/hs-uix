@@ -1,3 +1,4 @@
+export * from "./applyPatches.js";
 export * from "./collections.js";
 export * from "./crmSearchAdapters.js";
 export * from "./formatters.js";
