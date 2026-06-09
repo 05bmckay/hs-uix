@@ -8,6 +8,7 @@ export {
   AutoStatusTag,
   AvatarStack,
   CrmLookupSelect,
+  CrmRecordPicker,
   DEFAULT_SVG_FONT_WEIGHT,
   HS_DATE_DIRECTION_LABELS,
   HS_DATE_PRESETS,
