@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Calendar**: resource-view lane labels now shrink-wrap to their content
+  instead of truncating, so long owner / room / team names can drive the
+  resource column width.
 - **DateRangePicker**: expanded the HubSpot CRM date filter operator set beyond
   preset / greater-than rolling / explicit range. It now supports static date
   comparisons (`Equal`, `BeforeDateStaticOrDynamic`,
