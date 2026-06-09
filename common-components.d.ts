@@ -60,6 +60,62 @@ export interface DateDirectionLabels {
   desc: string;
 }
 
+/** HubSpot DateInput value object — `month` is 0-indexed (0 = January). */
+export interface DateRangePickerDateValue {
+  year: number;
+  month: number;
+  date: number;
+}
+
+/** The `dateRange` filter value shape shared with DataTable/Kanban/Feed/Calendar. */
+export interface DateRangePickerValue {
+  from?: DateRangePickerDateValue | null;
+  to?: DateRangePickerDateValue | null;
+}
+
+export interface DateRangePickerPresetOption {
+  label: string;
+  /** A preset key understood by presetToRange, or any key when getRange is given. */
+  value: string;
+  /** Fully custom preset: compute the range yourself from `now`. */
+  getRange?: (now: Date) => DateRangePickerValue;
+}
+
+export interface DateRangePickerChangeMeta {
+  /** The preset key that produced the range, or null for manual edits / clear. */
+  preset: string | null;
+}
+
+export interface DateRangePickerProps {
+  /** Controlled range. Either side may be null for an open-ended range. */
+  value?: DateRangePickerValue;
+  /** Initial range for uncontrolled usage. */
+  defaultValue?: DateRangePickerValue;
+  /** Fires ONLY with valid ranges (from <= to, or a side null). */
+  onChange?: (range: DateRangePickerValue, meta: DateRangePickerChangeMeta) => void;
+  /** Optional group label rendered above the control. */
+  label?: ReactNode;
+  /** Base for inner input names (`${name}-from`, `${name}-to`, `${name}-preset`). */
+  name?: string;
+  /** true = HS_DATE_PRESETS Select, false = none, or a custom preset array. */
+  presets?: boolean | DateRangePickerPresetOption[];
+  direction?: "row" | "column";
+  /** Show a Clear link when the range is non-empty. */
+  clearable?: boolean;
+  min?: DateRangePickerDateValue;
+  max?: DateRangePickerDateValue;
+  fromLabel?: string;
+  toLabel?: string;
+  /** DateInput display format. Default "medium". */
+  format?: "short" | "long" | "medium" | "standard" | "YYYY-MM-DD" | "L" | "LL" | "ll";
+  presetPlaceholder?: string;
+  customPresetLabel?: string;
+  clearLabel?: ReactNode;
+  invalidRangeMessage?: string;
+  readOnly?: boolean;
+  gap?: string;
+}
+
 export interface AvatarStackItemObject {
   letter?: string;
   color?: string;
@@ -548,6 +604,24 @@ export declare function makeStyledTextDataUri(
   text: string,
   options?: StyledTextDataUriOptions
 ): StyledTextDataUriResult;
+
+export declare function DateRangePicker(props: DateRangePickerProps): ReactNode;
+/** Translate an HS_DATE_PRESETS key into a { from, to } range. Null for unknown/custom/empty keys. */
+export declare function presetToRange(
+  presetKey: string | null | undefined,
+  now?: Date
+): DateRangePickerValue | null;
+/** Convert a JS Date to a HubSpot date value object. Null for invalid input. */
+export declare function toHsDateValue(date: Date): DateRangePickerDateValue | null;
+/** Sort-style comparator for HubSpot date value objects; null sides compare as 0. */
+export declare function compareHsDateValues(
+  a: DateRangePickerDateValue | null | undefined,
+  b: DateRangePickerDateValue | null | undefined
+): number;
+/** True when the range is open-ended or from <= to. */
+export declare function isValidDateRange(range: DateRangePickerValue | null | undefined): boolean;
+/** Sentinel preset value meaning "the user picked dates by hand". */
+export declare const DATE_RANGE_CUSTOM_VALUE: "custom";
 
 export declare const HS_DATE_PRESETS: DatePresetOption[];
 export declare const HS_DATE_DIRECTION_LABELS: DateDirectionLabels;
