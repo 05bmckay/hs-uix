@@ -44,7 +44,7 @@ Requires `react` >= 18.0.0 and `@hubspot/ui-extensions` >= 0.14.0 as peer depend
 | **Calendar** | Presentational month/week/day/agenda calendar with search, filters, date navigation, event overlays, and experimental Gantt view | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/src/calendar/README.md) |
 | **Common Components** | Thin visual wrappers and shared collection primitives — `Icon`, `AutoTag`, `AutoStatusTag`, `AvatarStack`, `CrmLookupSelect`, `CollectionToolbar`, `CollectionFilterControl`, `CollectionSortSelect`, `CollectionCount`, and more | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/src/common-components/README.md) |
 | **CRM data** | `CrmDataTable` / `CrmKanban` — batch-fetching, client-side-paginating CRM table & board, plus the `useCrmSearch*` hooks behind them | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/src/utils/README.md) |
-| **Utils** | Pure helpers for formatting, options, HubSpot value guards, tag-variant inference, collection filtering/searching, and active-filter chips | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/src/utils/README.md) |
+| **Utils** | Pure helpers for formatting, options, HubSpot value guards, tag-variant inference, collection filtering/searching, active-filter chips, and RFC 6902 JSON Patch applying (`applyPatches`) | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/src/utils/README.md) |
 
 ---
 

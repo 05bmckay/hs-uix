@@ -67,6 +67,7 @@ export {
   DEFAULT_SVG_FONT_WEIGHT,
 } from "./common-components";
 export {
+  applyPatches,
   buildActiveFilterChips,
   buildCrmSearchConfig,
   buildOptions,
@@ -101,6 +102,8 @@ export {
 export type {
   AutoTagOptions,
   AutoTagVariant,
+  JsonPatchOp,
+  JsonPatchOperation,
   AutoStatusTagOptions,
   AutoStatusTagVariant,
   StatusTagSortComparatorOptions,

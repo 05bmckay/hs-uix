@@ -12,6 +12,7 @@ Pure helper functions for formatting, mapping, guards, and lightweight data tran
 - `viewAdapters.js` — shape transforms between DataTable columns and Kanban cardFields (power a single "same data, different view" toggle)
 - `query.js` — shared collection query helpers: empty filter values, filter reset, active-filter chips, filtering, and search
 - `crmSearchAdapters.js` — CRM-bound data components (`CrmDataTable`, `CrmKanban`) plus the lower-level CRM search hooks and config builders behind them
+- `applyPatches.js` — RFC 6902 JSON Patch applier (add/replace/remove/move/copy) with structural sharing, built for streaming-UI flows
 
 ## Purpose
 
@@ -500,6 +501,44 @@ If you need to drive a custom view, the hooks and helpers are exported directly:
 - `crmSearchResultToOption` — map a single CRM record into an option.
 - `makeCrmSearchSelectField` / `makeCrmSearchMultiSelectField` — build FormBuilder field configs backed by CRM search.
 - `resolveCrmObjectType` — normalize object-type aliases (`"contact"` ↔ `"contacts"`, etc.).
+
+---
+
+## applyPatches.js
+
+RFC 6902 JSON Patch applier — the minimal subset that streaming UIs need.
+Supported ops: `add`, `replace`, `remove`, `move`, `copy`; anything else
+(including `test`) is skipped with a console warning.
+
+### `applyPatches(doc, patches)`
+
+```js
+import { applyPatches } from "hs-uix/utils";
+
+const doc = { meta: { title: "Dashboard" }, rows: [] };
+
+const next = applyPatches(doc, [
+  { op: "replace", path: "/meta/title", value: "Pipeline" },
+  { op: "add", path: "/rows/-", value: { id: "r1" } },
+]);
+// → { meta: { title: "Pipeline" }, rows: [{ id: "r1" }] }
+
+next === doc;          // → false (never mutates input)
+next.meta === doc.meta; // → false (changed branch)
+```
+
+Behavior worth knowing:
+
+| Behavior | Detail |
+|---|---|
+| Immutability | Returns a **new** document; untouched branches keep reference equality (structural sharing), so memoized renderers only re-render what changed. |
+| Permissive paths | Where RFC 6902 would error on a missing path prefix, `add`/`replace` create it — objects by default, arrays when the next segment is numeric or `-`. Built for patch streams where `/elements/x/props` can arrive before `/elements`. |
+| Root pointer | `path: ""` (or `"/"`) replaces the whole document. |
+| Array `add` vs `replace` | Per RFC 6902, `add` at an existing index **inserts** (shifts the rest right); `replace` overwrites in place. The standard `-` index appends (`{ op: "add", path: "/rows/-", value }`). |
+| Array `remove` | An invalid or out-of-range index (`/rows/-`, `/rows/foo`, `/rows/99`) is a safe no-op — same spirit as removing a missing object key. |
+| Escaping | Standard RFC 6901 unescaping: `~1` → `/`, `~0` → `~`. |
+| `copy` / `move` | `copy` deep-clones the source (JSON-safe values only — no `Date`/`Map`/`Set`). Pointers resolve own properties only, so `/constructor`-style segments read as missing instead of leaking functions into the document. |
+| Null doc | `applyPatches(null, patches)` starts from `{}`. Empty/missing `patches` returns the input as-is. |
 
 ---
 
