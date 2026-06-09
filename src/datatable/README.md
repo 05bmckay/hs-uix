@@ -33,6 +33,7 @@ That's a searchable, sortable, paginated table with auto-sized columns in 5 line
 - Click-to-sort headers with three-state cycling (none, ascending, descending)
 - Client-side or server-side pagination with configurable page size, visible page buttons, and First/Last navigation
 - Collapsible row groups with per-column aggregation functions
+- Expandable detail rows via `renderExpandedRow` — chevron or row-click toggle, optional accordion mode, controlled or uncontrolled, persists across pages and works inside groups
 - Row selection via checkboxes with client/server-aware "Select all" behavior and optional parent callback for dataset-level selection flows
 - Selection action bar with selected count, select/deselect all, and custom bulk action buttons
 - Per-row actions via `rowActions` (static array or dynamic function), with optional hide-on-selection behavior
@@ -571,6 +572,65 @@ groupBy={{
 
 ---
 
+### Expandable detail rows
+
+Pass `renderExpandedRow` and every row gets an expand toggle. Expanded content renders as an extra table row with a single cell spanning the full table width (`colSpan`) — ideal for descriptions, line items, audit info, or a nested layout that doesn't fit in columns.
+
+```jsx
+import React from "react";
+import { DescriptionList, DescriptionListItem, Text, hubspot } from "@hubspot/ui-extensions";
+import { DataTable } from "hs-uix/datatable";
+
+const COLUMNS = [
+  { field: "name", label: "Company", sortable: true },
+  { field: "owner", label: "Owner" },
+  { field: "amount", label: "Amount", align: "right" },
+];
+
+hubspot.extend(() => (
+  <DataTable
+    data={DEALS}
+    columns={COLUMNS}
+    pageSize={10}
+    renderExpandedRow={(row) => (
+      <DescriptionList direction="row">
+        <DescriptionListItem label="Notes"><Text>{row.notes || "--"}</Text></DescriptionListItem>
+        <DescriptionListItem label="Created"><Text>{row.createdAt}</Text></DescriptionListItem>
+        <DescriptionListItem label="Last activity"><Text>{row.lastActivity}</Text></DescriptionListItem>
+      </DescriptionList>
+    )}
+  />
+));
+```
+
+How it behaves:
+
+- **Toggle modes.** The default `expandOn="icon"` adds a narrow chevron column (native `downCarat`/`upCarat` icons) right next to the selection checkbox column. `expandOn="row"` drops the chevron column and toggles when the user clicks the row's cell content instead.
+- **Accordion.** Set `expandSingle={true}` and expanding a row collapses every other row.
+- **Controlled or uncontrolled.** Use `defaultExpandedRowIds` to seed initial state, or own it with `expandedRowIds` + `onExpandedRowsChange` (same pattern as `selectedIds`).
+- **Pagination.** State is keyed by row id (`rowIdField`), so expanded rows stay expanded when you page away and back. Rows without an id can't be expanded — same rule as selection.
+- **Grouping.** Detail rows render directly under their data row inside the group; collapsing the group hides them too.
+- **Column rendering required.** Like selection and editing, expansion injects cells into each row, so `renderRow` is ignored while `renderExpandedRow` is set — define your cells with `renderCell`.
+
+```jsx
+// Accordion, controlled, expand by clicking the row
+const [expanded, setExpanded] = React.useState([]);
+
+<DataTable
+  data={DEALS}
+  columns={COLUMNS}
+  renderExpandedRow={(row) => <Text>{row.notes}</Text>}
+  expandOn="row"
+  expandSingle={true}
+  expandedRowIds={expanded}
+  onExpandedRowsChange={setExpanded}
+/>
+```
+
+One platform tradeoff to know about: HubSpot's `TableRow` does not accept `onClick`, so `expandOn="row"` can't make the literal row surface clickable. Instead, DataTable wraps each cell's content in a quiet dark `Link` (the same pattern its group headers use). Clicks on cell padding/empty space don't toggle, and editable cells keep their click-to-edit behavior instead of toggling. If your `renderCell` returns its own interactive element (a `Link` or `Button`), prefer `expandOn="icon"` to avoid nested click targets.
+
+---
+
 ### Auto-width
 
 On by default. DataTable scans up to 50 rows and picks widths based on what's in each column. Disable with `autoWidth={false}` if you want full manual control.
@@ -892,6 +952,12 @@ function ServerSideTable({ runServerlessFunction }) {
 | `resetSelectionOnQueryChange` | boolean | `true` | Whether uncontrolled selection resets when search/filter/sort changes |
 | `rowActions` | Array \| `(row) => actions[]` | — | Per-row action buttons shown in a right-side actions column |
 | `hideRowActionsWhenSelectionActive` | boolean | `false` | Hide per-row action column while selected-row action bar is visible |
+| `renderExpandedRow` | `(row) => ReactNode` | — | Enables expandable detail rows. Content renders in a full-span row directly under the data row. |
+| `expandedRowIds` | Array | — | Controlled expansion — array of expanded row IDs. When provided, overrides internal expansion state. |
+| `defaultExpandedRowIds` | Array | `[]` | Initially expanded row IDs (uncontrolled mode) |
+| `onExpandedRowsChange` | `(ids[]) => void` | — | Called with the next expanded id array on every toggle |
+| `expandOn` | `"icon"` \| `"row"` | `"icon"` | Toggle affordance: chevron column next to the checkbox column, or click-on-row-content |
+| `expandSingle` | boolean | `false` | Accordion mode — expanding a row collapses all others |
 | `editMode` | `"discrete"` \| `"inline"` | `"discrete"` | Edit mode: click-to-edit or always-visible inputs |
 | `editingRowId` | string \| number | — | Full-row edit mode. When set, editable cells for that row render inline controls. |
 | `onRowEdit` | `(row, field, newValue) => void` | — | Called when an edit value is committed |
@@ -1020,7 +1086,7 @@ These come from HubSpot UI Extensions itself, not DataTable:
 | No pixel widths | `TableCell` `width` only accepts `"min"`, `"max"`, or `"auto"`. Numeric pixel values are silently ignored by HubSpot. |
 | Input alignment | HubSpot input components (Input, NumberInput, CurrencyInput, etc.) ignore parent `text-align` CSS. DataTable strips `align` when inputs are visible so headers and cells stay consistent. |
 | No multi-column sort | Only one column can be sorted at a time. |
-| No row expansion | No expand/collapse for individual row detail views. Row grouping works, but per-row expansion does not. |
+| No row `onClick` | HubSpot's `TableRow` doesn't accept `onClick`, so `expandOn="row"` wraps each cell's content in a clickable `Link` instead of making the whole row surface a click target. Cell padding/empty space doesn't toggle. |
 | No export | No built-in CSV/Excel export. You'd need to implement this in a serverless function. |
 | Validation on select/toggle/checkbox | `editValidate` only shows error UI on text-based inputs (text, number, currency, textarea, stepper). Select, toggle, and checkbox commit immediately and don't show `validationMessage`. |
 
@@ -1031,7 +1097,6 @@ These come from HubSpot UI Extensions itself, not DataTable:
 Planned for future releases:
 
 - Column visibility toggle so users can show/hide columns
-- Expandable rows with detail content below each row
 - Click-to-copy on individual cell values
 - Conditional formatting to color-code cells based on value rules
 - Per-column filter dropdowns in the header row

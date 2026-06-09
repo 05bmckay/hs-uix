@@ -177,6 +177,28 @@
  *   selected-row action bar is visible.
  *
  * ═══════════════════════════════════════════════════════════════════════════
+ * ROW EXPANSION / DETAIL ROWS:
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ *   <DataTable
+ *     renderExpandedRow={(row) => <DetailPanel row={row} />}  // enables the feature
+ *     expandOn="icon"                  // "icon" (chevron column) | "row" (click row content)
+ *     expandSingle={false}             // true = accordion (one row open at a time)
+ *     defaultExpandedRowIds={[1]}      // uncontrolled initial state
+ *     expandedRowIds={ids}             // OR controlled state...
+ *     onExpandedRowsChange={(ids) => setIds(ids)}  // ...with change callback
+ *   />
+ *
+ *   Expanded content renders as an extra TableRow with a single TableCell
+ *   spanning every column (colSpan). Expansion state is keyed by row id
+ *   (rowIdField), so it persists across pagination, and detail rows render
+ *   directly under their row inside groups. The chevron column sits next to
+ *   the selection checkbox column. Rows without ids cannot be expanded.
+ *
+ *   NOTE: like selection/editing, expansion requires column-based rendering —
+ *   renderRow is ignored while renderExpandedRow is set.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
  * INLINE EDITING:
  * ═══════════════════════════════════════════════════════════════════════════
  *
@@ -279,6 +301,11 @@ import { CollectionCount } from "../common-components/CollectionCount.js";
 import { CollectionToolbar } from "../common-components/CollectionToolbar.js";
 import { Icon } from "../common-components/Icon.js";
 import { editValidationError } from "./editValidation.js";
+import {
+  normalizeExpandedIds,
+  toggleExpandedId,
+  withDetailRows,
+} from "./rowExpansion.js";
 import {
   Box,
   Button,
@@ -545,6 +572,16 @@ export const DataTable = ({
   // -----------------------------------------------------------------------
   rowActions,             // [{ label, onClick(row), icon?, variant? }] or (row) => actions[]
   hideRowActionsWhenSelectionActive = false, // hide row action column while selected-row action bar is visible
+
+  // -----------------------------------------------------------------------
+  // Row expansion (detail rows)
+  // -----------------------------------------------------------------------
+  renderExpandedRow,      // (row) => ReactNode — providing this enables the feature
+  expandedRowIds: externalExpandedRowIds, // controlled — array of expanded row IDs
+  defaultExpandedRowIds,  // uncontrolled — initially expanded row IDs
+  onExpandedRowsChange,   // (expandedRowIds[]) => void
+  expandOn = "icon",      // "icon" (chevron toggle column) | "row" (click row content)
+  expandSingle = false,   // accordion mode — expanding a row collapses the others
 
   // -----------------------------------------------------------------------
   // Inline editing
@@ -869,6 +906,39 @@ export const DataTable = ({
     return rows;
   }, [groupedData, paginatedRows, expandedGroups]);
 
+  // ---------------------------------------------------------------------------
+  // Row expansion (detail rows)
+  // ---------------------------------------------------------------------------
+  const expandable = typeof renderExpandedRow === "function";
+  const showExpandColumn = expandable && expandOn === "icon";
+
+  const [internalExpandedRowIds, setInternalExpandedRowIds] = useState(
+    () => normalizeExpandedIds(defaultExpandedRowIds)
+  );
+  const expandedRowIds = useMemo(
+    () => (externalExpandedRowIds != null
+      ? normalizeExpandedIds(externalExpandedRowIds)
+      : internalExpandedRowIds),
+    [externalExpandedRowIds, internalExpandedRowIds]
+  );
+
+  const toggleRowExpanded = useCallback((rowId) => {
+    if (rowId == null) return; // rows without ids cannot be expanded
+    const next = toggleExpandedId(expandedRowIds, rowId, expandSingle);
+    if (externalExpandedRowIds == null) setInternalExpandedRowIds(next);
+    if (onExpandedRowsChange) onExpandedRowsChange([...next]);
+  }, [expandedRowIds, expandSingle, externalExpandedRowIds, onExpandedRowsChange]);
+
+  // Detail rows are interleaved AFTER pagination/grouping: expansion state is
+  // keyed by row id (so it persists across pages), and details land directly
+  // under their data row inside expanded groups. Derived counts (page row ids,
+  // shown-on-page) intentionally keep reading `displayRows` so detail rows
+  // never inflate them.
+  const renderedRows = useMemo(() => {
+    if (!expandable) return displayRows;
+    return withDetailRows(displayRows, expandedRowIds, rowIdField);
+  }, [expandable, displayRows, expandedRowIds, rowIdField]);
+
   // For footer callback — pass full filtered data (client) or current page (server)
   const footerData = serverSide ? data : filteredData;
 
@@ -1172,7 +1242,14 @@ export const DataTable = ({
   };
 
   const resolvedEditMode = editMode || (columns.some((col) => col.editable) ? "discrete" : null);
-  const useColumnRendering = selectable || !!resolvedEditMode || editingRowId != null || showRowActionsColumn || !renderRow;
+  const useColumnRendering = selectable || !!resolvedEditMode || editingRowId != null || showRowActionsColumn || expandable || !renderRow;
+
+  // Full table width in columns — the expanded-detail cell spans all of them.
+  const totalColumnCount =
+    columns.length +
+    (selectable ? 1 : 0) +
+    (showExpandColumn ? 1 : 0) +
+    (showRowActionsColumn ? 1 : 0);
 
   // ---------------------------------------------------------------------------
   // Auto-width computation
@@ -1547,6 +1624,7 @@ export const DataTable = ({
                   />
                 </TableHeader>
               )}
+              {showExpandColumn && <TableHeader width="min" />}
               {columns.map((col) => {
                 const headerAlign = (resolvedEditMode === "inline" && col.editable) ? undefined : col.align;
                 return (
@@ -1573,10 +1651,11 @@ export const DataTable = ({
           </TableHead>
 
           <TableBody>
-            {displayRows.map((item, idx) =>
+            {renderedRows.map((item, idx) =>
               item.type === "group-header" ? (
                 <TableRow key={`group-${item.group.key}`}>
                   {selectable && <TableCell width="min" />}
+                  {showExpandColumn && <TableCell width="min" />}
                   {columns.map((col, colIdx) => (
                     <TableCell key={col.field} width={getCellWidth(col)} align={colIdx === 0 ? undefined : col.align}>
                       {colIdx === 0 ? (
@@ -1604,6 +1683,12 @@ export const DataTable = ({
                   ))}
                   {showRowActionsColumn && <TableCell width="min" />}
                 </TableRow>
+              ) : item.type === "detail" ? (
+                <TableRow key={`detail-${item.row[rowIdField] ?? idx}`}>
+                  <TableCell colSpan={totalColumnCount}>
+                    {renderExpandedRow(item.row)}
+                  </TableCell>
+                </TableRow>
               ) : useColumnRendering ? (
                 <TableRow key={item.row[rowIdField] ?? idx}>
                   {selectable && (
@@ -1616,6 +1701,15 @@ export const DataTable = ({
                       />
                     </TableCell>
                   )}
+                  {showExpandColumn && (
+                    <TableCell width="min">
+                      <Icon
+                        name={expandedRowIds.has(item.row[rowIdField]) ? "upCarat" : "downCarat"}
+                        onClick={() => toggleRowExpanded(item.row[rowIdField])}
+                        screenReaderText={expandedRowIds.has(item.row[rowIdField]) ? "Collapse row" : "Expand row"}
+                      />
+                    </TableCell>
+                  )}
                   {columns.map((col) => {
                     const rowId = item.row[rowIdField];
                     const isDiscreteEditing = resolvedEditMode === "discrete" && editingCell?.rowId === rowId && editingCell?.field === col.field;
@@ -1623,9 +1717,19 @@ export const DataTable = ({
                     const isShowingInput = isDiscreteEditing || isRowEditing || (resolvedEditMode === "inline" && col.editable);
                     // Input components don't respect cell text-align — skip align when showing inputs
                     const cellAlign = isShowingInput ? undefined : col.align;
+                    const cellContent = renderCellContent(item.row, col);
+                    // expandOn="row": HubSpot's TableRow has no onClick, so the
+                    // closest native-safe equivalent is wrapping each cell's
+                    // content in a quiet Link (same pattern as group headers).
+                    // Editable cells keep their own click-to-edit affordance.
+                    const wrapInRowToggle = expandable && expandOn === "row" && !col.editable && !isShowingInput;
                     return (
                       <TableCell key={col.field} width={(isDiscreteEditing || isRowEditing) ? "auto" : getCellWidth(col)} align={cellAlign}>
-                        {renderCellContent(item.row, col)}
+                        {wrapInRowToggle ? (
+                          <Link variant="dark" onClick={() => toggleRowExpanded(rowId)}>
+                            {cellContent}
+                          </Link>
+                        ) : cellContent}
                       </TableCell>
                     );
                   })}
@@ -1663,6 +1767,7 @@ export const DataTable = ({
                 : (
                   <TableRow>
                     {selectable && <TableHeader width="min" />}
+                    {showExpandColumn && <TableHeader width="min" />}
                     {columns.map((col) => {
                       const footerDef = col.footer;
                       const content = typeof footerDef === "function"
