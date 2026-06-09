@@ -159,8 +159,9 @@ describe("normalizeRecordSelection", () => {
 
   it("accepts a scalar id or record and empty values", () => {
     expect(normalizeRecordSelection("5")).toEqual({ ids: ["5"], records: [] });
+    // Numeric ids normalize to strings so they match CRM search objectIds.
     const record = { id: 6 };
-    expect(normalizeRecordSelection(record)).toEqual({ ids: [6], records: [record] });
+    expect(normalizeRecordSelection(record)).toEqual({ ids: ["6"], records: [record] });
     expect(normalizeRecordSelection(undefined)).toEqual({ ids: [], records: [] });
     expect(normalizeRecordSelection("")).toEqual({ ids: [], records: [] });
   });

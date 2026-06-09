@@ -30,12 +30,15 @@ export const isRecordLike = (value) =>
  */
 export const getRecordId = (record) => {
   if (!isRecordLike(record)) return undefined;
-  return (
+  const id =
     record.objectId ??
     record.id ??
     record.hs_object_id ??
-    getByPath(record, "properties.hs_object_id")
-  );
+    getByPath(record, "properties.hs_object_id");
+  // CRM object ids are canonically strings; normalize so a numeric id in the
+  // consumer's `value` matches the string objectIds search rows come back with
+  // (strict-equality Maps/Sets would otherwise duplicate options).
+  return id == null ? undefined : String(id);
 };
 
 const toList = (value) =>
@@ -53,7 +56,8 @@ export const normalizeRecordSelection = (value) => {
   const records = [];
   const seen = new Set();
   for (const entry of toList(value)) {
-    const id = isRecordLike(entry) ? getRecordId(entry) : entry;
+    const rawId = isRecordLike(entry) ? getRecordId(entry) : entry;
+    const id = rawId == null || rawId === "" ? rawId : String(rawId);
     if (id == null || id === "" || seen.has(id)) continue;
     seen.add(id);
     ids.push(id);

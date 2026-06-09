@@ -12,7 +12,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import React, { useMemo, useRef, useState } from "react";
-import { MultiSelect, Select, useDebounce } from "@hubspot/ui-extensions";
+import { Flex, MultiSelect, SearchInput, Select, useDebounce } from "@hubspot/ui-extensions";
 import { resolveCrmObjectType, useCrmSearchOptions } from "../utils/crmSearchAdapters.js";
 import {
   enforceSelectionMax,
@@ -223,6 +223,7 @@ export const CrmRecordPicker = ({
   };
 
   const handleChange = (next) => {
+    if (createError) setCreateError(null);
     const { ids, create } = splitCreateSelection(next);
     const picked = ids.map((id) => recordsById.get(id)).filter(Boolean);
     if (picked.length) setSeenRecords((prev) => upsertRecords(prev, picked));
@@ -235,6 +236,11 @@ export const CrmRecordPicker = ({
       return;
     }
     commitChange(ids);
+  };
+
+  const handleSearchInput = (next) => {
+    setInputValue(next || "");
+    if (onSearchChange) onSearchChange(next || "");
   };
 
   const commonProps = {
@@ -260,12 +266,33 @@ export const CrmRecordPicker = ({
       (typeof dataSource.error === "string" ? dataSource.error : undefined),
     variant,
     onChange: handleChange,
-    onInput: (next) => {
-      setInputValue(next || "");
-      if (onSearchChange) onSearchChange(next || "");
-    },
     ...rest,
   };
 
-  return React.createElement(multi ? MultiSelect : Select, commonProps);
+  // Single mode: the native Select exposes onInput, so the dropdown's own
+  // search box can drive the CRM query directly.
+  if (!multi) {
+    return React.createElement(Select, { ...commonProps, onInput: handleSearchInput });
+  }
+
+  // Multi mode: MultiSelect declares NO onInput (an undeclared prop on a
+  // remote component silently no-ops), so the dropdown's filter box can't
+  // reach the CRM query. Render a SearchInput above the MultiSelect to drive
+  // the search — it's also what makes the inline-create option reachable.
+  return React.createElement(
+    Flex,
+    { direction: "column", gap: "xs" },
+    React.createElement(SearchInput, {
+      name: name ? `${name}-search` : undefined,
+      label: "",
+      placeholder: "Search CRM records...",
+      value: inputValue,
+      readOnly: readOnly || createPending,
+      onInput: handleSearchInput,
+      // The clear "x" emits onChange (not onInput) — wire both so clearing
+      // resets the term (same pattern as CollectionToolbar).
+      onChange: handleSearchInput,
+    }),
+    React.createElement(MultiSelect, commonProps)
+  );
 };

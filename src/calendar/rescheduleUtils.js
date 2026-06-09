@@ -58,8 +58,12 @@ export const shiftEvent = (range, shift) => {
 export const calendarDayDelta = (a, b) =>
   Math.round((startOfDay(b).getTime() - startOfDay(a).getTime()) / MS_PER_DAY);
 
-/** Milliseconds elapsed since local midnight of `d` (its wall-clock time-of-day). */
-export const msIntoDay = (d) => d.getTime() - startOfDay(d).getTime();
+/** Wall-clock time-of-day of `d` in ms, from the CLOCK FIELDS — not elapsed
+ * time since midnight, which is ±1 h off on a DST transition day (9:00 AM on
+ * a spring-forward day is only 8 elapsed hours after midnight). */
+export const msIntoDay = (d) =>
+  ((d.getHours() * 60 + d.getMinutes()) * 60 + d.getSeconds()) * 1000 +
+  d.getMilliseconds();
 
 /**
  * Move an event to an arbitrary new start, carrying the end with it. The end is
@@ -81,9 +85,21 @@ export const rescheduleToStart = (range, newStart) => {
   const dayDelta = calendarDayDelta(start, target);
   const timeDelta = msIntoDay(target) - msIntoDay(start);
   const endOnDay = addDays(end, dayDelta);
+  if (!timeDelta) return { start: target, end: endOnDay };
+  // Apply the wall-clock delta via field construction (not raw ms addition),
+  // so the end keeps its clock shape even when endOnDay itself is a DST
+  // transition day; field normalization rolls overnight spills correctly.
   return {
     start: target,
-    end: timeDelta ? new Date(endOnDay.getTime() + timeDelta) : endOnDay,
+    end: new Date(
+      endOnDay.getFullYear(),
+      endOnDay.getMonth(),
+      endOnDay.getDate(),
+      0,
+      0,
+      0,
+      msIntoDay(endOnDay) + timeDelta
+    ),
   };
 };
 

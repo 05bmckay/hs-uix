@@ -10,7 +10,7 @@
 // footer with a renderFooter escape hatch.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -115,6 +115,12 @@ export const Wizard = ({
   const [completedIds, setCompletedIds] = useState([]);
   const [error, setError] = useState(null);
   const [values, setValuesState] = useState(defaultValues);
+  // Mirror of `values` so setValues can compute the next bag OUTSIDE the
+  // state updater (updaters must stay pure — React may replay them under
+  // StrictMode/concurrent interruptions, which would double-fire
+  // onValuesChange) while still composing correctly across batched calls.
+  const valuesRef = useRef(values);
+  valuesRef.current = values;
 
   const isControlled = step !== undefined;
   // Keep internal state in sync while controlled so dropping the `step` prop
@@ -131,12 +137,12 @@ export const Wizard = ({
   const currentStep = currentIndex === -1 ? null : steps[currentIndex];
 
   const setValues = (patch) => {
-    setValuesState((prev) => {
-      const next =
-        typeof patch === "function" ? patch(prev) : { ...prev, ...(patch || {}) };
-      if (onValuesChange) onValuesChange(next);
-      return next;
-    });
+    const prev = valuesRef.current;
+    const next =
+      typeof patch === "function" ? patch(prev) : { ...prev, ...(patch || {}) };
+    valuesRef.current = next;
+    setValuesState(next);
+    if (onValuesChange) onValuesChange(next);
   };
 
   const moveTo = (index) => {

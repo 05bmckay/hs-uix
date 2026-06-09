@@ -1121,7 +1121,8 @@ export const Feed = ({
         </Alert>
       )
     );
-  } else if (processedItems.length === 0) {
+  } else if (processedItems.length === 0 && pendingNewCount === 0) {
+    // (buffered-only state shows just the new-items pill, not the empty state)
     bodyContent.push(
       renderEmptyState ? renderEmptyState({ title: labels.emptyTitle, message: labels.emptyMessage }) : (
         <Tile key="empty">

@@ -45,7 +45,8 @@ export interface WizardFooterContext extends WizardStepContext {
 export interface WizardStep {
   /** Stable identifier. Falls back to `step-<index>` when omitted. */
   id?: string | number;
-  title?: ReactNode;
+  /** Card heading. NOTE: the native Accordion (collapsible mode) only accepts a string title — a non-string node falls back to "Getting started". */
+  title?: ReactNode | string;
   description?: ReactNode;
   /** Optional steps never block jump-ahead reachability in linear mode. */
   optional?: boolean;
