@@ -75,8 +75,14 @@ export interface DateRangePickerRangeValue {
 
 export type DateRangePickerOperator =
   | "InRollingDateRange"
+  | "Equal"
+  | "BeforeDateStaticOrDynamic"
+  | "AfterDateStaticOrDynamic"
+  | "InRange"
   | "GreaterRolling"
-  | "InRange";
+  | "LessRolling"
+  | "Known"
+  | "NotKnown";
 
 export type DateRangePickerRollingUnit = "day" | "week" | "month" | "year";
 export type DateRangePickerRollingDirection = "backward" | "forward";
@@ -87,21 +93,32 @@ export interface DateRangePickerPresetValue {
 }
 
 export interface DateRangePickerRollingValue {
-  operator: "GreaterRolling";
+  operator: "GreaterRolling" | "LessRolling";
   amount?: number;
   unit?: DateRangePickerRollingUnit;
   direction?: DateRangePickerRollingDirection;
+}
+
+export interface DateRangePickerSingleDateValue {
+  operator: "Equal" | "BeforeDateStaticOrDynamic" | "AfterDateStaticOrDynamic";
+  date?: DateRangePickerDateValue | null;
 }
 
 export interface DateRangePickerExplicitRangeValue extends DateRangePickerRangeValue {
   operator: "InRange";
 }
 
+export interface DateRangePickerPresenceValue {
+  operator: "Known" | "NotKnown";
+}
+
 export type DateRangePickerValue =
   | DateRangePickerRangeValue
   | DateRangePickerPresetValue
+  | DateRangePickerSingleDateValue
   | DateRangePickerRollingValue
-  | DateRangePickerExplicitRangeValue;
+  | DateRangePickerExplicitRangeValue
+  | DateRangePickerPresenceValue;
 
 export interface DateRangePickerPresetOption {
   label: string;
@@ -113,6 +130,8 @@ export interface DateRangePickerPresetOption {
 
 export interface DateRangePickerChangeMeta {
   operator: DateRangePickerOperator;
+  /** Selected controlling CRM property, when field selection is enabled. */
+  field?: string | null;
   /** The preset key that produced the range, or null for manual edits / clear. */
   preset: string | null;
   range?: DateRangePickerRangeValue | null;
@@ -120,16 +139,24 @@ export interface DateRangePickerChangeMeta {
 }
 
 export interface DateRangePickerProps {
-  /** Controlled range. Either side may be null for an open-ended range. */
+  /** Controlled date filter value. Range sides may be null for an open-ended range. */
   value?: DateRangePickerValue;
-  /** Initial range for uncontrolled usage. */
+  /** Initial date filter value for uncontrolled usage. */
   defaultValue?: DateRangePickerValue;
-  /** Fires ONLY with valid ranges (from <= to, or a side null). */
+  /** Fires with normalized values. Explicit ranges only emit when valid (from <= to, or a side null). */
   onChange?: (range: DateRangePickerValue, meta: DateRangePickerChangeMeta) => void;
   /** Optional group label rendered above the control. */
   label?: ReactNode;
   /** Base for inner input names (`${name}-from`, `${name}-to`, `${name}-preset`). */
   name?: string;
+  /** Controlled CRM date/datetime property value for the field dropdown. */
+  field?: string;
+  /** Initial CRM date/datetime property value for uncontrolled field selection. */
+  defaultField?: string;
+  onFieldChange?: (field: string) => void;
+  /** Render a controlling field dropdown above the operator. */
+  showFieldSelect?: boolean;
+  fieldOptions?: Array<{ label: ReactNode; value: string }>;
   operator?: DateRangePickerOperator;
   defaultOperator?: DateRangePickerOperator;
   onOperatorChange?: (operator: DateRangePickerOperator) => void;
@@ -145,6 +172,9 @@ export interface DateRangePickerProps {
   max?: DateRangePickerDateValue;
   fromLabel?: string;
   toLabel?: string;
+  dateLabel?: string;
+  /** Keep DateInput labels visible. Defaults to false for compact filter rows. */
+  showDateLabels?: boolean;
   /** DateInput display format. Default "medium". */
   format?: "short" | "long" | "medium" | "standard" | "YYYY-MM-DD" | "L" | "LL" | "ll";
   presetPlaceholder?: string;
@@ -153,6 +183,8 @@ export interface DateRangePickerProps {
   invalidRangeMessage?: string;
   readOnly?: boolean;
   gap?: string;
+  /** Minimum column width for the field-enabled flexible AutoGrid layout. */
+  gridColumnWidth?: number;
 }
 
 export interface AvatarStackItemObject {
@@ -193,6 +225,61 @@ export interface AvatarStackProps {
   overflowColor?: string;
   fontFamily?: string;
   alt?: string;
+}
+
+export type IconSize =
+  | number
+  | "xs"
+  | "extra-small"
+  | "sm"
+  | "small"
+  | "md"
+  | "med"
+  | "medium"
+  | "lg"
+  | "large"
+  | "xl"
+  | "extra-large";
+
+export interface IconPathObject {
+  d: string;
+  fill?: string;
+  fillRule?: "nonzero" | "evenodd";
+}
+
+export type IconPath = string | IconPathObject;
+
+export interface IconEntry {
+  /** Defaults to "0 0 24 24" when omitted. */
+  viewBox?: string;
+  paths: IconPath[];
+  /** Optional transform applied to all paths (e.g. a mirror/rotation). */
+  transform?: string;
+}
+
+export interface IconProps {
+  /** A registered glyph name (native or custom). Unknown names render nothing. */
+  name: string;
+  /** A semantic token ("inherit" | "alert" | "warning" | "success") or any CSS color. */
+  color?: string;
+  size?: IconSize;
+  /** Accessible label for screen readers. */
+  screenReaderText?: string;
+  /** Passed through to native HubSpot Icon when possible; fallback Image also receives it. */
+  onClick?: (...args: unknown[]) => void;
+  /** Passed through to native HubSpot Icon when possible; fallback Image also receives it. */
+  href?: string | { url: string; external?: boolean };
+}
+
+export interface IconDataUriResult {
+  src: string;
+  width: number;
+  height: number;
+}
+
+export interface IconDataUriOptions {
+  size?: IconSize;
+  color?: string;
 }
 
 export interface CollectionFilterConfig {
@@ -514,6 +601,73 @@ export interface StyledTextDataUriOptions extends Omit<StyledTextSharedProps, "c
 
 export interface StyledTextProps extends StyledTextSharedProps {}
 
+export type SpinnerName =
+  | "braille"
+  | "braillewave"
+  | "dna"
+  | "scan"
+  | "rain"
+  | "scanline"
+  | "pulse"
+  | "snake"
+  | "sparkle"
+  | "cascade"
+  | "columns"
+  | "orbit"
+  | "breathe"
+  | "waverows"
+  | "checkerboard"
+  | "helix"
+  | "fillsweep"
+  | "diagswipe";
+
+export interface SpinnerPreset {
+  frames: readonly string[];
+  interval: number;
+}
+
+export interface SpinnerProps {
+  name?: SpinnerName | string;
+  frames?: readonly string[];
+  interval?: number;
+  label?: ReactNode;
+  children?: ReactNode;
+  paused?: boolean;
+  gap?: string;
+  variant?: "bodytext" | "microcopy";
+  format?: StyledTextFormat;
+  inline?: boolean;
+  truncate?: boolean | { tooltipText?: string };
+}
+
+export declare function AutoTag(props: AutoTagProps): ReactNode;
+export declare function AutoStatusTag(props: AutoStatusTagProps): ReactNode;
+export declare function ActiveFilterChips(props: ActiveFilterChipsProps): ReactNode;
+export declare function CollectionCount(props: CollectionCountProps): ReactNode;
+export declare function formatCollectionCount(params: FormatCollectionCountParams): ReactNode;
+export declare function CollectionFilterControl(props: CollectionFilterControlProps): ReactNode;
+export declare function CollectionSortSelect(props: CollectionSortSelectProps): ReactNode;
+export declare function CollectionToolbar(props: CollectionToolbarProps): ReactNode;
+export declare function SectionHeader(props: SectionHeaderProps): ReactNode;
+export declare function KeyValueList(props: KeyValueListProps): ReactNode;
+export declare function AvatarStack(props: AvatarStackProps): ReactNode;
+export declare function CrmLookupSelect(props: CrmLookupSelectProps): ReactNode;
+export declare function CrmRecordPicker(props: CrmRecordPickerProps): ReactNode;
+export declare function Icon(props: IconProps): ReactNode;
+/** Custom glyph names registered in this library (excludes native names). */
+export declare const ICON_NAMES: string[];
+/** The custom glyph registry, keyed by icon name. */
+export declare const ICONS: Record<string, IconEntry>;
+/** The native `@hubspot/ui-extensions` `<Icon>` name whitelist, sorted. */
+export declare const NATIVE_ICON_NAME_LIST: string[];
+/** Build an SVG data URI from a registered name or an inline entry. Null for unknown names. */
+export declare function makeIconDataUri(
+  nameOrEntry: string | IconEntry,
+  options?: IconDataUriOptions
+): IconDataUriResult | null;
+/** Parse a raw `<svg>` string into a registry entry (drops mask/defs, keeps per-path fills). */
+export declare function svgToIconEntry(raw: string): IconEntry;
+export declare function StyledText(props: StyledTextProps): ReactNode;
 export declare function Spinner(props: SpinnerProps): ReactNode;
 export declare const SPINNERS: Record<SpinnerName, SpinnerPreset>;
 export declare const SPINNER_NAMES: SpinnerName[];

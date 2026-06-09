@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **DateRangePicker**: expanded the HubSpot CRM date filter operator set beyond
+  preset / greater-than rolling / explicit range. It now supports static date
+  comparisons (`Equal`, `BeforeDateStaticOrDynamic`,
+  `AfterDateStaticOrDynamic`), less-than rolling (`LessRolling`), and presence
+  checks (`Known`, `NotKnown`), plus an optional CRM property field dropdown for
+  filter-builder rows. Public typings and common-component docs cover the new
+  value shapes and field-selection props.
+
 ## 2.1.0 — 2026-06-03
 
 - **New: `Calendar`** (`hs-uix/calendar`) — a presentational calendar surface.

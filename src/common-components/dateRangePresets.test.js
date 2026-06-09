@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  DATE_FILTER_OPERATORS,
   DATE_RANGE_CUSTOM_VALUE,
   compareHsDateValues,
   isValidDateRange,
@@ -18,6 +19,22 @@ const FRI_MAR_15_2024 = new Date(2024, 2, 15); // leap year, Friday
 const SUN_MAR_15_2026 = new Date(2026, 2, 15); // non-leap, Sunday
 const THU_FEB_29_2024 = new Date(2024, 1, 29); // leap day itself
 const SAT_JAN_2_2027 = new Date(2027, 0, 2); // week spans year boundary
+
+describe("DATE_FILTER_OPERATORS", () => {
+  it("covers HubSpot's CRM date filter operator values", () => {
+    expect(DATE_FILTER_OPERATORS.map((operator) => operator.value)).toEqual([
+      "InRollingDateRange",
+      "Equal",
+      "BeforeDateStaticOrDynamic",
+      "AfterDateStaticOrDynamic",
+      "InRange",
+      "GreaterRolling",
+      "LessRolling",
+      "Known",
+      "NotKnown",
+    ]);
+  });
+});
 
 describe("toHsDateValue", () => {
   it("converts a Date to a { year, month, date } value object", () => {

@@ -11,7 +11,7 @@ Reusable UI wrappers built on top of HubSpot UI Extensions primitives.
 - `CrmLookupSelect` — CRM-backed `Select` / `MultiSelect` with live, debounced search
 - `CrmRecordPicker` — multi-association record picker: search CRM records, select many, get ids AND records back, optional inline create
 - `CollectionToolbar`, `CollectionFilterControl`, `ActiveFilterChips`, `CollectionSortSelect`, `CollectionCount` — shared search/filter/sort/count primitives used by DataTable, Kanban, Feed, and Calendar
-- `DateRangePicker` — HubSpot-style date filter value control with `is`, rolling, and explicit-range operator layouts
+- `DateRangePicker` — HubSpot-style date filter value control with preset, static-date, rolling, range, and presence operator layouts
 - `SectionHeader` — title + optional description row
 - `KeyValueList` — vertical list of label/value rows
 - `StyledText` — SVG-rendered text with rotation, custom colors, pill backgrounds
@@ -135,7 +135,7 @@ const activeChips = buildActiveFilterChips(filters, filterValues);
 
 ## DateRangePicker
 
-HubSpot's CRM filter editor changes the value control based on the selected date operator. `DateRangePicker` follows that pattern: `is` renders a quick-preset `Select`, `is more than` renders a number plus rolling unit dropdown, and `is between` renders two `DateInput`s with a `to` separator. Its `onChange` payload preserves the operator so server-side CRM search builders can distinguish preset, rolling, and explicit range filters.
+HubSpot's CRM filter editor changes the value control based on the selected date operator. `DateRangePicker` follows that pattern: `is` renders a quick-preset `Select`, static comparisons render one date input, rolling comparisons render a number plus unit dropdown, `is between` renders two date inputs with a `to` separator, and known / unknown render no value input. Its `onChange` payload preserves the operator so server-side CRM search builders can distinguish preset, static-date, rolling, explicit-range, and presence filters.
 
 ```jsx
 import { DateRangePicker } from "hs-uix/common-components";
@@ -156,28 +156,34 @@ const [range, setRange] = useState({
 
 Features:
 
-- **HubSpot-style operator values.** The built-in operators are `InRollingDateRange` (`is`), `GreaterRolling` (`is more than`), and `InRange` (`is between`).
+- **HubSpot-style operator values.** The built-in operators are `InRollingDateRange` (`is`), `Equal` (`is equal to`), `BeforeDateStaticOrDynamic` (`is before`), `AfterDateStaticOrDynamic` (`is after`), `InRange` (`is between`), `GreaterRolling` (`is more than`), `LessRolling` (`is less than`), `Known` (`is known`), and `NotKnown` (`is unknown`).
 - **Presets can still resolve to dates.** Picking "Last quarter" includes the computed `{ from, to }` bounds in `meta.range` via `presetToRange`.
+- **Compact date inputs by default.** Date inputs use the same no-label treatment as `FilterBuilder` for CRM-filter-style rows. Set `showDateLabels` to `true` to render labels.
 - **Only valid explicit ranges escape.** If an `InRange` edit would make `from > to`, the invalid half is held locally with an error message and `onChange` is NOT called until the user fixes either side.
 - **Controlled or uncontrolled** via `value` / `defaultValue` / `onChange`.
 - **Plain `{ from, to }` compatibility.** Passing the older range shape is treated as `operator: "InRange"`.
 
 | Prop | Type | Default | Notes |
 | ---- | ---- | ------- | ----- |
-| `value` | operator value | — | Controlled value. Use `{ operator: "InRollingDateRange", preset }`, `{ operator: "GreaterRolling", amount, unit, direction }`, `{ operator: "InRange", from, to }`, or legacy `{ from, to }`. |
+| `value` | operator value | — | Controlled value. Use `{ operator: "InRollingDateRange", preset }`, `{ operator: "Equal", date }`, `{ operator: "BeforeDateStaticOrDynamic", date }`, `{ operator: "AfterDateStaticOrDynamic", date }`, `{ operator: "GreaterRolling", amount, unit, direction }`, `{ operator: "LessRolling", amount, unit, direction }`, `{ operator: "InRange", from, to }`, `{ operator: "Known" }`, `{ operator: "NotKnown" }`, or legacy `{ from, to }`. |
 | `defaultValue` | operator value | `{ operator: "InRollingDateRange", preset: "today" }` | Initial value for uncontrolled usage. |
-| `onChange` | `(value, meta) => void` | — | Fires with the normalized operator value. `meta` includes `{ operator, preset, range? }`. |
+| `onChange` | `(value, meta) => void` | — | Fires with the normalized operator value. `meta` includes `{ operator, field?, preset, range? }`. |
 | `label` | `ReactNode` | — | Group label rendered above the control. |
 | `name` | `string` | `"date-range"` | Base for inner input names. |
+| `field` / `defaultField` | `string` | — | Controlled or uncontrolled selected CRM property when `showFieldSelect` is enabled. |
+| `onFieldChange` | `(field) => void` | — | Fires when the field dropdown changes. |
+| `showFieldSelect` | `boolean` | `false` | Render a CRM property dropdown before the operator and value controls. |
+| `fieldOptions` | array | `[]` | Options for the field dropdown, shaped like `{ label, value }`. |
 | `operator` / `defaultOperator` | date operator | — / `"InRollingDateRange"` | Controlled or uncontrolled operator. |
 | `showOperatorSelect` | `boolean` | `true` | Render the operator dropdown. |
 | `operatorOptions` | array | `DATE_FILTER_OPERATORS` | Override operator labels or available operators. |
 | `presets` | `boolean \| array` | `true` | `true` = `HS_DATE_PRESETS`; `false` = no preset Select; or a custom `{ label, value, getRange? }` array — `value` is a `presetToRange` key, or supply `getRange(now)` for fully custom presets. |
 | `rollingUnitOptions` | array | `DATE_ROLLING_UNIT_OPTIONS` | Options for the rolling amount unit/direction dropdown. |
-| `direction` | `"row" \| "column"` | `"row"` | Row uses placeholders on the date inputs; column uses labels. |
-| `clearable` | `boolean` | `false` | Show a Clear link when the range is non-empty. Clearing commits `{ from: null, to: null }`. |
+| `direction` | `"row" \| "column"` | `"row"` | Layout direction for the operator/value controls. |
+| `clearable` | `boolean` | `false` | Show a Clear link when the current operator has a non-empty value. |
 | `min` / `max` | date object | — | Passed through to both `DateInput`s. |
-| `fromLabel` / `toLabel` | `string` | `"Start date"` / `"End date"` | Date input text in column mode. |
+| `fromLabel` / `toLabel` / `dateLabel` | `string` | `"Start date"` / `"End date"` / `"Date"` | Date input labels used when `showDateLabels` is true. |
+| `showDateLabels` | `boolean` | `false` | Render DateInput labels visibly instead of the compact no-label CRM-filter layout. |
 | `format` | `string` | `"medium"` | `DateInput` display format. |
 | `presetPlaceholder` | `string` | `"Enter value"` | Placeholder for the preset Select. |
 | `customPresetLabel` | `string` | `"Custom"` | Label for the appended Custom option. |
@@ -185,6 +191,7 @@ Features:
 | `invalidRangeMessage` | `string` | `"Start date must be on or before end date"` | Shown on the held invalid input. |
 | `readOnly` | `boolean` | `false` | Pass-through to all inner controls (also hides the Clear link). |
 | `gap` | `string` | `"xs"` row / `"sm"` column | Flex gap between controls. |
+| `gridColumnWidth` | `number` | `260` | Minimum column width for the field-enabled flexible AutoGrid layout. |
 
 ### Pure helpers (`dateRangePresets.js`)
 

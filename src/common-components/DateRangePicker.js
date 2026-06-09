@@ -3,8 +3,10 @@
 //
 // The UI mirrors HubSpot's CRM filter editor:
 // - "is" renders a quick preset Select (Today, This week, Last 30 days...)
-// - "is more than" renders NumberInput + rolling unit/direction Select
+// - static comparison operators render one DateInput
+// - rolling comparison operators render NumberInput + rolling unit/direction Select
 // - "is between" renders a start DateInput, "to", and an end DateInput
+// - known / unknown render no value input
 //
 // `onChange` receives a structured value that preserves the selected operator.
 // For compatibility, a plain `{ from, to }` value is treated as `InRange`.
@@ -12,6 +14,8 @@
 
 import React, { useState } from "react";
 import {
+  AutoGrid,
+  Box,
   DateInput,
   Flex,
   Link,
@@ -31,10 +35,22 @@ import {
 const h = React.createElement;
 
 const IN_ROLLING = "InRollingDateRange";
+const EQUAL = "Equal";
+const BEFORE = "BeforeDateStaticOrDynamic";
+const AFTER = "AfterDateStaticOrDynamic";
 const GREATER_ROLLING = "GreaterRolling";
+const LESS_ROLLING = "LessRolling";
 const IN_RANGE = "InRange";
+const KNOWN = "Known";
+const NOT_KNOWN = "NotKnown";
 
 const EMPTY_RANGE = { from: null, to: null };
+const EMPTY_DATE = { date: null };
+const COMPACT_LABEL = "";
+
+const STATIC_DATE_OPERATORS = new Set([EQUAL, BEFORE, AFTER]);
+const ROLLING_OPERATORS = new Set([GREATER_ROLLING, LESS_ROLLING]);
+const PRESENCE_OPERATORS = new Set([KNOWN, NOT_KNOWN]);
 
 const keyOfDate = (v) => (v ? `${v.year}-${v.month}-${v.date}` : "");
 const keyOfRange = (r) => `${keyOfDate(r?.from)}|${keyOfDate(r?.to)}`;
@@ -56,13 +72,19 @@ const normalizeValue = (value) => {
   if (operator === IN_RANGE) {
     return { operator, from: value.from ?? null, to: value.to ?? null };
   }
-  if (operator === GREATER_ROLLING) {
+  if (STATIC_DATE_OPERATORS.has(operator)) {
+    return { operator, date: value.date ?? null };
+  }
+  if (ROLLING_OPERATORS.has(operator)) {
     return {
       operator,
       amount: Number.isFinite(Number(value.amount)) ? Number(value.amount) : 1,
       unit: value.unit || "day",
       direction: value.direction || "backward",
     };
+  }
+  if (PRESENCE_OPERATORS.has(operator)) {
+    return { operator };
   }
   return { operator: IN_ROLLING, preset: value.preset || value.value || "today" };
 };
@@ -90,6 +112,11 @@ export const DateRangePicker = ({
   onChange,
   label,
   name = "date-range",
+  field,
+  defaultField,
+  onFieldChange,
+  showFieldSelect = false,
+  fieldOptions = [],
   operator,
   defaultOperator = IN_ROLLING,
   onOperatorChange,
@@ -103,6 +130,8 @@ export const DateRangePicker = ({
   max,
   fromLabel = "Start date",
   toLabel = "End date",
+  dateLabel = "Date",
+  showDateLabels = false,
   format = "medium",
   presetPlaceholder = "Enter value",
   customPresetLabel = "Custom",
@@ -110,14 +139,19 @@ export const DateRangePicker = ({
   invalidRangeMessage = "Start date must be on or before end date",
   readOnly = false,
   gap,
+  gridColumnWidth = 260,
 }) => {
   const isControlled = value !== undefined;
   const controlledValue = normalizeValue(value);
   const [internalValue, setInternalValue] = useState(() =>
     normalizeValue(defaultValue ?? { operator: defaultOperator })
   );
+  const [internalField, setInternalField] = useState(() =>
+    defaultField ?? fieldOptions?.[0]?.value ?? ""
+  );
   const current = normalizeValue(isControlled ? controlledValue : internalValue);
   const currentOperator = operator || current.operator || defaultOperator;
+  const currentField = field !== undefined ? field : internalField;
   const resolvedCurrent = normalizeValue({ ...current, operator: currentOperator });
   const [pending, setPending] = useState(null);
   const [lastPreset, setLastPreset] = useState({
@@ -131,6 +165,7 @@ export const DateRangePicker = ({
     clearable &&
     !readOnly &&
     (resolvedCurrent.preset ||
+      resolvedCurrent.date ||
       resolvedCurrent.amount ||
       resolvedCurrent.from ||
       resolvedCurrent.to ||
@@ -144,8 +179,19 @@ export const DateRangePicker = ({
     }
     onChange?.(normalized, {
       operator: normalized.operator,
+      field: currentField || null,
       preset: normalized.operator === IN_ROLLING ? normalized.preset ?? null : null,
       ...meta,
+    });
+  };
+
+  const handleFieldChange = (nextField) => {
+    if (field === undefined) setInternalField(nextField);
+    onFieldChange?.(nextField);
+    onChange?.(resolvedCurrent, {
+      operator: resolvedCurrent.operator,
+      field: nextField || null,
+      preset: resolvedCurrent.operator === IN_ROLLING ? resolvedCurrent.preset ?? null : null,
     });
   };
 
@@ -153,11 +199,15 @@ export const DateRangePicker = ({
     setPending(null);
     if (nextOperator === IN_RANGE) {
       emit({ operator: IN_RANGE, ...EMPTY_RANGE }, { previousOperator: currentOperator });
-    } else if (nextOperator === GREATER_ROLLING) {
+    } else if (STATIC_DATE_OPERATORS.has(nextOperator)) {
+      emit({ operator: nextOperator, ...EMPTY_DATE }, { previousOperator: currentOperator });
+    } else if (ROLLING_OPERATORS.has(nextOperator)) {
       emit(
-        { operator: GREATER_ROLLING, amount: 1, unit: "day", direction: "backward" },
+        { operator: nextOperator, amount: 1, unit: "day", direction: "backward" },
         { previousOperator: currentOperator }
       );
+    } else if (PRESENCE_OPERATORS.has(nextOperator)) {
+      emit({ operator: nextOperator }, { previousOperator: currentOperator });
     } else {
       emit({ operator: IN_ROLLING, preset: "today" }, { previousOperator: currentOperator });
     }
@@ -185,7 +235,7 @@ export const DateRangePicker = ({
   const handleRollingUnitChange = (compound) => {
     const [unit, unitDirection] = String(compound || "day:backward").split(":");
     emit({
-      operator: GREATER_ROLLING,
+      operator: currentOperator,
       amount: resolvedCurrent.amount || 1,
       unit,
       direction: unitDirection || "backward",
@@ -207,13 +257,21 @@ export const DateRangePicker = ({
     }
   };
 
+  const handleStaticDateChange = (next) => {
+    emit({ operator: currentOperator, date: next ?? null });
+  };
+
   const handleClear = () => {
     setPending(null);
     setLastPreset({ key: "", rangeKey: null });
     if (currentOperator === IN_RANGE) {
       emit({ operator: IN_RANGE, ...EMPTY_RANGE });
-    } else if (currentOperator === GREATER_ROLLING) {
-      emit({ operator: GREATER_ROLLING, amount: 1, unit: "day", direction: "backward" });
+    } else if (STATIC_DATE_OPERATORS.has(currentOperator)) {
+      emit({ operator: currentOperator, ...EMPTY_DATE });
+    } else if (ROLLING_OPERATORS.has(currentOperator)) {
+      emit({ operator: currentOperator, amount: 1, unit: "day", direction: "backward" });
+    } else if (PRESENCE_OPERATORS.has(currentOperator)) {
+      emit({ operator: currentOperator });
     } else {
       emit({ operator: IN_ROLLING, preset: "" });
     }
@@ -223,6 +281,7 @@ export const DateRangePicker = ({
     ? h(Select, {
         key: "operator",
         name: `${name}-operator`,
+        label: COMPACT_LABEL,
         options: operatorOptions,
         value: currentOperator,
         onChange: handleOperatorChange,
@@ -230,7 +289,22 @@ export const DateRangePicker = ({
       })
     : null;
 
+  const fieldSelect = showFieldSelect
+    ? h(Select, {
+        key: "field",
+        name: `${name}-field`,
+        label: "",
+        options: fieldOptions,
+        value: currentField,
+        onChange: handleFieldChange,
+        readOnly,
+      })
+    : null;
+
   let valueInput = null;
+  const fromInputLabel = showDateLabels ? fromLabel : COMPACT_LABEL;
+  const toInputLabel = showDateLabels ? toLabel : COMPACT_LABEL;
+  const singleDateInputLabel = showDateLabels ? dateLabel : COMPACT_LABEL;
 
   if (currentOperator === IN_RANGE) {
     const committed = rangeFromValue(resolvedCurrent);
@@ -243,7 +317,7 @@ export const DateRangePicker = ({
       h(DateInput, {
         key: "from",
         name: `${name}-from`,
-        label: fromLabel,
+        label: fromInputLabel,
         format,
         value: display.from ?? null,
         onChange: (next) => handleDateChange("from", next),
@@ -257,7 +331,7 @@ export const DateRangePicker = ({
       h(DateInput, {
         key: "toDate",
         name: `${name}-to`,
-        label: toLabel,
+        label: toInputLabel,
         format,
         value: display.to ?? null,
         onChange: (next) => handleDateChange("to", next),
@@ -268,18 +342,30 @@ export const DateRangePicker = ({
         validationMessage: invalidSide === "to" ? invalidRangeMessage : undefined,
       }),
     ];
-  } else if (currentOperator === GREATER_ROLLING) {
+  } else if (STATIC_DATE_OPERATORS.has(currentOperator)) {
+    valueInput = h(DateInput, {
+      key: "date",
+      name: `${name}-date`,
+      label: singleDateInputLabel,
+      format,
+      value: resolvedCurrent.date ?? null,
+      onChange: handleStaticDateChange,
+      min,
+      max,
+      readOnly,
+    });
+  } else if (ROLLING_OPERATORS.has(currentOperator)) {
     const compound = `${resolvedCurrent.unit || "day"}:${resolvedCurrent.direction || "backward"}`;
     valueInput = [
       h(NumberInput, {
         key: "amount",
         name: `${name}-amount`,
-        label: "",
+        label: COMPACT_LABEL,
         min: 0,
         value: resolvedCurrent.amount ?? 1,
         onChange: (amount) =>
           emit({
-            operator: GREATER_ROLLING,
+            operator: currentOperator,
             amount: Number.isFinite(Number(amount)) ? Number(amount) : 0,
             unit: resolvedCurrent.unit || "day",
             direction: resolvedCurrent.direction || "backward",
@@ -289,12 +375,15 @@ export const DateRangePicker = ({
       h(Select, {
         key: "unit",
         name: `${name}-rolling-unit`,
+        label: COMPACT_LABEL,
         options: rollingUnitOptions,
         value: compound,
         onChange: handleRollingUnitChange,
         readOnly,
       }),
     ];
+  } else if (PRESENCE_OPERATORS.has(currentOperator)) {
+    valueInput = null;
   } else {
     const range = presetToRange(resolvedCurrent.preset);
     const presetValue =
@@ -305,6 +394,7 @@ export const DateRangePicker = ({
     valueInput = h(Select, {
       key: "preset",
       name: `${name}-preset`,
+      label: COMPACT_LABEL,
       placeholder: presetPlaceholder,
       options: presetOptions || [],
       value: presetValue,
@@ -313,11 +403,43 @@ export const DateRangePicker = ({
     });
   }
 
-  const children = [
-    operatorSelect,
-    ...(Array.isArray(valueInput) ? valueInput : [valueInput]),
+  const valueChildren = [
+    ...(Array.isArray(valueInput) ? valueInput : valueInput ? [valueInput] : []),
     showClear ? h(Link, { key: "clear", onClick: handleClear }, clearLabel) : null,
   ];
+  const children = [operatorSelect, ...valueChildren];
+
+  if (fieldSelect) {
+    const rowChildren = [
+      h(Box, { key: "field-box", flex: "auto", alignSelf: "stretch" }, fieldSelect),
+      operatorSelect
+        ? h(Box, { key: "operator-box", flex: "auto", alignSelf: "stretch" }, operatorSelect)
+        : null,
+      ...valueChildren.map((child, index) =>
+        child?.type === Text || child?.type === Link
+          ? child
+          : h(Box, { key: `value-box-${index}`, flex: "auto", alignSelf: "stretch" }, child)
+      ),
+    ].filter(Boolean);
+
+    const fieldControl = h(
+      AutoGrid,
+      {
+        columnWidth: gridColumnWidth,
+        flexible: true,
+        gap: gap ?? "xs",
+      },
+      ...rowChildren
+    );
+
+    if (!label) return fieldControl;
+    return h(
+      Flex,
+      { direction: "column", gap: "xs" },
+      h(Text, { format: { fontWeight: "demibold" } }, label),
+      fieldControl
+    );
+  }
 
   const control = h(
     Flex,

@@ -20,8 +20,14 @@ export const DATE_RANGE_CUSTOM_VALUE = "custom";
 
 export const DATE_FILTER_OPERATORS = [
   { label: "is", value: "InRollingDateRange" },
-  { label: "is more than", value: "GreaterRolling" },
+  { label: "is equal to", value: "Equal" },
+  { label: "is before", value: "BeforeDateStaticOrDynamic" },
+  { label: "is after", value: "AfterDateStaticOrDynamic" },
   { label: "is between", value: "InRange" },
+  { label: "is more than", value: "GreaterRolling" },
+  { label: "is less than", value: "LessRolling" },
+  { label: "is known", value: "Known" },
+  { label: "is unknown", value: "NotKnown" },
 ];
 
 export const DATE_ROLLING_UNIT_OPTIONS = [
