@@ -13,10 +13,11 @@ import { KeyValueList } from "../common-components/KeyValueList.js";
 import { Feed } from "../feed/Feed.jsx";
 import { Calendar } from "../calendar/Calendar.jsx";
 import { CrmDataTable, CrmKanban } from "../utils/crmSearchAdapters.js";
-import { SAFE_ARRAY_PROPS } from "./catalogs.js";
+import { SAFE_ARRAY_PROPS, SAFE_DERIVE_PROPS } from "./catalogs.js";
 import { withSafeArrayProps } from "./withSafeArrayProps.js";
 
-const wrap = (Component, name) => withSafeArrayProps(Component, name, SAFE_ARRAY_PROPS[name]);
+const wrap = (Component, name) =>
+  withSafeArrayProps(Component, name, SAFE_ARRAY_PROPS[name] ?? [], SAFE_DERIVE_PROPS[name] ?? []);
 
 // Native @hubspot/ui-extensions
 export const SafeSelect = wrap(Select, "Select");

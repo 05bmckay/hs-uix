@@ -8,6 +8,12 @@
 // (reading 'length')"), which blanks the whole extension in production.
 // Coercing the required array props to [] degrades to the component's own
 // empty state instead.
+//
+// `derivePropNames` covers the optional-with-fallback flavor (CrmDataTable
+// columns, CrmKanban stages): those components auto-derive the prop when it's
+// OMITTED, and an empty array would suppress that (`columns || infer` — [] is
+// truthy). So derive props are left alone when null/undefined and DROPPED
+// (with a warn) when set to a non-array, keeping the derive path alive.
 // ═══════════════════════════════════════════════════════════════════════════
 
 import React from "react";
@@ -29,17 +35,33 @@ const arrayProp = (value, componentName, propName) => {
  * @param {string[]} propNames    props to force to arrays: null/undefined → []
  *                                silently, any other non-array → [] with a
  *                                one-time console.warn
- * @returns a drop-in wrapper, displayName `Safe<componentName>`
+ * @param {string[]} [derivePropNames]  auto-derived-when-omitted props:
+ *                                null/undefined pass through untouched (so the
+ *                                component still derives them); non-arrays are
+ *                                dropped with a one-time console.warn
+ * @returns a drop-in wrapper (refs forward through), displayName
+ *          `Safe<componentName>`
  */
-export function withSafeArrayProps(Component, componentName, propNames) {
+export function withSafeArrayProps(Component, componentName, propNames, derivePropNames = []) {
   if (!Component) return undefined;
-  const SafeComponent = (props) => {
+  // forwardRef so wrapped forwardRef components (FormBuilder's imperative
+  // ref API) stay drop-ins.
+  const SafeComponent = React.forwardRef((props, ref) => {
     const next = { ...(props || {}) };
     for (const propName of propNames) {
       next[propName] = arrayProp(next[propName], componentName, propName);
     }
-    return React.createElement(Component, next);
-  };
+    for (const propName of derivePropNames) {
+      const value = next[propName];
+      if (value == null || Array.isArray(value)) continue;
+      warnOnce(
+        `${componentName}-${propName}-not-array`,
+        `[hs-uix/safe] ${componentName}.${propName} must be an array — received ${typeof value}; omitting it so ${componentName} derives it automatically.`
+      );
+      delete next[propName];
+    }
+    return React.createElement(Component, ref != null ? { ...next, ref } : next);
+  });
   SafeComponent.displayName = `Safe${componentName}`;
   return SafeComponent;
 }

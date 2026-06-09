@@ -7,6 +7,7 @@ import {
   TREND_DIRECTIONS,
   TREND_DIRECTION_ALIASES,
   SAFE_ARRAY_PROPS,
+  SAFE_DERIVE_PROPS,
 } from "./catalogs.js";
 
 describe("catalogs", () => {
@@ -43,7 +44,7 @@ describe("catalogs", () => {
   });
 
   it("lists required array props as non-empty string arrays", () => {
-    expect(Object.keys(SAFE_ARRAY_PROPS).length).toBe(13);
+    expect(Object.keys(SAFE_ARRAY_PROPS).length).toBe(12);
     for (const [name, props] of Object.entries(SAFE_ARRAY_PROPS)) {
       expect(Array.isArray(props), name).toBe(true);
       expect(props.length, name).toBeGreaterThan(0);
@@ -51,5 +52,17 @@ describe("catalogs", () => {
     }
     // the native StepIndicator prop is stepNames (not steps)
     expect(SAFE_ARRAY_PROPS.StepIndicator).toEqual(["stepNames"]);
+  });
+
+  it("keeps derive props disjoint from coerced props", () => {
+    expect(SAFE_DERIVE_PROPS).toEqual({
+      CrmDataTable: ["columns"],
+      CrmKanban: ["stages"],
+    });
+    for (const [name, props] of Object.entries(SAFE_DERIVE_PROPS)) {
+      for (const p of props) {
+        expect((SAFE_ARRAY_PROPS[name] ?? []).includes(p), `${name}.${p}`).toBe(false);
+      }
+    }
   });
 });

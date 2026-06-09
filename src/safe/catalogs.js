@@ -89,6 +89,15 @@ export const SAFE_ARRAY_PROPS = {
   KeyValueList: ["items"],
   Feed: ["items", "fields"],
   Calendar: ["events"],
+  CrmKanban: ["cardFields"],
+};
+
+// Auto-derived-when-omitted collection props. These must NOT coerce to [] —
+// CrmDataTable resolves `columns || inferCrmColumns(...)` and CrmKanban does
+// `if (stages) return stages;`, and [] is truthy, so coercion would silently
+// disable the documented auto-derivation. Invalid non-array values are
+// dropped instead (the derive path takes over), with a one-time warn.
+export const SAFE_DERIVE_PROPS = {
   CrmDataTable: ["columns"],
-  CrmKanban: ["stages", "cardFields"],
+  CrmKanban: ["stages"],
 };

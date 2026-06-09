@@ -23,8 +23,14 @@ export declare const EMPTY_STATE_IMAGE_ALIASES: Readonly<Record<string, string>>
 export declare const TREND_DIRECTIONS: ReadonlySet<string>;
 /** Common direction mistakes ("increasing", "up", …) → a valid value. */
 export declare const TREND_DIRECTION_ALIASES: Readonly<Record<string, string>>;
-/** Required collection props per component name, as used by the Safe* exports. */
+/** Required collection props per component name (coerced to []), as used by the Safe* exports. */
 export declare const SAFE_ARRAY_PROPS: Readonly<Record<string, readonly string[]>>;
+/**
+ * Auto-derived-when-omitted collection props (CrmDataTable columns, CrmKanban
+ * stages). Never coerced to [] — that would suppress the derive path; invalid
+ * non-array values are dropped instead.
+ */
+export declare const SAFE_DERIVE_PROPS: Readonly<Record<string, readonly string[]>>;
 
 // ---------------------------------------------------------------------------
 // Warning dedup
@@ -42,12 +48,16 @@ export declare function resetSafeWarnings(): void;
 /**
  * Wrap any component so the listed props are always arrays: null/undefined
  * coerce to [] silently, any other non-array coerces to [] with a one-time
- * console.warn. Returns a drop-in with displayName `Safe<componentName>`.
+ * console.warn. `derivePropNames` lists auto-derived-when-omitted props,
+ * which instead pass null/undefined through and DROP invalid non-arrays so
+ * the component's own derivation still runs. Refs forward through. Returns a
+ * drop-in with displayName `Safe<componentName>`.
  */
 export declare function withSafeArrayProps<Props extends object>(
   Component: ComponentType<Props>,
   componentName: string,
-  propNames: ReadonlyArray<string>
+  propNames: ReadonlyArray<string>,
+  derivePropNames?: ReadonlyArray<string>
 ): ComponentType<Props>;
 
 // ---------------------------------------------------------------------------
@@ -105,26 +115,44 @@ export declare const SafeToggleGroup: ComponentType<SafeOptionsProps>;
 export declare const SafeStepIndicator: ComponentType<SafeStepIndicatorProps>;
 
 // ---------------------------------------------------------------------------
-// Hardened hs-uix components (same props as the originals; their required
-// array props additionally accept null/undefined and degrade to empty)
+// Hardened hs-uix components — same props as the originals, except the
+// coerced collection props (see SAFE_ARRAY_PROPS / SAFE_DERIVE_PROPS) also
+// accept null/undefined, matching the runtime tolerance that is the point of
+// these wrappers.
 // ---------------------------------------------------------------------------
 
+/** The original props with the hardened collection props widened to optional-and-nullable. */
+type WithNullableArrays<Props, K extends keyof Props> = Omit<Props, K> & {
+  [P in K]?: Props[P] | null;
+};
+
 export declare function SafeDataTable<Row = Record<string, unknown>>(
-  props: DataTableProps<Row>
+  props: WithNullableArrays<
+    DataTableProps<Row>,
+    "data" | "columns" | "searchFields" | "filters" | "selectionActions"
+  >
 ): ReactNode;
 export declare function SafeKanban<Row = Record<string, unknown>, Id = string | number>(
-  props: KanbanProps<Row, Id>
+  props: WithNullableArrays<KanbanProps<Row, Id>, "data" | "stages">
 ): ReactNode;
-export declare const SafeFormBuilder: ComponentType<FormBuilderProps>;
-export declare function SafeFeed<Row = FeedItem>(props: FeedProps<Row>): ReactNode;
+export declare const SafeFormBuilder: ComponentType<
+  WithNullableArrays<FormBuilderProps, "fields">
+>;
+export declare function SafeFeed<Row = FeedItem>(
+  props: WithNullableArrays<FeedProps<Row>, "items" | "fields">
+): ReactNode;
 export declare function SafeCalendar<Event = Record<string, unknown>>(
-  props: CalendarProps<Event>
+  props: WithNullableArrays<CalendarProps<Event>, "events">
 ): ReactNode;
-export declare const SafeAvatarStack: ComponentType<AvatarStackProps>;
-export declare const SafeKeyValueList: ComponentType<KeyValueListProps>;
+export declare const SafeAvatarStack: ComponentType<
+  WithNullableArrays<AvatarStackProps, "items">
+>;
+export declare const SafeKeyValueList: ComponentType<
+  WithNullableArrays<KeyValueListProps, "items">
+>;
 export declare function SafeCrmDataTable<Row = Record<string, unknown>>(
-  props: CrmDataTableProps<Row>
+  props: WithNullableArrays<CrmDataTableProps<Row>, "columns">
 ): ReactNode;
 export declare function SafeCrmKanban<Row = Record<string, unknown>>(
-  props: CrmKanbanProps<Row>
+  props: WithNullableArrays<CrmKanbanProps<Row>, "stages" | "cardFields">
 ): ReactNode;

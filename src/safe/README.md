@@ -46,7 +46,8 @@ import {
 
 Required collection props are forced to arrays: `null`/`undefined` → `[]`
 silently, any other non-array → `[]` with a one-time warn. The component's own
-empty state renders instead of the page blanking.
+empty state renders instead of the page blanking. Refs forward through, so
+`SafeFormBuilder` keeps FormBuilder's imperative ref API.
 
 | Component | Coerced props |
 |---|---|
@@ -58,16 +59,22 @@ empty state renders instead of the page blanking.
 | `SafeAvatarStack` / `SafeKeyValueList` | `items` |
 | `SafeFeed` | `items`, `fields` |
 | `SafeCalendar` | `events` |
-| `SafeCrmDataTable` | `columns` |
-| `SafeCrmKanban` | `stages`, `cardFields` |
+| `SafeCrmKanban` | `cardFields` |
+
+`SafeCrmDataTable.columns` and `SafeCrmKanban.stages` are different: those
+props **auto-derive when omitted** (columns from CRM properties, stages from
+the batch), and a coerced `[]` would silently turn derivation off. They pass
+`null`/`undefined` through untouched, and an invalid non-array is *dropped*
+(with a warn) so the derive path takes over.
 
 Wrap anything else yourself:
 
 ```js
-import { withSafeArrayProps, SAFE_ARRAY_PROPS } from "hs-uix/safe";
+import { withSafeArrayProps, SAFE_ARRAY_PROPS, SAFE_DERIVE_PROPS } from "hs-uix/safe";
 
 const SafeMyList = withSafeArrayProps(MyList, "MyList", ["entries"]);
-// SAFE_ARRAY_PROPS holds the per-component prop lists used above
+// withSafeArrayProps(Component, name, arrayProps, deriveProps?) — the
+// SAFE_ARRAY_PROPS / SAFE_DERIVE_PROPS registries hold the lists used above
 ```
 
 ### Catalogs

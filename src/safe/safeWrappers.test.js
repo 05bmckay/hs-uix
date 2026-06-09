@@ -5,7 +5,13 @@ import { SafeIcon } from "./SafeIcon.js";
 import { SafeEmptyState } from "./SafeEmptyState.js";
 import { SafeStatisticsTrend } from "./SafeStatisticsTrend.js";
 import { SafePopover } from "./SafePopover.js";
-import { SafeSelect, SafeDataTable } from "./safeComponents.js";
+import {
+  SafeSelect,
+  SafeDataTable,
+  SafeCrmDataTable,
+  SafeCrmKanban,
+  SafeFormBuilder,
+} from "./safeComponents.js";
 import { resetSafeWarnings } from "./warnings.js";
 
 beforeEach(() => {
@@ -106,20 +112,43 @@ describe("SafePopover", () => {
 });
 
 describe("pre-wrapped components", () => {
+  // forwardRef components — invoke .render directly to inspect the element.
   it("SafeSelect coerces options", () => {
-    const el = SafeSelect({ label: "L" });
+    const el = SafeSelect.render({ label: "L" }, null);
     expect(el.type).toBe(Select);
     expect(el.props.options).toEqual([]);
     expect(el.props.label).toBe("L");
   });
 
   it("SafeDataTable coerces every required collection prop", () => {
-    const el = SafeDataTable({ data: "not-an-array" });
+    const el = SafeDataTable.render({ data: "not-an-array" }, null);
     expect(el.props.data).toEqual([]);
     expect(el.props.columns).toEqual([]);
     expect(el.props.searchFields).toEqual([]);
     expect(el.props.filters).toEqual([]);
     expect(el.props.selectionActions).toEqual([]);
     expect(console.warn).toHaveBeenCalledTimes(1); // only data was non-null
+  });
+
+  it("SafeCrmDataTable leaves omitted columns alone so auto-derive still runs", () => {
+    const el = SafeCrmDataTable.render({ objectType: "deal" }, null);
+    expect("columns" in el.props).toBe(false);
+    expect(console.warn).not.toHaveBeenCalled();
+
+    const repaired = SafeCrmDataTable.render({ objectType: "deal", columns: "oops" }, null);
+    expect("columns" in repaired.props).toBe(false);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("SafeCrmKanban derives stages but still coerces cardFields", () => {
+    const el = SafeCrmKanban.render({ objectType: "deal", groupBy: "dealstage" }, null);
+    expect("stages" in el.props).toBe(false);
+    expect(el.props.cardFields).toEqual([]);
+  });
+
+  it("SafeFormBuilder forwards its imperative ref", () => {
+    const ref = { current: null };
+    const el = SafeFormBuilder.render({ fields: [] }, ref);
+    expect(el.ref).toBe(ref);
   });
 });
