@@ -36,6 +36,11 @@ import {
   Toggle,
   Checkbox,
   ToggleGroup,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  LoadingSpinner,
+  useExtensionActions,
 } from "@hubspot/ui-extensions";
 import { Icon } from "../common-components/Icon.js";
 
@@ -84,9 +89,30 @@ import {
   resolveDependentCascade,
 } from "./formDependencies.js";
 
+import { isFormDirty, getDirtyFields } from "./formDirty.js";
+
 
 const getRepeaterErrorKey = (fieldName, rowIdx, subFieldName) =>
   `${fieldName}[${rowIdx}].${subFieldName}`;
+
+
+// Field-level loading treatment: pair the (disabled) input with an inline
+// LoadingSpinner so async-sourced options (CRM search selects, lazily loaded
+// enums) read as "still fetching" instead of mysteriously empty. size="xs" +
+// layout="inline" is the inline-loading standard (see standards/states.md).
+const withFieldLoadingSpinner = (element, loading) => {
+  if (!loading) return element;
+  return (
+    <Flex direction="row" gap="xs" align="end">
+      <Box flex={1}>{element}</Box>
+      <LoadingSpinner size="xs" layout="inline" />
+    </Flex>
+  );
+};
+
+// Per-mount counter so each FormBuilder gets a unique discard-confirmation
+// Modal id (overlays are closed by id via actions.closeOverlay).
+let formBuilderInstanceCounter = 0;
 
 
 const fieldSetHasErrors = (errors, fields) => {
@@ -197,6 +223,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     loading: controlledLoading,    // controlled loading state
     disabled = false,              // disable entire form
     renderButtons: renderButtonsProp, // custom action row renderer
+    confirmDiscard,                // true | { title, message, confirmLabel, cancelLabel } — confirm before the built-in Cancel discards dirty changes
   } = props;
 
   // Appearance / layout
@@ -302,7 +329,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   if (process.env.NODE_ENV !== "production") {
     const KNOWN_FIELD_PROPS = new Set([
       "name", "type", "label", "description", "placeholder", "tooltip", "required",
-      "readOnly", "alwaysEditable", "disabled", "defaultValue", "fieldProps", "colSpan", "width",
+      "readOnly", "alwaysEditable", "disabled", "loading", "defaultValue", "fieldProps", "colSpan", "width",
       "visible", "dependsOn", "dependsOnConfig", "group", "debounce",
       "pattern", "patternMessage", "minLength", "maxLength", "min", "max",
       "validate", "validators", "validateDebounce", "useDefaultValidators",
@@ -559,7 +586,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
   }, [values, syncDirtyBaseline]);
 
   const isDirty = useMemo(() => {
-    return !deepEqual(formValues, initialSnapshot.current);
+    return isFormDirty(formValues, initialSnapshot.current);
   }, [formValues]);
 
   const prevDirtyRef = useRef(false);
@@ -569,6 +596,44 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       if (onDirtyChange) onDirtyChange(isDirty);
     }
   }, [isDirty, onDirtyChange]);
+
+  // -- Confirm-discard guard ---------------------------------------------------
+  // When confirmDiscard is set, the built-in Cancel button swaps its onClick
+  // for a native Modal confirmation while the form is dirty. The modal closes
+  // through actions.closeOverlay, fetched via useExtensionActions so consumers
+  // don't have to thread `actions` in. The hook is wrapped in try/catch so
+  // FormBuilder still renders in environments without the extension bridge
+  // (the modal's X close button keeps working regardless).
+  let hostActions = null;
+  try {
+    hostActions = useExtensionActions();
+  } catch (err) {
+    hostActions = null;
+  }
+
+  const discardModalIdRef = useRef(null);
+  if (discardModalIdRef.current === null) {
+    formBuilderInstanceCounter += 1;
+    discardModalIdRef.current = `hs-uix-form-discard-${formBuilderInstanceCounter}`;
+  }
+
+  const discardConfig = confirmDiscard
+    ? confirmDiscard === true
+      ? {}
+      : confirmDiscard
+    : null;
+  const discardTitle = (discardConfig && discardConfig.title) || "Discard changes?";
+  const discardMessage =
+    (discardConfig && discardConfig.message) ||
+    "You have unsaved changes. If you discard now, they will be lost.";
+  const discardConfirmLabel = (discardConfig && discardConfig.confirmLabel) || "Discard changes";
+  const discardCancelLabel = (discardConfig && discardConfig.cancelLabel) || "Keep editing";
+
+  const closeDiscardModal = useCallback(() => {
+    if (hostActions && typeof hostActions.closeOverlay === "function") {
+      hostActions.closeOverlay(discardModalIdRef.current);
+    }
+  }, [hostActions]);
 
   // -- Auto-save --------------------------------------------------------------
 
@@ -1335,6 +1400,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     },
     getValues: () => formValues,
     isDirty: () => isDirty,
+    getDirtyFields: () => getDirtyFields(formValuesRef.current, initialSnapshot.current),
     setFieldValue: (name, value) => handleFieldChange(name, value),
     setFieldError: (name, message) => updateErrors({ [name]: message }),
     setErrors: (errors) => {
@@ -1363,7 +1429,11 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     const isRequired = showRequiredIndicator && resolveRequired(field, formValues);
     const fieldFormReadOnly = field.alwaysEditable ? false : formReadOnly;
     const isReadOnly = field.readOnly || fieldFormReadOnly;
-    const isDisabled = disabled || resolveDisabled(field, formValues) || fieldFormReadOnly;
+    // Field-level loading (e.g. async-sourced options via makeCrmSearchSelectField,
+    // which sets { loading } on the field config) disables the input while a
+    // spinner renders beside select/multiselect controls.
+    const isFieldLoading = !!field.loading;
+    const isDisabled = disabled || resolveDisabled(field, formValues) || fieldFormReadOnly || isFieldLoading;
 
     // Route onChange through debounce if field has debounce prop
     const fieldOnChange = field.debounce
@@ -1578,7 +1648,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       disabled: isDisabled,
       error: hasError,
       validationMessage: renderFieldError ? undefined : (fieldError || undefined),
-      ...(field.loading || validatingFields[field.name] ? { loading: true } : {}),
+      ...(validatingFields[field.name] ? { loading: true } : {}),
       ...(field.fieldProps || {}),
     };
 
@@ -1742,24 +1812,26 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       }
 
       case "select":
-        return (
+        return withFieldLoadingSpinner(
           <Select
             {...commonProps}
             value={fieldValue}
             options={options}
             variant={field.variant}
             onChange={fieldOnChange}
-          />
+          />,
+          isFieldLoading
         );
 
       case "multiselect":
-        return (
+        return withFieldLoadingSpinner(
           <MultiSelect
             {...commonProps}
             value={fieldValue || []}
             options={options}
             onChange={fieldOnChange}
-          />
+          />,
+          isFieldLoading
         );
 
       case "toggle":
@@ -2536,6 +2608,49 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
 
   // -- Buttons rendering ----------------------------------------------------
 
+  // Built-in Cancel button. With confirmDiscard set and unsaved changes
+  // present, clicking it opens a native confirmation Modal instead of firing
+  // onCancel directly — "Keep editing" closes the modal, the destructive
+  // confirm closes it and then calls onCancel.
+  const renderCancelButton = () => {
+    if (discardConfig && isDirty) {
+      return (
+        <Button
+          variant="secondary"
+          disabled={disabled}
+          overlay={
+            <Modal id={discardModalIdRef.current} title={discardTitle} width="small">
+              <ModalBody>
+                <Text>{discardMessage}</Text>
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="secondary" onClick={closeDiscardModal}>
+                  {discardCancelLabel}
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    closeDiscardModal();
+                    if (onCancel) onCancel();
+                  }}
+                >
+                  {discardConfirmLabel}
+                </Button>
+              </ModalFooter>
+            </Modal>
+          }
+        >
+          {cancelButtonLabel}
+        </Button>
+      );
+    }
+    return (
+      <Button variant="secondary" onClick={onCancel} disabled={disabled}>
+        {cancelButtonLabel}
+      </Button>
+    );
+  };
+
   const renderButtons = () => {
     if (submitPosition === "none" || formReadOnly) return null;
 
@@ -2550,6 +2665,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
       totalSteps: isMultiStep ? steps.length : 1,
       disabled,
       loading: isLoading,
+      isDirty,
       labels: {
         submit: submitButtonLabel,
         cancel: cancelButtonLabel,
@@ -2575,9 +2691,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
             </Button>
           ) : (
             showCancel ? (
-              <Button variant="secondary" onClick={onCancel} disabled={disabled}>
-                {cancelButtonLabel}
-              </Button>
+              renderCancelButton()
             ) : (
               <Text>{" "}</Text>
             )
@@ -2608,11 +2722,7 @@ export const FormBuilder = forwardRef(function FormBuilder(props, ref) {
     // Single-step form buttons
     return (
       <Flex direction="row" justify={singleStepJustify} gap="sm">
-        {showCancel && (
-          <Button variant="secondary" onClick={onCancel} disabled={disabled}>
-            {cancelButtonLabel}
-          </Button>
-        )}
+        {showCancel && renderCancelButton()}
         <LoadingButton
           variant={submitVariant}
           type={noFormWrapper ? "button" : "submit"}

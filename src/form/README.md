@@ -555,17 +555,60 @@ For centralized alert config:
 />
 ```
 
-## Dirty Tracking
+## Dirty Tracking & Unsaved-Changes Guard
+
+FormBuilder deep-compares current values against the initial snapshot (the
+resolved `initialValues` / first controlled `values`). `onDirtyChange` fires on
+transitions only — once when the form becomes dirty, once when it goes clean
+again (reset, submit-reset, or values edited back to their originals).
 
 ```jsx
 <FormBuilder
   fields={fields}
   onSubmit={save}
   onDirtyChange={(isDirty) => {
-    // e.g., show unsaved changes warning
+    // e.g., flip a "you have unsaved changes" banner outside the form
   }}
 />
 ```
+
+The ref exposes the same state imperatively: `formRef.current.isDirty()` and
+`formRef.current.getDirtyFields()` (names of changed fields).
+
+### Confirm Before Discarding (`confirmDiscard`)
+
+When `confirmDiscard` is set, the built-in Cancel button stops firing
+`onCancel` directly while the form is dirty. Instead it opens a native Modal
+confirmation — "Keep editing" closes the modal, the destructive confirm
+closes it and then calls `onCancel`. A clean form cancels immediately, no
+modal.
+
+```jsx
+<FormBuilder
+  fields={fields}
+  onSubmit={save}
+  showCancel={true}
+  onCancel={() => actions.closeOverlay("edit-panel")}
+  confirmDiscard={true} // or customize:
+  // confirmDiscard={{
+  //   title: "Discard this deal?",
+  //   message: "Your edits to this deal will be lost.",
+  //   confirmLabel: "Discard edits",
+  //   cancelLabel: "Keep editing",
+  // }}
+/>
+```
+
+The confirmation modal closes itself via `actions.closeOverlay` (FormBuilder
+calls `useExtensionActions` internally — nothing to thread in).
+
+**Host-close caveat.** UI extensions cannot intercept the host panel/modal
+close — the X button, ESC, and outside clicks discard silently and there is no
+`beforeunload` equivalent. `confirmDiscard` only guards FormBuilder's own
+Cancel button (and the imperative `ref.reset()` is intentionally unguarded —
+it's your code calling it). For everything else, `onDirtyChange` is your hook:
+track dirty state in the parent and surface your own warning UI (a banner, a
+disabled close affordance, an alert on reopen).
 
 ## Custom Render Escape Hatch
 
@@ -1059,6 +1102,89 @@ const initialValues = useFormPrefill(properties, {
 <FormBuilder fields={fields} initialValues={initialValues} onSubmit={save} />
 ```
 
+## Fields from HubSpot Properties
+
+`fieldsFromHubSpotProperties` turns HubSpot property definitions (the objects
+returned by `GET /crm/v3/properties/{objectType}`) into FormBuilder field
+configs, so a CRM edit form is one fetch + one function call instead of a
+hand-maintained field list that drifts from the portal.
+
+```jsx
+import { FormBuilder, fieldsFromHubSpotProperties } from "hs-uix/form";
+
+// properties = the `results` array from the properties API (via hubspot.fetch
+// or a serverless function)
+const fields = fieldsFromHubSpotProperties(properties, {
+  include: ["dealname", "dealstage", "amount", "closedate"], // also sets order
+  requiredOverrides: ["dealname", "dealstage"],
+  overrides: {
+    amount: { min: 0, description: "USD" },
+  },
+});
+
+<FormBuilder fields={fields} onSubmit={save} />
+```
+
+Type mapping (HubSpot `fieldType` first, storage `type` as tie-breaker):
+
+| HubSpot | FormBuilder field type |
+|---|---|
+| `select` (enumeration) | `select` — options from property options, `hidden: true` options filtered |
+| `radio` | `radioGroup` |
+| `checkbox` (multi-enum) | `multiselect` |
+| `booleancheckbox` | `toggle` — with `transformIn`/`transformOut` normalizing HubSpot's `"true"`/`"false"` strings |
+| `date` (type `date`) | `date` |
+| `date` (type `datetime`) | `datetime` |
+| `number` | `number` — with `transformIn` parsing HubSpot's numeric strings |
+| `textarea` | `textarea` |
+| `text` / `phonenumber` | `text` |
+| anything else | falls back on storage type (`enumeration` → `select`, `bool` → `toggle`, `number` → `number`, else `text`) |
+
+Options:
+
+| Option | Type | Default | Notes |
+|---|---|---|---|
+| `include` | `string[]` | - | Property names to keep. Also sets the output field order. |
+| `exclude` | `string[]` | - | Property names to drop. |
+| `overrides` | `Record<string, Partial<Field>>` | - | Partial field configs merged over the generated config per property. |
+| `requiredOverrides` | `string[] \| Record<string, boolean>` | - | Mark properties required (property definitions don't carry required-ness — that's per-form in HubSpot). |
+| `includeDescriptions` | `boolean` | `false` | Copy property descriptions into field `description` help text (off by default — portal descriptions are often internal notes). |
+
+Hard-earned defaults: `hidden: true` properties are skipped unless explicitly
+listed in `include`; `calculated` and `modificationMetadata.readOnlyValue`
+properties come back `readOnly: true` (an editable input for a value HubSpot
+will refuse to save is a silent-fail trap). Date/datetime **values** are not
+transformed — epoch-ms ↔ `{ year, month, date }` conversion is timezone
+sensitive, so wire `transformIn`/`transformOut` yourself (see `dateToTimestamp`
+in `hs-uix/utils`).
+
+## Field-Level Loading
+
+Set `loading: true` on a field while its options (or any backing data) are
+still in flight: the input is disabled, and `select` / `multiselect` fields
+render an inline `LoadingSpinner` (`size="xs"`) beside the control so the
+empty dropdown reads as "still fetching" rather than broken.
+
+```jsx
+const { options, loading } = useCrmSearchOptions({ objectType: "companies", query });
+
+const fields = [
+  { name: "company", type: "select", label: "Company", options, loading },
+];
+```
+
+The CRM search adapters in `hs-uix/utils` set exactly this key, so the two
+compose with zero glue:
+
+```jsx
+import { useCrmSearchOptions, makeCrmSearchSelectField } from "hs-uix/utils";
+
+const search = useCrmSearchOptions({ objectType: "companies" });
+const fields = [
+  makeCrmSearchSelectField({ name: "company", label: "Company" }, search),
+];
+```
+
 ## Auto-Save
 
 Debounced auto-save on field changes:
@@ -1121,6 +1247,7 @@ try {
 | `submitVariant` | `"primary" \| "secondary"` | `"primary"` | Button variant |
 | `showCancel` | `boolean` | `false` | Show cancel button |
 | `onCancel` | `() => void` | - | Cancel callback |
+| `confirmDiscard` | `boolean \| { title?, message?, confirmLabel?, cancelLabel? }` | - | When set, the built-in Cancel button opens a native Modal confirmation before discarding dirty changes. Cannot intercept the host panel/modal close — use `onDirtyChange` for that |
 | `submitPosition` | `"bottom" \| "none"` | `"bottom"` | Button placement |
 | `submitAlign` | `"start" \| "end" \| "between"` | auto | Default single-step button-row alignment. Defaults to `"between"` when `showCancel` is true, otherwise `"start"` |
 | `loading` | `boolean` | - | Controlled loading state |
@@ -1156,7 +1283,7 @@ try {
 | `onSubmitError` | `(error, helpers) => void` | - | Post-submit error |
 | `resetOnSuccess` | `boolean` | `false` | Auto-reset after success |
 | `autoSave` | `{ debounce?, onAutoSave }` | - | Debounced auto-save |
-| `onDirtyChange` | `(isDirty) => void` | - | Dirty state callback |
+| `onDirtyChange` | `(isDirty) => void` | - | Dirty state callback (fires on transitions only) |
 | `ref` | `Ref<FormBuilderRef>` | - | Imperative ref |
 
 ### Field Props
@@ -1183,7 +1310,7 @@ try {
 | `useDefaultValidators` | `boolean` | All | Enable/disable built-in type/shape validation (default `true`) |
 | `validateDebounce` | `number` | All | Debounce async validation (ms) |
 | `debounce` | `number` | All | Debounce onChange callback (ms) |
-| `loading` | `boolean` | All | Field-level loading indicator |
+| `loading` | `boolean` | All | Field-level loading: disables the input; select/multiselect also render an inline `LoadingSpinner` (set automatically by `makeCrmSearchSelectField` / `makeCrmSearchMultiSelectField`) |
 | `group` | `string` | All | Divider-based field grouping |
 | `onFieldChange` | `(value, allValues, helpers) => void` | All | Cross-field side effects |
 | `transformIn` | `(rawValue) => displayValue` | All | Storage → display transform (on load) |
@@ -1233,6 +1360,7 @@ try {
 | `reset()` | `void` | Reset to initial values |
 | `getValues()` | `Record<string, unknown>` | Current form values |
 | `isDirty()` | `boolean` | Whether values differ from initial |
+| `getDirtyFields()` | `string[]` | Names of fields whose value differs from initial |
 | `setFieldValue(name, value)` | `void` | Set a field value programmatically |
 | `setFieldError(name, message)` | `void` | Set a field error programmatically |
 | `setErrors(errors)` | `void` | Batch set field errors (server-side validation) |

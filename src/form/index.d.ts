@@ -106,6 +106,17 @@ export interface FormBuilderAlertConfig {
   successTitle?: string;
 }
 
+export interface FormBuilderConfirmDiscardConfig {
+  /** Modal title. Default "Discard changes?". */
+  title?: string;
+  /** Modal body text. Default "You have unsaved changes. If you discard now, they will be lost.". */
+  message?: string;
+  /** Destructive confirm button label. Default "Discard changes". */
+  confirmLabel?: string;
+  /** Keep-editing button label. Default "Keep editing". */
+  cancelLabel?: string;
+}
+
 export interface FormBuilderButtonsRenderContext {
   isMultiStep: boolean;
   isFirstStep: boolean;
@@ -114,6 +125,8 @@ export interface FormBuilderButtonsRenderContext {
   totalSteps: number;
   disabled: boolean;
   loading: boolean;
+  /** True when current values deep-differ from the initial snapshot. */
+  isDirty: boolean;
   labels: Required<Pick<FormBuilderLabels, "submit" | "cancel" | "back" | "next">>;
   onBack: () => void;
   onNext: () => void;
@@ -164,7 +177,12 @@ export interface FormBuilderField {
   minValidationMessage?: string;
   maxValidationMessage?: string;
 
-  // Field-level loading indicator
+  /**
+   * Field-level loading indicator. While true the input is disabled and
+   * select/multiselect fields render an inline LoadingSpinner beside the
+   * control — `makeCrmSearchSelectField` / `makeCrmSearchMultiSelectField`
+   * (hs-uix/utils) set this automatically while CRM search options load.
+   */
   loading?: boolean;
 
   // Conditional visibility
@@ -357,6 +375,8 @@ export interface FormBuilderRef {
   reset: () => void;
   getValues: () => Record<string, unknown>;
   isDirty: () => boolean;
+  /** Names of fields whose current value deep-differs from the initial snapshot. */
+  getDirtyFields: () => string[];
   setFieldValue: (name: string, value: unknown) => void;
   setFieldError: (name: string, message: string) => void;
   setErrors: (errors: Record<string, string>) => void;
@@ -424,6 +444,14 @@ export interface FormBuilderProps {
   submitVariant?: "primary" | "secondary";
   showCancel?: boolean;
   onCancel?: () => void;
+  /**
+   * Guard the built-in Cancel button while the form is dirty: clicking it
+   * opens a native Modal confirmation ("Keep editing" / destructive confirm)
+   * before onCancel fires. Pass `true` for default copy or an object to
+   * customize it. Note: extensions cannot intercept the host panel/modal
+   * close (the X button) — pair this with onDirtyChange for those cases.
+   */
+  confirmDiscard?: boolean | FormBuilderConfirmDiscardConfig;
   submitPosition?: "bottom" | "none";
   /**
    * Controls the default single-step action-row alignment.
@@ -496,3 +524,56 @@ export declare function useFormPrefill(
   properties: Record<string, unknown> | undefined,
   mapping?: Record<string, string>
 ): Record<string, unknown>;
+
+// ---------------------------------------------------------------------------
+// HubSpot property schema mapping
+// ---------------------------------------------------------------------------
+
+/** One enumeration option on a HubSpot property definition. */
+export interface FormBuilderHubSpotPropertyOption {
+  label?: string;
+  value: string | number | boolean;
+  description?: string;
+  displayOrder?: number;
+  hidden?: boolean;
+}
+
+/** A HubSpot property definition (GET /crm/v3/properties/{objectType}). Extra API fields are tolerated. */
+export interface FormBuilderHubSpotProperty {
+  name: string;
+  label?: string;
+  type?: string; // "string" | "number" | "date" | "datetime" | "enumeration" | "bool" | ...
+  fieldType?: string; // "text" | "textarea" | "select" | "radio" | "checkbox" | "booleancheckbox" | "number" | "date" | "phonenumber" | ...
+  description?: string;
+  options?: FormBuilderHubSpotPropertyOption[];
+  hidden?: boolean;
+  calculated?: boolean;
+  modificationMetadata?: { readOnlyValue?: boolean; [k: string]: unknown };
+  [k: string]: unknown;
+}
+
+export interface FormBuilderHubSpotSchemaOptions {
+  /** Property names to keep. Also sets the output field order. */
+  include?: string[];
+  /** Property names to drop. */
+  exclude?: string[];
+  /** Per-property partial field configs merged over the generated config. */
+  overrides?: Record<string, Partial<FormBuilderField>>;
+  /** Property names to mark required — an array of names or a name → required map. */
+  requiredOverrides?: string[] | Record<string, boolean>;
+  /** Copy property descriptions into field `description` help text. Default false. */
+  includeDescriptions?: boolean;
+}
+
+/**
+ * Maps HubSpot property definitions to FormBuilder field configs.
+ * select → select · radio → radioGroup · checkbox → multiselect ·
+ * booleancheckbox → toggle (with "true"/"false" string normalization) ·
+ * date → date · datetime → datetime · number → number (string parsing) ·
+ * textarea → textarea · text/phonenumber → text. Hidden enumeration options
+ * are filtered; calculated / readOnlyValue properties come back readOnly.
+ */
+export declare function fieldsFromHubSpotProperties(
+  properties: FormBuilderHubSpotProperty[] | null | undefined,
+  options?: FormBuilderHubSpotSchemaOptions
+): FormBuilderField[];
