@@ -8,6 +8,7 @@ export default defineConfig({
     kanban: "src/kanban/index.js",
     feed: "src/feed/index.js",
     calendar: "src/calendar/index.js",
+    wizard: "src/wizard/index.js",
     "common-components": "src/common-components/index.js",
     utils: "src/utils/index.js",
   },

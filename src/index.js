@@ -3,6 +3,7 @@ export { FormBuilder, useFormPrefill } from "./form/index.js";
 export { Kanban, KanbanCardActions } from "./kanban/index.js";
 export { Feed } from "./feed/index.js";
 export { Calendar } from "./calendar/index.js";
+export { Wizard, OnboardingChecklist } from "./wizard/index.js";
 export {
   AutoTag,
   AutoStatusTag,
