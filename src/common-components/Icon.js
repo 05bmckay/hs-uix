@@ -2,6 +2,7 @@ import React from "react";
 import { Image, Icon as HsIcon, Link } from "@hubspot/ui-extensions";
 import { HS_TEXT_COLOR } from "./svgDefaults.js";
 import { GENERATED_ICONS } from "./icons.generated.js";
+import { NATIVE_ICON_NAMES } from "./nativeIconNames.js";
 
 // ---------------------------------------------------------------------------
 // Icon — a superset of HubSpot's native <Icon>. The native component is great
@@ -26,12 +27,10 @@ import { GENERATED_ICONS } from "./icons.generated.js";
 //     `color` prop only recolors paths that don't declare one.
 // ---------------------------------------------------------------------------
 
-// The native component's full `name` whitelist (from the UI Extensions docs).
-// If a requested name is in here AND color/size are native-expressible, we let
-// the real <Icon> render it.
-const NATIVE_ICON_NAMES = new Set([
-  "add","appointment","approvals","artificialIntelligence","artificialIntelligenceEnhanced","attach","bank","block","book","bulb","calling","callingHangup","callingMade","callingMissed","callingVoicemail","callTranscript","campaigns","cap","checkCircle","circleFilled","circleHollow","clock","comment","contact","copy","crm","dataSync","date","delay","delete","description","developerProjects","documents","downCarat","download","edit","ellipses","email","emailOpen","emailThreadedReplies","enrichment","enroll","exclamation","exclamationCircle","facebook","faceHappy","faceHappyFilled","faceNeutral","faceNeutralFilled","faceSad","faceSadFilled","favoriteHollow","file","filledXCircleIcon","filter","flame","folder","folderOpen","forward","gauge","generateChart","gift","globe","globeLine","goal","googlePlus","guidedActions","hash","hide","home","hubDB","image","imageGallery","inbox","info","infoNoCircle","insertVideo","instagram","integrations","invoice","key","language","left","lessCircle","lesson","light","link","linkedin","listView","location","locked","mention","messages","mobile","moreCircle","notEditable","notification","notificationOff","objectAssociations","objectAssociationsManyToMany","objectAssociationsManyToOne","office365","order","paymentSubscriptions","pin","pinterest","powerPointFile","presentation","product","publish","question","questionAnswer","questionCircle","quickbooks","quote","readMore","readOnlyView","realEstateListing","recentlySelected","record","redo","refresh","registration","remove","replace","reports","right","robot","rotate","rss","salesQuote","salesTemplates","save","search","send","sequences","settings","shoppingCart","signal","signalPoor","signature","snooze","sortAlpAsc","sortAlpDesc","sortAmtAsc","sortAmtDesc","sortNumAsc","sortNumDesc","sortTableAsc","sortTableDesc","spellCheck","sprocket","star","stopRecord","strike","styles","success","tablet","tag","tasks","test","text","textBodyExpanded","textColor","textDataType","textSnippet","thumbsDown","thumbsUp","ticket","translate","trophy","twitter","undo","upCarat","upload","video","videoFile","videoPlayerSubtitles","view","viewDetails","warning","website","workflows","x","xCircle","xing","youtube","youtubePlay","zoomIn","zoomOut",
-]);
+// The native component's full `name` whitelist now lives in
+// nativeIconNames.js (shared with hs-uix/safe's SafeIcon). If a requested
+// name is in there AND color/size are native-expressible, we let the real
+// <Icon> render it.
 
 const NATIVE_COLORS = new Set(["inherit", "alert", "warning", "success"]);
 

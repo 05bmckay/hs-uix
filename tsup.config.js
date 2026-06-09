@@ -10,6 +10,7 @@ export default defineConfig({
     calendar: "src/calendar/index.js",
     "common-components": "src/common-components/index.js",
     utils: "src/utils/index.js",
+    safe: "src/safe/index.js",
   },
   format: ["esm", "cjs"],
   external: [

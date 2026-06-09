@@ -7,6 +7,9 @@ export * from "./src/kanban/index";
 export * from "./src/feed/index";
 export * from "./src/calendar/index";
 export * from "./src/form/index";
+// safe prefixes everything with Safe* / catalog-style ALL_CAPS names, so it's
+// also collision-free under export *.
+export * from "./src/safe/index";
 
 export {
   ActiveFilterChips,

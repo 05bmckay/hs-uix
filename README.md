@@ -26,6 +26,7 @@ import {
   CollectionToolbar,
 } from "hs-uix/common-components";
 import { CrmDataTable, CrmKanban, formatCurrency, formatDate } from "hs-uix/utils";
+import { SafeIcon, SafeEmptyState, SafeDataTable } from "hs-uix/safe";
 
 // or import everything from the root
 import { DataTable, FormBuilder, Kanban, Feed, Calendar, Icon } from "hs-uix";
@@ -43,6 +44,7 @@ Requires `react` >= 18.0.0 and `@hubspot/ui-extensions` >= 0.14.0 as peer depend
 | **Feed** | Activity feed / timeline with a standard item shape, date grouping, load-more pagination, and HubSpot-native item regions | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/src/feed/README.md) |
 | **Calendar** | Presentational month/week/day/agenda calendar with search, filters, date navigation, event overlays, and experimental Gantt view | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/src/calendar/README.md) |
 | **Common Components** | Thin visual wrappers and shared collection primitives — `Icon`, `AutoTag`, `AutoStatusTag`, `AvatarStack`, `CrmLookupSelect`, `CollectionToolbar`, `CollectionFilterControl`, `CollectionSortSelect`, `CollectionCount`, and more | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/src/common-components/README.md) |
+| **Safe wrappers** | Hardened drop-ins for failure-prone natives — `SafeIcon` (alias-repair + visible placeholder), `SafeEmptyState` (`imageName` fallback instead of a throw), `SafeStatisticsTrend`, `SafePopover` (auto-padding), and array-coercing `SafeDataTable` / `SafeSelect` / … that degrade to empty states instead of blanking the page | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/src/safe/README.md) |
 | **CRM data** | `CrmDataTable` / `CrmKanban` — batch-fetching, client-side-paginating CRM table & board, plus the `useCrmSearch*` hooks behind them | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/src/utils/README.md) |
 | **Utils** | Pure helpers for formatting, options, HubSpot value guards, tag-variant inference, collection filtering/searching, and active-filter chips | [Full documentation](https://github.com/05bmckay/hs-uix/blob/main/src/utils/README.md) |
 
