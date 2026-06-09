@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.2.0 — 2026-06-09
 
 - **Calendar**: resource-view lane labels now shrink-wrap to their content
   instead of truncating, so long owner / room / team names can drive the
