@@ -4,6 +4,28 @@ export { Kanban, KanbanCardActions } from "./kanban/index.js";
 export { Feed } from "./feed/index.js";
 export { Calendar } from "./calendar/index.js";
 export {
+  FilterBuilder,
+  FILTER_OPERATORS,
+  getOperatorOptions,
+  operatorExpectsValue,
+  operatorExpectsHighValue,
+  operatorExpectsValues,
+  isGroupNode,
+  isConditionNode,
+  createCondition,
+  createGroup,
+  getNodeAtPath,
+  addFilter,
+  updateFilter,
+  removeFilter,
+  countConditions,
+  changeConditionProperty,
+  changeConditionOperator,
+  validateTree,
+  conditionToCrmFilter,
+  toCrmSearchFilterGroups,
+} from "./filter/index.js";
+export {
   AutoTag,
   AutoStatusTag,
   AvatarStack,

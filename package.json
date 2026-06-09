@@ -37,6 +37,11 @@
       "import": "./dist/calendar.mjs",
       "require": "./dist/calendar.js"
     },
+    "./filter": {
+      "types": "./filter.d.ts",
+      "import": "./dist/filter.mjs",
+      "require": "./dist/filter.js"
+    },
     "./common-components": {
       "types": "./common-components.d.ts",
       "import": "./dist/common-components.mjs",
@@ -56,6 +61,7 @@
     "kanban.d.ts",
     "feed.d.ts",
     "calendar.d.ts",
+    "filter.d.ts",
     "common-components.d.ts",
     "utils.d.ts",
     "src/**/*.d.ts",

@@ -1,5 +1,5 @@
 // Each component module prefixes its type names (DataTable*, Kanban*, Feed*,
-// Calendar*, FormBuilder*) and its value exports are unique, so `export *` is
+// Calendar*, FormBuilder*, Filter*) and its value exports are unique, so `export *` is
 // collision-free and keeps this root barrel automatically in sync with every
 // type each component declares — no hand-maintained list to fall out of date.
 export * from "./src/datatable/index";
@@ -7,6 +7,7 @@ export * from "./src/kanban/index";
 export * from "./src/feed/index";
 export * from "./src/calendar/index";
 export * from "./src/form/index";
+export * from "./src/filter/index";
 
 export {
   ActiveFilterChips,
