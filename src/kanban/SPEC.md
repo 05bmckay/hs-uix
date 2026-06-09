@@ -794,13 +794,13 @@ The consumer keeps: data loading, pagination/load-more, delta refresh, user pref
 
 ## 9. Out of scope (flag for future versions)
 
-- Swimlanes (secondary grouping — e.g. by owner within stage).
-- WIP limits / over-capacity warnings per column.
 - Drag-and-drop (requires a HubSpot primitive that doesn't exist yet).
 - Column reordering.
 - Card previews / expandable detail.
 
 > Note: bulk select + a selection-action bar were originally listed here and have been moved into v0.1 scope (§4.1 `selectable`, §4.4a `KanbanSelectionAction`) after the decision to put a checkbox on every card.
+>
+> Swimlanes (`swimlaneBy` + lane ordering/labels/collapse, optional `metricsPerLane`) and WIP limits (`stage.wipLimit` / `wipLimits` override, "count / limit" headers, "Over WIP" StatusTag, `onWipExceeded` transition callback) shipped in v0.3 — see README and `kanbanLanes.js` for the pure lane/WIP logic. WIP limits are advisory only: over-limit transitions still complete because the server is the source of truth on the write path.
 
 ---
 

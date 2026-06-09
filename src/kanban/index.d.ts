@@ -86,11 +86,58 @@ export interface KanbanStage<Row = Record<string, unknown>> {
   icon?: string;
   terminal?: boolean;
   order?: number;
+  /**
+   * WIP limit for this stage. The header shows "count / limit" and an
+   * "Over WIP" StatusTag when exceeded. 0 is valid ("stay empty"). The
+   * top-level `wipLimits` prop overrides this per stage. Advisory only —
+   * transitions that exceed the limit still complete.
+   */
+  wipLimit?: number;
   footer?: (rows: Row[]) => ReactNode;
   canEnter?: (row: Row) => boolean;
   onEnterRequired?: {
     render: (ctx: KanbanTransitionPromptContext<Row>) => ReactNode;
   };
+}
+
+// ---------------------------------------------------------------------------
+// WIP limits
+// ---------------------------------------------------------------------------
+
+export interface KanbanWipStatus {
+  /** Cards counted against the limit (stageMeta.totalCount when present, else the loaded bucket size). */
+  count: number;
+  /** Effective limit (top-level override beats stage.wipLimit), or null when the stage has none. */
+  limit: number | null;
+  /** True only when count is STRICTLY greater than limit. */
+  exceeded: boolean;
+}
+
+export type KanbanWipEvaluation = Record<string, KanbanWipStatus>;
+
+export interface KanbanWipExceededEvent {
+  stageId: string;
+  count: number;
+  limit: number;
+}
+
+// ---------------------------------------------------------------------------
+// Swimlanes
+// ---------------------------------------------------------------------------
+
+export type KanbanSwimlaneBy<Row = Record<string, unknown>> =
+  | string
+  | ((row: Row) => string | number | boolean | null | undefined);
+
+export type KanbanSwimlaneLabels<Row = Record<string, unknown>> =
+  | Record<string, string>
+  | ((laneKey: string, rows: Row[]) => ReactNode);
+
+export interface KanbanLanePartition<Row = Record<string, unknown>> {
+  /** Lane keys in render order (swimlaneOrder first — including empty explicit lanes — then first-seen). */
+  laneKeys: string[];
+  /** Rows per lane in original data order. Every key in laneKeys is present. */
+  rowsByLane: Record<string, Row[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,6 +194,7 @@ export interface KanbanParams {
   filters: Record<string, unknown>;
   sort: string | null;
   collapsedStages: string[];
+  collapsedLanes: string[];
 }
 
 export interface KanbanEmptyStateRenderContext {
@@ -183,6 +231,13 @@ export interface KanbanLabels {
   errorTitle?: string;
   errorMessage?: string;
   cardCount?: (n: number) => string;
+  /** Stage-header count when a WIP limit is set. Default "{count} / {limit}". */
+  wipCount?: (count: number, limit: number) => string;
+  /** Warning StatusTag text on over-limit stage headers. Default "Over WIP". */
+  overWip?: string;
+  laneCount?: (n: number) => string;
+  /** Lane header label for rows whose swimlane value is null/undefined/"". Default "Unassigned". */
+  unassignedLane?: string;
   moveTo?: string;
   clearAll?: string;
   selectAll?: string | ((count: number, label: string) => string);
@@ -278,6 +333,37 @@ export interface KanbanProps<Row = Record<string, unknown>, Id = string | number
   stageMeta?: Record<string, KanbanStageMeta>;
   onLoadMore?: (stage: string) => void;
 
+  // WIP limits
+  /** Top-level per-stage limit overrides: `{ [stageId]: n }`. Beats `stage.wipLimit`. */
+  wipLimits?: Record<string, number>;
+  /**
+   * Fires when a stage TRANSITIONS into the exceeded state (count > limit) —
+   * once per crossing, including a board that mounts already over a limit;
+   * never on every render. Over-limit transitions still complete: the server
+   * is the source of truth, so WIP limits are a signal, not a gate.
+   */
+  onWipExceeded?: (stageId: string, count: number, limit: number) => void;
+
+  // Swimlanes
+  /** Field name or accessor that groups the board vertically into lanes. */
+  swimlaneBy?: KanbanSwimlaneBy<Row>;
+  /** `{ key: label }` map or `(laneKey, rows) => label` function for lane headers. */
+  swimlaneLabels?: KanbanSwimlaneLabels<Row>;
+  /** Explicit lane order. Listed keys render first (even when empty); unlisted lanes append first-seen. */
+  swimlaneOrder?: string[];
+  /** Show the collapse chevron on lane headers. Default true. */
+  collapseLanes?: boolean;
+  /** Controlled list of collapsed lane keys. */
+  collapsedLanes?: string[];
+  /** Initial collapsed lane keys (uncontrolled). */
+  defaultCollapsedLanes?: string[];
+  onCollapsedLanesChange?: (laneKeys: string[]) => void;
+  /**
+   * Render the metrics panel inside each lane instead of globally. Requires
+   * `metrics` to be a function — it's called per lane with `(laneRows, laneKey)`.
+   */
+  metricsPerLane?: boolean;
+
   // Selection
   selectable?: boolean;
   selectedIds?: Id[];
@@ -345,8 +431,16 @@ export interface KanbanProps<Row = Record<string, unknown>, Id = string | number
   onCollapsedStagesChange?: (stages: string[]) => void;
 
   // Metrics panel (toggled via the toolbar's Metrics button)
-  /** Array of stat items for the <Statistics> panel, or a custom ReactNode. */
-  metrics?: KanbanMetricItem[] | ReactNode;
+  /**
+   * Array of stat items for the <Statistics> panel, a custom ReactNode, or a
+   * function of the (filtered) rows. The function form receives
+   * `(rows, laneKey)` — laneKey is null for the global panel and the lane key
+   * when `metricsPerLane` is active.
+   */
+  metrics?:
+    | KanbanMetricItem[]
+    | ReactNode
+    | ((rows: Row[], laneKey: string | null) => KanbanMetricItem[] | ReactNode);
   /** Controlled visibility of the metrics panel. */
   showMetrics?: boolean;
   /** Fires when the Metrics button is clicked. Receives the new visible state. */
@@ -376,3 +470,60 @@ export interface KanbanProps<Row = Record<string, unknown>, Id = string | number
 export declare function Kanban<Row = Record<string, unknown>, Id = string | number>(
   props: KanbanProps<Row, Id>
 ): ReactElement | null;
+
+// ---------------------------------------------------------------------------
+// Pure lane / WIP helpers (from kanbanLanes.js) — usable outside the component,
+// e.g. to evaluate WIP server-side or render custom lane summaries.
+// ---------------------------------------------------------------------------
+
+/** Lane key used for rows whose swimlane value is null/undefined/"". */
+export declare const UNASSIGNED_LANE_KEY: "__unassigned";
+
+/** Resolve the swimlane key for a row (String-coerced; empty values map to UNASSIGNED_LANE_KEY). */
+export declare function getLaneKey<Row = Record<string, unknown>>(
+  row: Row,
+  swimlaneBy: KanbanSwimlaneBy<Row>
+): string;
+
+/** Order lane keys: explicit swimlaneOrder first (deduped, kept even when empty), then first-seen. */
+export declare function orderLaneKeys(seenKeys: string[], swimlaneOrder?: string[]): string[];
+
+/** Partition rows into swimlanes — render order plus rows per lane. */
+export declare function partitionLanes<Row = Record<string, unknown>>(
+  rows: Row[],
+  options?: { swimlaneBy?: KanbanSwimlaneBy<Row>; swimlaneOrder?: string[] }
+): KanbanLanePartition<Row>;
+
+/** Resolve a lane's display label from a map or function, with unassigned/key fallbacks. */
+export declare function resolveLaneLabel<Row = Record<string, unknown>>(
+  laneKey: string,
+  swimlaneLabels?: KanbanSwimlaneLabels<Row>,
+  rows?: Row[],
+  unassignedLabel?: string
+): ReactNode;
+
+/** Effective WIP limit for a stage (wipLimits override beats stage.wipLimit; invalid → null). */
+export declare function resolveWipLimit<Row = Record<string, unknown>>(
+  stage: KanbanStage<Row>,
+  wipLimits?: Record<string, number>
+): number | null;
+
+/** Per-stage counts for WIP evaluation (stageMeta.totalCount when present, else bucket length). */
+export declare function computeStageCounts<Row = Record<string, unknown>>(
+  stages: KanbanStage<Row>[],
+  buckets: Record<string, Row[]>,
+  stageMeta?: Record<string, KanbanStageMeta>
+): Record<string, number>;
+
+/** Evaluate `{ count, limit, exceeded }` for every stage. */
+export declare function evaluateWip<Row = Record<string, unknown>>(
+  stages: KanbanStage<Row>[],
+  counts: Record<string, number>,
+  wipLimits?: Record<string, number>
+): KanbanWipEvaluation;
+
+/** Diff two evaluations; returns stages that newly crossed into exceeded (the onWipExceeded contract). */
+export declare function findNewlyExceededWip(
+  prev: KanbanWipEvaluation | null | undefined,
+  next: KanbanWipEvaluation
+): KanbanWipExceededEvent[];

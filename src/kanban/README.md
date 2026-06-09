@@ -33,6 +33,8 @@ That's a filterable, sortable, stage-bucketed board with per-stage footers and i
 - Full-text search across any combination of fields, with optional fuzzy matching via Fuse.js
 - Headline metrics panel rendered above the board (`<Statistics>` under the hood) via a `metrics` prop
 - Stage transition prompts — async confirmation or extra-property capture before committing a stage change, declared per-stage via `stage.onEnterRequired.render`
+- WIP limits — per-stage `wipLimit` (or a top-level `wipLimits` override) renders `count / limit` headers, an "Over WIP" warning tag on over-limit stages, and fires `onWipExceeded` once per crossing
+- Swimlanes — `swimlaneBy` groups the board vertically into stacked lane sections (each with its own header, count, and row of stage columns), with explicit ordering, custom labels, collapsible lanes, and optional per-lane metrics
 - Per-card selection with a bulk action bar, plus `KanbanCardActions` for per-card actions
 - Per-stage pagination via `stageMeta` + `onLoadMore` — mix client-side, server-load-more, and pre-bucketed server data column-by-column
 - Empty / loading / error render slots that mirror DataTable's override API
@@ -329,6 +331,91 @@ Invalid target stages are disabled in the inline control; no callback fires.
 
 ---
 
+### WIP limits
+
+Declare a limit per stage (or override centrally with `wipLimits`) and the stage header switches from a plain count to `count / limit`. When the count goes **over** the limit — at the limit is full, not over — the header grows a warning `StatusTag` ("Over WIP") and `onWipExceeded` fires.
+
+```jsx
+const STAGES = [
+  { value: "qualified",   label: "Qualified",   variant: "info" },
+  { value: "in_progress", label: "In Progress", variant: "info",    wipLimit: 5 },
+  { value: "review",      label: "Review",      variant: "warning", wipLimit: 3 },
+  { value: "done",        label: "Done",        variant: "success", terminal: true },
+];
+
+<Kanban
+  data={tickets}
+  stages={STAGES}
+  groupBy="status"
+  cardFields={CARD_FIELDS}
+  // Optional central override — beats stage.wipLimit per stage. Useful when
+  // limits come from team settings rather than the stage config.
+  wipLimits={{ in_progress: teamSettings.wipLimit }}
+  onWipExceeded={(stageId, count, limit) => {
+    notify(`${stageId} is over its WIP limit (${count}/${limit})`);
+  }}
+  onStageChange={handleStageChange}
+/>
+```
+
+Semantics worth knowing:
+
+- **Limits never block transitions.** A move that pushes a stage over its limit still completes and `onStageChange` still fires. The component is stateless on the write path — your server is the source of truth — so blocking client-side would only desync the board from reality and prevent legitimate over-limit moves (expedites, bulk reassignment). WIP limits are a signal, not a gate. Enforce hard caps server-side if you need them.
+- **`onWipExceeded` fires on the transition into exceeded**, not on every render: once when a stage crosses its limit (including a board that mounts already over a limit — that reports once on mount), and again only after the stage recovers below the limit and re-crosses.
+- **Counts follow the header.** The number checked against the limit is the same one the column header shows: `stageMeta[stage].totalCount` when present (server truth), otherwise the loaded, filtered bucket size.
+- **`wipLimit: 0` is valid** ("this stage should stay empty"); negative or non-numeric limits are ignored.
+- Customize the header strings via `labels.wipCount` (`(count, limit) => string`, default `"5 / 4"` style) and `labels.overWip` (default `"Over WIP"`).
+
+---
+
+### Swimlanes
+
+`swimlaneBy` (field name or `(row) => key` accessor) splits the board vertically into stacked lane sections — by owner, priority, team, SLA tier. Each lane renders a header (label + count + collapse chevron) above its own row of stage columns.
+
+```jsx
+<Kanban
+  data={deals}
+  stages={STAGES}
+  groupBy="stage"
+  cardFields={CARD_FIELDS}
+  swimlaneBy="priority"
+  swimlaneOrder={["high", "medium", "low"]}
+  swimlaneLabels={{ high: "High priority", medium: "Medium", low: "Low" }}
+  defaultCollapsedLanes={["low"]}
+  onStageChange={handleStageChange}
+/>
+```
+
+Behavior:
+
+- **Lane order**: keys in `swimlaneOrder` render first, in that order — and hold their slot even when empty (an explicit order doubles as an explicit lane list). Lanes not listed append in first-seen data order. Without `swimlaneOrder`, all lanes render first-seen.
+- **Labels**: `swimlaneLabels` is a `{ key: label }` map or a `(laneKey, rows) => ReactNode` function. Unlabeled lanes show their key. Rows whose lane value is `null`/`undefined`/`""` collect in a shared lane keyed `"__unassigned"` (exported as `UNASSIGNED_LANE_KEY`), labeled via `labels.unassignedLane` (default `"Unassigned"`).
+- **Collapsible lanes**: on by default; collapse state is the usual controlled/uncontrolled trio — `collapsedLanes` + `onCollapsedLanesChange` (controlled) or `defaultCollapsedLanes` (uncontrolled). Set `collapseLanes={false}` to remove the affordance. Collapsed lane keys are also included in `onParamsChange` payloads.
+- **Empty lane×stage cells render compactly** — a single header row with the empty placeholder instead of a full column shell, so sparse boards don't drown in empty columns.
+- **WIP limits stay per-stage** (a limit applies to the stage total across all lanes, not to each lane's slice). Lane cells show lane-local counts; every cell of an over-limit stage carries the "Over WIP" tag, while the `count / limit` fraction renders on the flat (non-swimlane) board where the header count *is* the stage count.
+- **Per-stage pagination (`stageMeta` / `onLoadMore`) is flat-board only.** In swimlane mode the per-cell footers describe lane slices, so load-more / totalCount displays are omitted; WIP evaluation still honors `stageMeta.totalCount`.
+- **Stage collapse/expand stays global** — collapsing a stage collapses it in every lane.
+
+#### Per-lane metrics
+
+The headline metrics row stays global by default. For per-lane summaries, pass `metricsPerLane={true}` and make `metrics` a *function* — it's called per lane with `(laneRows, laneKey)` and rendered under each lane header while the toolbar's Metrics toggle is on:
+
+```jsx
+<Kanban
+  {...rest}
+  swimlaneBy="owner"
+  metricsPerLane
+  metrics={(rows, laneKey) => [
+    { label: "Pipeline", number: formatCurrencyCompact(sumBy(rows, "amount")) },
+    { label: "Deals",    number: rows.length },
+  ]}
+/>
+```
+
+Without `metricsPerLane` (or without lanes), a metrics function is called once with all filtered rows — so the same function serves both modes. Arrays and ReactNodes keep rendering globally regardless of `metricsPerLane`.
+
+---
+
 ### Row selection with bulk actions
 
 Add `selectable={true}` and checkboxes appear on each card (top-right of the title row). When any card is selected, a compact selection bar appears above the board with selected count, "Select all", "Deselect all", and any custom action buttons.
@@ -497,7 +584,7 @@ If your data comes from an API or you have too many records to load up-front, dr
   searchValue={params.search}
   filterValues={params.filters}
   sort={params.sort}
-  onParamsChange={fetchBoard}    // { search, filters, sort, collapsedStages }
+  onParamsChange={fetchBoard}    // { search, filters, sort, collapsedStages, collapsedLanes }
 
   stageMeta={stageMeta}          // per-column totals / hasMore / loading
   onLoadMore={loadMoreForStage}
@@ -506,7 +593,7 @@ If your data comes from an API or you have too many records to load up-front, dr
 />
 ```
 
-`onParamsChange` fires on any toolbar change with a unified `{ search, filters, sort, collapsedStages }` object so you can avoid wiring four separate callbacks. The component never mutates `data` — updating the board after a stage change or load-more is the caller's job, same as DataTable's `onRowEdit`.
+`onParamsChange` fires on any toolbar change with a unified `{ search, filters, sort, collapsedStages, collapsedLanes }` object so you can avoid wiring five separate callbacks. The component never mutates `data` — updating the board after a stage change or load-more is the caller's job, same as DataTable's `onRowEdit`.
 
 ---
 
@@ -533,6 +620,16 @@ If your data comes from an API or you have too many records to load up-front, dr
 | `onExpandedStagesChange` | `(stages) => void` | — | Controlled-expansion callback |
 | `stageMeta` | `Record<string, KanbanStageMeta>` | — | Per-stage `hasMore` / `totalCount` / `loading` / `error` |
 | `onLoadMore` | `(stage) => void` | — | Per-column "Load more" callback |
+| `wipLimits` | `Record<string, number>` | — | Top-level per-stage WIP limit overrides (`{ [stageId]: n }`). Beats `stage.wipLimit`. |
+| `onWipExceeded` | `(stageId, count, limit) => void` | — | Fires once when a stage transitions over its limit (incl. mounting already over). Never blocks the move. |
+| `swimlaneBy` | `string \| (row) => key` | — | Groups the board vertically into stacked lane sections |
+| `swimlaneLabels` | `Record<string, string> \| (laneKey, rows) => ReactNode` | — | Lane header labels. Unlabeled lanes show their key. |
+| `swimlaneOrder` | string[] | first-seen | Explicit lane order; listed keys render first and persist even when empty |
+| `collapseLanes` | boolean | `true` | Show the collapse chevron on lane headers |
+| `collapsedLanes` | string[] | — | Controlled list of collapsed lane keys |
+| `defaultCollapsedLanes` | string[] | `[]` | Initial collapsed lane keys (uncontrolled) |
+| `onCollapsedLanesChange` | `(laneKeys) => void` | — | Lane collapse callback |
+| `metricsPerLane` | boolean | `false` | Render the metrics panel inside each lane. Requires `metrics` to be a function. |
 | `selectable` | boolean | `false` | Show a selection checkbox on each card |
 | `selectedIds` | `Id[]` | — | Controlled selection — array of row IDs |
 | `onSelectionChange` | `(ids) => void` | — | Called when selection changes |
@@ -565,14 +662,14 @@ If your data comes from an API or you have too many records to load up-front, dr
 | `columnWidth` | number | `350` | Min per-column width in px (AutoGrid `columnWidth`). Clamped to a 350px minimum. |
 | `collapsedStages` | string[] | — | Controlled list of collapsed stage values |
 | `onCollapsedStagesChange` | `(stages) => void` | — | Controlled-collapse callback |
-| `metrics` | `KanbanMetricItem[] \| ReactNode` | — | Headline metrics panel. Array → `<StatisticsItem>` shorthand; ReactNode → full custom render. |
+| `metrics` | `KanbanMetricItem[] \| ReactNode \| (rows, laneKey) => items \| node` | — | Headline metrics panel. Array → `<StatisticsItem>` shorthand; ReactNode → full custom render; function → computed from the filtered rows (and per lane with `metricsPerLane`). |
 | `showMetrics` | boolean | — | Controlled visibility of the metrics panel |
 | `onMetricsToggle` | `(visible) => void` | — | Called when the toolbar Metrics button is clicked |
 | `searchValue` | string | — | Controlled search term |
 | `onSearchChange` | `(term) => void` | — | Search callback |
 | `filterValues` | `Record<string, unknown>` | — | Controlled filter values |
 | `onFilterChange` | `(values) => void` | — | Filter callback |
-| `onParamsChange` | `({ search, filters, sort, collapsedStages }) => void` | — | Unified callback fired on any toolbar change |
+| `onParamsChange` | `({ search, filters, sort, collapsedStages, collapsedLanes }) => void` | — | Unified callback fired on any toolbar change |
 | `loading` | boolean | `false` | Show a loading skeleton in place of the board |
 | `error` | `string \| boolean` | — | Show an error state. String value is used as the title. |
 | `labels` | `KanbanLabels` | — | Override hardcoded UI strings for i18n |
@@ -592,6 +689,7 @@ If your data comes from an API or you have too many records to load up-front, dr
 | `color` | string | Optional dot color for the header |
 | `icon` | string | Optional HubSpot `Icon` name for the header |
 | `terminal` | boolean | Mark as a "closed" stage (hidden behind a "Show closed" toggle) |
+| `wipLimit` | number | WIP limit. Header shows `count / limit` plus an "Over WIP" tag when exceeded. `0` is valid; overridden per stage by the `wipLimits` prop. Advisory only — never blocks transitions. |
 | `order` | number | Explicit order override (otherwise array order wins) |
 | `footer` | `(rows) => ReactNode` | Per-stage footer content (overrides `columnFooter`) |
 | `canEnter` | `(row) => boolean` | Gate whether a row can move *into* this stage |
@@ -679,7 +777,23 @@ If your data comes from an API or you have too many records to load up-front, dr
 
 ### Labels
 
-`labels` accepts overrides for every hardcoded UI string. See `KanbanLabels` in `kanban.d.ts` for the full list — the most common overrides are `search`, `filtersButton`, `sortButton`, `loadMore`, `loadingMore`, `showMore`, `emptyTitle`, `emptyMessage`, `selected`, `selectAll`, `deselectAll`, `moveTo`, `metricsButton`.
+`labels` accepts overrides for every hardcoded UI string. See `KanbanLabels` in `kanban.d.ts` for the full list — the most common overrides are `search`, `filtersButton`, `sortButton`, `loadMore`, `loadingMore`, `showMore`, `emptyTitle`, `emptyMessage`, `selected`, `selectAll`, `deselectAll`, `moveTo`, `metricsButton`, plus the WIP/swimlane strings `wipCount` (`(count, limit) => string`), `overWip`, `laneCount`, and `unassignedLane`.
+
+### Lane & WIP helper functions
+
+The pure logic behind swimlanes and WIP limits is exported for reuse (custom lane summaries, server-side WIP alerting, tests):
+
+| Export | Signature | Description |
+|---|---|---|
+| `UNASSIGNED_LANE_KEY` | `"__unassigned"` | Lane key for rows with a null/undefined/empty swimlane value |
+| `getLaneKey` | `(row, swimlaneBy) => string` | Resolve a row's lane key (String-coerced) |
+| `orderLaneKeys` | `(seenKeys, swimlaneOrder?) => string[]` | Explicit order first (kept even when empty), then first-seen |
+| `partitionLanes` | `(rows, { swimlaneBy, swimlaneOrder }) => { laneKeys, rowsByLane }` | Full lane partition in render order |
+| `resolveLaneLabel` | `(laneKey, swimlaneLabels?, rows?, unassignedLabel?) => label` | Lane display label with fallbacks |
+| `resolveWipLimit` | `(stage, wipLimits?) => number \| null` | Effective limit (override beats `stage.wipLimit`; invalid → null) |
+| `computeStageCounts` | `(stages, buckets, stageMeta?) => Record<string, number>` | Header-consistent per-stage counts (`totalCount` else bucket size) |
+| `evaluateWip` | `(stages, counts, wipLimits?) => Record<string, { count, limit, exceeded }>` | Per-stage WIP status (`exceeded` = strictly over) |
+| `findNewlyExceededWip` | `(prev, next) => { stageId, count, limit }[]` | Stages that newly crossed into exceeded — the `onWipExceeded` contract |
 
 ---
 
@@ -695,7 +809,6 @@ These come from HubSpot UI Extensions itself, not Kanban:
 | Rotated column labels | Collapsed columns stack each character vertically in its own `Text` (no CSS transforms available). Long stage names become tall — use `shortLabel` for those. |
 | External-link glyph on title links | HubSpot's `Link` primitive always shows the external-link glyph when `href.external === true`. To get a title link *without* the glyph, omit `external: true`. New-tab + no-glyph is not possible today. |
 | No row expansion | Cards are read-mostly; expandable detail rows aren't supported. Route to the CRM record for full edits. |
-| No swimlanes | Secondary grouping (e.g. by owner within stage) isn't supported. On the roadmap. |
 | No export | No built-in CSV/Excel export. Pair with a serverless function. |
 
 See [`src/kanban/SPEC.md`](./SPEC.md) for the full design doc, decision log, and roadmap.
