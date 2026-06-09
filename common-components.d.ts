@@ -323,6 +323,85 @@ export interface StyledTextDataUriOptions extends Omit<StyledTextSharedProps, "c
 
 export interface StyledTextProps extends StyledTextSharedProps {}
 
+export type SkeletonVariant = "text" | "box" | "circle";
+
+/** Pixel number or a width token: sm = 120, md = 240, lg = 360. */
+export type SkeletonWidth = number | "sm" | "md" | "lg";
+
+export interface SkeletonDataUriOptions {
+  variant?: SkeletonVariant;
+  width?: SkeletonWidth;
+  /** Per-line height for "text" (default 12), block height for "box" (default 96), diameter for "circle" (default 40). */
+  height?: number;
+  /** "text" only: number of stacked lines. Default 1. */
+  lines?: number;
+  /** "text" only: final-line width when lines > 1. (0, 1] = fraction of width; > 1 = px; tokens allowed. Default 0.6. */
+  lastLineWidth?: SkeletonWidth;
+  /** "text" only: px between lines. Default 8. */
+  gap?: number;
+  /** Corner radius px (ignored for "circle"). Default 3. */
+  radius?: number;
+  /** "box" only: split the block into N equal cells. Default 1. */
+  columns?: number;
+  /** "box" only: px between cells. Default 16. */
+  columnGap?: number;
+  /** Placeholder color. Default SKELETON_FILL. */
+  fill?: string;
+}
+
+export interface SkeletonDataUriResult {
+  src: string;
+  width: number;
+  height: number;
+}
+
+export interface SkeletonProps extends SkeletonDataUriOptions {
+  /** Accessible label on the underlying <Image>. Default "Loading". */
+  alt?: string;
+  [imageProp: string]: unknown;
+}
+
+export interface SkeletonTextProps extends Omit<SkeletonProps, "variant"> {
+  /** Default 3. */
+  lines?: number;
+  /** Default "md" (240). */
+  width?: SkeletonWidth;
+}
+
+export interface SkeletonBoxProps extends Omit<SkeletonProps, "variant"> {
+  /** Default "md" (240). */
+  width?: SkeletonWidth;
+  /** Default 96. */
+  height?: number;
+}
+
+export interface SkeletonCircleProps
+  extends Omit<SkeletonProps, "variant" | "width" | "height"> {
+  /** Diameter px. Default 40. */
+  size?: number;
+}
+
+export interface SkeletonTableProps {
+  /** Default 4. */
+  rows?: number;
+  /** Cells per row. Default 3. */
+  columns?: number;
+  /** Total row width: px or token. Default "lg" (360). */
+  width?: SkeletonWidth;
+  /** Px height of each row's cells. Default 16. */
+  rowHeight?: number;
+  /** Px between cells within a row. Default 16. */
+  columnGap?: number;
+  /** Flex gap token between rows. Default "sm". */
+  gap?: string;
+  /** Cell corner radius px. Default 3. */
+  radius?: number;
+  fill?: string;
+  /** Accessible label applied to each row image. Default "Loading table". */
+  alt?: string;
+  [flexProp: string]: unknown;
+}
+
 export type SpinnerName =
   | "braille"
   | "braillewave"
@@ -445,6 +524,17 @@ export declare function KeyValueList(props: KeyValueListProps): ReactNode;
 export declare function AvatarStack(props: AvatarStackProps): ReactNode;
 export declare function CrmLookupSelect(props: CrmLookupSelectProps): ReactNode;
 export declare function StyledText(props: StyledTextProps): ReactNode;
+export declare function Skeleton(props: SkeletonProps): ReactNode;
+export declare function SkeletonText(props: SkeletonTextProps): ReactNode;
+export declare function SkeletonBox(props: SkeletonBoxProps): ReactNode;
+export declare function SkeletonCircle(props: SkeletonCircleProps): ReactNode;
+export declare function SkeletonTable(props: SkeletonTableProps): ReactNode;
+/** Build the SVG data URI + intrinsic dimensions for a skeleton placeholder. */
+export declare function makeSkeletonDataUri(
+  options?: SkeletonDataUriOptions
+): SkeletonDataUriResult;
+/** Width tokens accepted anywhere a skeleton takes a `width` (sm/md/lg → px). */
+export declare const SKELETON_WIDTH_TOKENS: { sm: number; md: number; lg: number };
 export declare function Spinner(props: SpinnerProps): ReactNode;
 export declare const SPINNERS: Record<SpinnerName, SpinnerPreset>;
 export declare const SPINNER_NAMES: SpinnerName[];
@@ -466,6 +556,8 @@ export declare const HS_TEXT_COLOR: string;
 export declare const HS_SUBTLE_BG: string;
 export declare const HS_MUTED_TEXT: string;
 export declare const HS_NEUTRAL_CHIP: string;
+/** Skeleton placeholder gray. */
+export declare const SKELETON_FILL: string;
 export declare const HS_TAG_SUBTLE_BORDER: string;
 export declare const HS_TAG_TEXT_COLOR: string;
 export declare const HS_TAG_FONT_SIZE: number;

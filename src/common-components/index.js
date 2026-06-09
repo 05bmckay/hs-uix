@@ -11,6 +11,8 @@ export * from "./datePresets.js";
 export * from "./Icon.js";
 export * from "./KeyValueList.js";
 export * from "./SectionHeader.js";
+export * from "./Skeleton.js";
+export * from "./skeletonSvg.js";
 export * from "./Spinner.js";
 export * from "./spinners.js";
 export * from "./StyledText.js";
