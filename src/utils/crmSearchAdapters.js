@@ -707,3 +707,6 @@ export const CrmKanban = ({
     board
   );
 };
+
+CrmDataTable.displayName = "CrmDataTable";
+CrmKanban.displayName = "CrmKanban";

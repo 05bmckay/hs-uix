@@ -1,15 +1,14 @@
 // Each component module prefixes its type names (DataTable*, Kanban*, Feed*,
-// Calendar*, FormBuilder*, Filter*, Wizard*/OnboardingChecklist*) and its
-// value exports are unique, so `export *` is collision-free and keeps this
-// root barrel automatically in sync with every type each component declares —
-// no hand-maintained list to fall out of date.
+// Calendar*, FormBuilder*, and Filter*) and its value exports are unique, so
+// `export *` is collision-free and keeps this root barrel automatically in
+// sync with every type each component declares — no hand-maintained list to
+// fall out of date.
 export * from "./src/datatable/index";
 export * from "./src/kanban/index";
 export * from "./src/feed/index";
 export * from "./src/calendar/index";
 export * from "./src/form/index";
 export * from "./src/filter/index";
-export * from "./src/wizard/index";
 
 export {
   ActiveFilterChips,
@@ -22,7 +21,9 @@ export {
   compareHsDateValues,
   CrmLookupSelect,
   CrmRecordPicker,
+  DATE_FILTER_OPERATORS,
   DATE_RANGE_CUSTOM_VALUE,
+  DATE_ROLLING_UNIT_OPTIONS,
   DateRangePicker,
   formatCollectionCount,
   isValidDateRange,
@@ -30,13 +31,6 @@ export {
   toHsDateValue,
   KeyValueList,
   SectionHeader,
-  Skeleton,
-  SkeletonText,
-  SkeletonBox,
-  SkeletonCircle,
-  SkeletonTable,
-  makeSkeletonDataUri,
-  SKELETON_WIDTH_TOKENS,
   SKELETON_FILL,
   Spinner,
   SPINNERS,
@@ -156,21 +150,19 @@ export type {
   DatePresetOption,
   DateRangePickerChangeMeta,
   DateRangePickerDateValue,
+  DateRangePickerExplicitRangeValue,
+  DateRangePickerOperator,
   DateRangePickerPresetOption,
+  DateRangePickerPresetValue,
   DateRangePickerProps,
+  DateRangePickerRangeValue,
+  DateRangePickerRollingDirection,
+  DateRangePickerRollingUnit,
+  DateRangePickerRollingValue,
   DateRangePickerValue,
   KeyValueListItem,
   KeyValueListProps,
   SectionHeaderProps,
-  SkeletonVariant,
-  SkeletonWidth,
-  SkeletonDataUriOptions,
-  SkeletonDataUriResult,
-  SkeletonProps,
-  SkeletonTextProps,
-  SkeletonBoxProps,
-  SkeletonCircleProps,
-  SkeletonTableProps,
   SpinnerName,
   SpinnerPreset,
   SpinnerProps,

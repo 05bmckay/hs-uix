@@ -11,20 +11,19 @@ Reusable UI wrappers built on top of HubSpot UI Extensions primitives.
 - `CrmLookupSelect` — CRM-backed `Select` / `MultiSelect` with live, debounced search
 - `CrmRecordPicker` — multi-association record picker: search CRM records, select many, get ids AND records back, optional inline create
 - `CollectionToolbar`, `CollectionFilterControl`, `ActiveFilterChips`, `CollectionSortSelect`, `CollectionCount` — shared search/filter/sort/count primitives used by DataTable, Kanban, Feed, and Calendar
-- `DateRangePicker` — standalone from/to date-range control with HubSpot's quick-preset dropdown; emits the same `{ from, to }` shape as `dateRange` filters
+- `DateRangePicker` — HubSpot-style date filter value control with `is`, rolling, and explicit-range operator layouts
 - `SectionHeader` — title + optional description row
 - `KeyValueList` — vertical list of label/value rows
 - `StyledText` — SVG-rendered text with rotation, custom colors, pill backgrounds
-- `Skeleton` (+ `SkeletonText`, `SkeletonBox`, `SkeletonCircle`, `SkeletonTable`) — gray content placeholders for loading states
 - `Spinner` — animated unicode/braille loading indicator
 
 Plus utilities + constants:
 
-- `makeAvatarStackDataUri`, `makeStyledTextDataUri`, `makeIconDataUri`, `makeSkeletonDataUri` — low-level builders that return `{ src, width, height }` for composing into larger SVGs
+- `makeAvatarStackDataUri`, `makeStyledTextDataUri`, `makeIconDataUri` — low-level builders that return `{ src, width, height }` for composing into larger SVGs
 - `ICONS`, `ICON_NAMES`, `NATIVE_ICON_NAME_LIST`, `svgToIconEntry` — the custom icon registry and helpers behind `Icon`
 - `SPINNERS`, `SPINNER_NAMES` — spinner presets and registry
 - `HS_DATE_PRESETS`, `HS_DATE_DIRECTION_LABELS` — HubSpot's native quick-date preset list
-- `presetToRange`, `toHsDateValue`, `compareHsDateValues`, `isValidDateRange`, `DATE_RANGE_CUSTOM_VALUE` — the pure date-range math behind `DateRangePicker`
+- `presetToRange`, `toHsDateValue`, `compareHsDateValues`, `isValidDateRange`, `DATE_FILTER_OPERATORS`, `DATE_ROLLING_UNIT_OPTIONS`, `DATE_RANGE_CUSTOM_VALUE` — date-filter constants and math behind `DateRangePicker`
 - `HS_FONT_FAMILY`, `HS_TEXT_COLOR`, `HS_SUBTLE_BG`, `HS_MUTED_TEXT`, `HS_NEUTRAL_CHIP` — style constants matching native HubSpot CSS
 
 ## Purpose
@@ -136,12 +135,15 @@ const activeChips = buildActiveFilterChips(filters, filterValues);
 
 ## DateRangePicker
 
-HubSpot only ships a single-date `DateInput`. `DateRangePicker` is the from/to pair done right: a quick-preset `Select` (HubSpot's native Today / Last 7 days / This quarter list), two `DateInput`s, and an optional Clear link — in one control. Its value is the exact `{ from, to }` shape that `dateRange` filters use across DataTable, Kanban, Feed, and Calendar, so the `onChange` payload plugs straight into those filter pipelines (and into `filterRows` / `dateToTimestamp` from `hs-uix/utils`).
+HubSpot's CRM filter editor changes the value control based on the selected date operator. `DateRangePicker` follows that pattern: `is` renders a quick-preset `Select`, `is more than` renders a number plus rolling unit dropdown, and `is between` renders two `DateInput`s with a `to` separator. Its `onChange` payload preserves the operator so server-side CRM search builders can distinguish preset, rolling, and explicit range filters.
 
 ```jsx
 import { DateRangePicker } from "hs-uix/common-components";
 
-const [range, setRange] = useState({ from: null, to: null });
+const [range, setRange] = useState({
+  operator: "InRollingDateRange",
+  preset: "today",
+});
 
 <DateRangePicker
   label="Close date"
@@ -154,26 +156,30 @@ const [range, setRange] = useState({ from: null, to: null });
 
 Features:
 
-- **Presets that actually fill dates.** Picking "Last quarter" computes real `{ from, to }` bounds via `presetToRange` and fires `onChange` — no more "the preset value is just a string, translate it yourself".
-- **Custom flips automatically.** Editing either date by hand (or changing `value` externally to a range no preset produced) flips the Select to "Custom".
-- **Only valid ranges escape.** If an edit would make `from > to`, the invalid half is held locally — shown in the input with an error message — and `onChange` is NOT called until the user fixes either side. Your state never sees a backwards range.
+- **HubSpot-style operator values.** The built-in operators are `InRollingDateRange` (`is`), `GreaterRolling` (`is more than`), and `InRange` (`is between`).
+- **Presets can still resolve to dates.** Picking "Last quarter" includes the computed `{ from, to }` bounds in `meta.range` via `presetToRange`.
+- **Only valid explicit ranges escape.** If an `InRange` edit would make `from > to`, the invalid half is held locally with an error message and `onChange` is NOT called until the user fixes either side.
 - **Controlled or uncontrolled** via `value` / `defaultValue` / `onChange`.
-- **Open-ended ranges** are first-class: either side may stay `null`.
+- **Plain `{ from, to }` compatibility.** Passing the older range shape is treated as `operator: "InRange"`.
 
 | Prop | Type | Default | Notes |
 | ---- | ---- | ------- | ----- |
-| `value` | `{ from, to }` | — | Controlled range of HubSpot date objects (`{ year, month, date }`, month 0-indexed). Either side may be `null`. |
-| `defaultValue` | `{ from, to }` | `{ from: null, to: null }` | Initial range for uncontrolled usage. |
-| `onChange` | `(range, { preset }) => void` | — | Fires only with valid ranges. `preset` is the preset key when the change came from the Select, else `null`. |
+| `value` | operator value | — | Controlled value. Use `{ operator: "InRollingDateRange", preset }`, `{ operator: "GreaterRolling", amount, unit, direction }`, `{ operator: "InRange", from, to }`, or legacy `{ from, to }`. |
+| `defaultValue` | operator value | `{ operator: "InRollingDateRange", preset: "today" }` | Initial value for uncontrolled usage. |
+| `onChange` | `(value, meta) => void` | — | Fires with the normalized operator value. `meta` includes `{ operator, preset, range? }`. |
 | `label` | `ReactNode` | — | Group label rendered above the control. |
-| `name` | `string` | `"date-range"` | Base for inner input names (`-from`, `-to`, `-preset` suffixes). |
+| `name` | `string` | `"date-range"` | Base for inner input names. |
+| `operator` / `defaultOperator` | date operator | — / `"InRollingDateRange"` | Controlled or uncontrolled operator. |
+| `showOperatorSelect` | `boolean` | `true` | Render the operator dropdown. |
+| `operatorOptions` | array | `DATE_FILTER_OPERATORS` | Override operator labels or available operators. |
 | `presets` | `boolean \| array` | `true` | `true` = `HS_DATE_PRESETS`; `false` = no preset Select; or a custom `{ label, value, getRange? }` array — `value` is a `presetToRange` key, or supply `getRange(now)` for fully custom presets. |
+| `rollingUnitOptions` | array | `DATE_ROLLING_UNIT_OPTIONS` | Options for the rolling amount unit/direction dropdown. |
 | `direction` | `"row" \| "column"` | `"row"` | Row uses placeholders on the date inputs; column uses labels. |
 | `clearable` | `boolean` | `false` | Show a Clear link when the range is non-empty. Clearing commits `{ from: null, to: null }`. |
 | `min` / `max` | date object | — | Passed through to both `DateInput`s. |
-| `fromLabel` / `toLabel` | `string` | `"From"` / `"To"` | Date input text. |
+| `fromLabel` / `toLabel` | `string` | `"Start date"` / `"End date"` | Date input text in column mode. |
 | `format` | `string` | `"medium"` | `DateInput` display format. |
-| `presetPlaceholder` | `string` | `"Date range"` | Placeholder for the preset Select. |
+| `presetPlaceholder` | `string` | `"Enter value"` | Placeholder for the preset Select. |
 | `customPresetLabel` | `string` | `"Custom"` | Label for the appended Custom option. |
 | `clearLabel` | `ReactNode` | `"Clear"` | Clear link text. |
 | `invalidRangeMessage` | `string` | `"Start date must be on or before end date"` | Shown on the held invalid input. |
@@ -360,87 +366,6 @@ const { src, width, height } = makeStyledTextDataUri("Sort", {
 Text rendered through `<Image>` as a data URI is **not user-selectable** — glyphs live inside a rasterized image boundary, not the DOM tree. If the text needs to be selectable/copyable, use the native `<Text>` component instead. `StyledText` is for cases where you need visual effects `<Text>` can't provide.
 
 For `background={{ preset: "tag" }}` specifically: plain horizontal tags now render through native HubSpot `Tag` so they match the platform exactly. The SVG path is still used when you rotate the tag or override the tag chrome.
-
----
-
-## Skeleton
-
-Content placeholders for loading states. `Spinner` says "something is happening"; `Skeleton` holds the **shape** of the incoming content so the layout doesn't jump when data lands. There is no native skeleton component and CSS is forbidden, so each placeholder is a gray rounded-rect SVG data URI rendered through the native `<Image>` — the same technique as `StyledText` and `AvatarStack`.
-
-Prefer the presets — they cover the common shapes:
-
-```jsx
-import {
-  Skeleton,
-  SkeletonText,
-  SkeletonBox,
-  SkeletonCircle,
-  SkeletonTable,
-} from "hs-uix/common-components";
-import { Flex } from "@hubspot/ui-extensions";
-
-// Paragraph: 3 lines, shorter last line
-{loading ? <SkeletonText lines={3} width="md" /> : <Text>{description}</Text>}
-
-// Card header: avatar + two text lines
-<Flex direction="row" align="center" gap="sm">
-  <SkeletonCircle size={40} />
-  <SkeletonText lines={2} width="sm" />
-</Flex>
-
-// Chart / image block
-<SkeletonBox width="lg" height={160} />
-
-// Table placeholder: 5 rows × 4 columns
-<SkeletonTable rows={5} columns={4} width="lg" />
-
-// Base component for custom shapes
-<Skeleton variant="text" lines={4} width={280} height={10} gap={6} lastLineWidth={0.4} />
-```
-
-Width tokens: anywhere a skeleton takes a `width` you can pass a pixel number or `"sm"` (120) / `"md"` (240) / `"lg"` (360).
-
-### `<Skeleton>` props
-
-| Prop | Type | Default | Notes |
-| ---- | ---- | ------- | ----- |
-| `variant` | `"text"` \| `"box"` \| `"circle"` | `"text"` | `text` = stacked lines, `box` = solid block, `circle` = avatar disc. |
-| `width` | number \| `"sm"` \| `"md"` \| `"lg"` | `"md"` (240) | Pixel width or token. |
-| `height` | number | per variant | Per-line height for `text` (12), block height for `box` (96), diameter for `circle` (40). |
-| `lines` | number | `1` | `text` only: stacked line count. |
-| `lastLineWidth` | number \| token | `0.6` | `text` only, when `lines > 1`. Values in `(0, 1]` are a fraction of `width`; larger numbers are px. |
-| `gap` | number | `8` | `text` only: px between lines. |
-| `radius` | number | `3` | Corner radius px (ignored for `circle`). |
-| `columns` | number | `1` | `box` only: split the block into N equal cells (what `SkeletonTable` rows use). |
-| `columnGap` | number | `16` | `box` only: px between cells. |
-| `fill` | string | `SKELETON_FILL` | Placeholder color. |
-| `alt` | string | `"Loading"` | Accessibility label; `...rest` forwards to the underlying `<Image>`. |
-
-### Presets
-
-| Component | Props | Defaults |
-| --------- | ----- | -------- |
-| `SkeletonText` | `lines`, `width`, + any `Skeleton` prop | `lines=3`, `width="md"` |
-| `SkeletonBox` | `width`, `height`, + any `Skeleton` prop | `width="md"`, `height=96` |
-| `SkeletonCircle` | `size`, + any `Skeleton` prop | `size=40` (avatar `md`) |
-| `SkeletonTable` | `rows`, `columns`, `width`, `rowHeight`, `columnGap`, `gap` (Flex token between rows), `radius`, `fill`, `alt` | `rows=4`, `columns=3`, `width="lg"`, `rowHeight=16`, `columnGap=16`, `gap="sm"` |
-
-`SkeletonTable` renders a `Flex` column of row skeletons; each row is one SVG split into `columns` equal cells, so rows stay pixel-aligned without fighting Flex gap tokens. `...rest` forwards to the wrapping `Flex`.
-
-### Low-level builder
-
-```js
-import { makeSkeletonDataUri, SKELETON_WIDTH_TOKENS } from "hs-uix/common-components";
-
-const { src, width, height } = makeSkeletonDataUri({ variant: "text", lines: 3, width: "md" });
-// → paint anywhere an <Image> is valid; SKELETON_WIDTH_TOKENS = { sm: 120, md: 240, lg: 360 }
-```
-
-### Guidelines
-
-- Match the skeleton to the layout it replaces — same widths, same row counts — so nothing shifts on load.
-- Skeletons are static by design (no shimmer; UI Extensions can't animate CSS). If you need motion, pair a `Spinner` line above a skeleton block.
-- For card/panel-level loading where shape preservation doesn't matter, the native `LoadingSpinner` is still the default.
 
 ---
 

@@ -1640,3 +1640,5 @@ export const Calendar = (props) => {
 };
 
 export default Calendar;
+
+Calendar.displayName = "Calendar";

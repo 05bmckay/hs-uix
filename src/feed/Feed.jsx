@@ -1232,3 +1232,5 @@ export const Feed = ({
   if (container === "card" || container === "tile") return <Tile compact>{feed}</Tile>;
   return feed;
 };
+
+Feed.displayName = "Feed";

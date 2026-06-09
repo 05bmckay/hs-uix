@@ -1170,6 +1170,7 @@ export const DataTable = ({
     const type = col.editType || "text";
     const rowId = row[rowIdField];
     const fieldName = `edit-${rowId}-${col.field}`;
+    const inputLabel = typeof col.label === "string" ? col.label : col.field;
     const commit = (val) => commitEdit(row, col.field, val);
     const exitEdit = () => {
       if (editError) return;
@@ -1214,18 +1215,18 @@ export const DataTable = ({
       case "multiselect":
         return <MultiSelect {...extra} name={fieldName} label="" value={editValue || []} onChange={commit} options={resolveEditOptions(col, data)} />;
       case "date":
-        return <DateInput {...extra} name={fieldName} label="" value={editValue} onChange={commit} />;
+        return <DateInput {...extra} name={fieldName} label={inputLabel} value={editValue} onChange={commit} />;
       case "time":
-        return <TimeInput {...extra} name={fieldName} label="" value={editValue} onChange={commit} />;
+        return <TimeInput {...extra} name={fieldName} label={inputLabel} value={editValue} onChange={commit} />;
       case "datetime":
         return (
           <Flex direction="row" align="center" gap="xs" wrap="nowrap">
-            <DateInput {...extra} name={`${fieldName}-date`} label="" value={editValue?.date} onChange={(val) => {
+            <DateInput {...extra} name={`${fieldName}-date`} label={`${inputLabel} date`} value={editValue?.date} onChange={(val) => {
               const next = { ...editValue, date: val };
               handleInput(next);
               commitEdit(row, col.field, next, { keepEditing: true });
             }} onBlur={maybeExitDatetimeEdit} />
-            <TimeInput {...(extra.timeProps || {})} name={`${fieldName}-time`} label="" value={editValue?.time} onChange={(val) => {
+            <TimeInput {...(extra.timeProps || {})} name={`${fieldName}-time`} label={`${inputLabel} time`} value={editValue?.time} onChange={(val) => {
               const next = { ...editValue, time: val };
               handleInput(next);
               commitEdit(row, col.field, next, { keepEditing: true });
@@ -1270,6 +1271,7 @@ export const DataTable = ({
     const type = col.editType || "text";
     const rowId = row[rowIdField];
     const fieldName = `inline-${rowId}-${col.field}`;
+    const inputLabel = typeof col.label === "string" ? col.label : col.field;
     const cellKey = `${rowId}-${col.field}`;
     const value = row[col.field];
     const validate = col.editValidate;
@@ -1318,16 +1320,16 @@ export const DataTable = ({
       case "multiselect":
         return <MultiSelect {...extra} name={fieldName} label="" value={value || []} onChange={fire} options={resolveEditOptions(col, data)} />;
       case "date":
-        return <DateInput {...extra} name={fieldName} label="" value={value} onChange={fire} />;
+        return <DateInput {...extra} name={fieldName} label={inputLabel} value={value} onChange={fire} />;
       case "time":
-        return <TimeInput {...extra} name={fieldName} label="" value={value} onChange={fire} />;
+        return <TimeInput {...extra} name={fieldName} label={inputLabel} value={value} onChange={fire} />;
       case "datetime":
         return (
           <Flex direction="row" align="center" gap="xs" wrap="nowrap">
-            <DateInput {...extra} name={`${fieldName}-date`} label="" value={value?.date} onChange={(val) => {
+            <DateInput {...extra} name={`${fieldName}-date`} label={`${inputLabel} date`} value={value?.date} onChange={(val) => {
               fire({ ...value, date: val });
             }} />
-            <TimeInput {...(extra.timeProps || {})} name={`${fieldName}-time`} label="" value={value?.time} onChange={(val) => {
+            <TimeInput {...(extra.timeProps || {})} name={`${fieldName}-time`} label={`${inputLabel} time`} value={value?.time} onChange={(val) => {
               fire({ ...value, time: val });
             }} />
           </Flex>
@@ -1789,3 +1791,5 @@ export const DataTable = ({
     </Flex>
   );
 };
+
+DataTable.displayName = "DataTable";

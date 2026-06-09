@@ -19,3 +19,5 @@ export const KeyValueList = ({ items = [], direction = "row", gap = "sm" }) => {
     React.createElement(DescriptionList, { direction }, ...rows)
   );
 };
+
+KeyValueList.displayName = "KeyValueList";

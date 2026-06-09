@@ -1589,3 +1589,5 @@ export const Kanban = ({
     </Flex>
   );
 };
+
+Kanban.displayName = "Kanban";
