@@ -32,6 +32,7 @@ export {
   AvatarStack,
   compareHsDateValues,
   CrmLookupSelect,
+  CrmRecordPicker,
   DATE_RANGE_CUSTOM_VALUE,
   DateRangePicker,
   DEFAULT_SVG_FONT_WEIGHT,

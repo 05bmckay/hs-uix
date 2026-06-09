@@ -3,6 +3,8 @@ export * from "./AutoStatusTag.js";
 export * from "./ActiveFilterChips.js";
 export * from "./AvatarStack.js";
 export * from "./CrmLookupSelect.js";
+export * from "./CrmRecordPicker.js";
+export * from "./recordPickerCore.js";
 export * from "./CollectionCount.js";
 export * from "./CollectionFilterControl.js";
 export * from "./CollectionSortSelect.js";

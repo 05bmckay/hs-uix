@@ -9,6 +9,7 @@ Reusable UI wrappers built on top of HubSpot UI Extensions primitives.
 - `AvatarStack` — overlapping circular avatars (letters or image URLs)
 - `Icon` — superset of HubSpot's native `<Icon>`: custom glyphs, any CSS color, pixel sizes
 - `CrmLookupSelect` — CRM-backed `Select` / `MultiSelect` with live, debounced search
+- `CrmRecordPicker` — multi-association record picker: search CRM records, select many, get ids AND records back, optional inline create
 - `CollectionToolbar`, `CollectionFilterControl`, `ActiveFilterChips`, `CollectionSortSelect`, `CollectionCount` — shared search/filter/sort/count primitives used by DataTable, Kanban, Feed, and Calendar
 - `DateRangePicker` — standalone from/to date-range control with HubSpot's quick-preset dropdown; emits the same `{ from, to }` shape as `dateRange` filters
 - `SectionHeader` — title + optional description row
@@ -41,6 +42,7 @@ import {
   AvatarStack,
   Icon,
   CrmLookupSelect,
+  CrmRecordPicker,
   CollectionToolbar,
   CollectionSortSelect,
   DateRangePicker,
@@ -482,6 +484,69 @@ import { CrmLookupSelect } from "hs-uix/common-components";
 | `query` / `onSearchChange` | string \| `(q) => void` | — | Controlled search query. |
 | `variant` | `"transparent"` \| `"input"` | — | Visual variant passed to the underlying select. |
 | `placeholder`, `description`, `tooltip`, `required`, `readOnly`, `error`, `validationMessage` | — | — | Standard field props forwarded to the native select. |
+
+---
+
+## CrmRecordPicker
+
+The association picker. `CrmLookupSelect` answers "pick ONE record" — `CrmRecordPicker` answers "pick MANY, give me the records back, and let the user create one inline". Use it whenever you're managing a record's associations (contacts on a deal, companies on a ticket) or any selection where you need the full record objects, not just ids.
+
+What you get over a hand-rolled `MultiSelect` + `useCrmSearchOptions`:
+
+- **Selections never vanish.** A selected record stays visible as an option even when the live search page no longer contains it.
+- **ids AND records.** `onChange(ids, records)` hands back both — no second fetch to resolve what the user picked. `value` accepts ids, records, or a mix.
+- **`max` enforcement.** Picks beyond the cap are rejected (the existing selection is kept), and the create option hides at the cap.
+- **Guarded inline create.** With `allowCreate`, a settled search with no exact label match appends `Create "<term>"`; choosing it awaits `onCreate(term)`, selects the result, and merges it into the options. Double-fires are blocked while the create call is pending.
+
+```jsx
+import { CrmRecordPicker } from "hs-uix/common-components";
+
+<CrmRecordPicker
+  objectType="contact"
+  properties={["firstname", "lastname", "email"]}
+  label="Associated contacts"
+  labelField={(r) => `${r.firstname} ${r.lastname}`}
+  descriptionField="email"
+  value={contactIds}
+  onChange={(ids, records) => {
+    setContactIds(ids);
+    syncAssociations(records);
+  }}
+  max={10}
+  allowCreate={{
+    label: (term) => `Create contact "${term}"`,
+    onCreate: async (term) => {
+      const created = await hubspot.serverless("createContact", { parameters: { email: term } });
+      return created; // record object or its id — both work
+    },
+  }}
+/>
+```
+
+Single-select mode (`multi={false}`) behaves like `CrmLookupSelect` but keeps this component's richer API: `onChange(id, record)` with a scalar id (or `null` when cleared), plus `allowCreate` — which `CrmLookupSelect` doesn't have.
+
+### Props
+
+| Prop | Type | Default | Notes |
+| ---- | ---- | ------- | ----- |
+| `objectType` | string | — | CRM object to search (`"contact"`, `"company"`, `"deal"`, or any object type id/name). |
+| `properties` | `string[]` | — | Properties to fetch (drive labels/descriptions). |
+| `labelField` | string \| `(record) => unknown` | — | Option label: dotted property path or accessor. Falls back to `name`, `properties.name`, then `fallbackLabel`. |
+| `descriptionField` | string \| `(record) => unknown` | — | Option description (omitted when empty). |
+| `value` / `defaultValue` | array of ids and/or records (scalar when `multi={false}`) | — | Controlled / uncontrolled selection. Record objects seed the id→record registry. |
+| `onChange` | `(ids, records) => void` | — | Multi: arrays. Single: scalar id (or `null`) + record (or `null`). Never-seen ids come back as `{ objectId: id }` stubs. |
+| `multi` | boolean | `true` | `MultiSelect` vs `Select`. |
+| `max` | number | — | Selection cap. The pick that would exceed it is rejected. |
+| `allowCreate` | `false` \| `{ label?, onCreate }` | `false` | `onCreate: async (term) => recordOrId`. `label` is a string or `(term) => string`; default `Create "<term>"`. |
+| `filterMap` | `(filters, params) => filterGroups` | — | Scope the search with full HubSpot CRM search syntax (e.g. restrict to a pipeline). |
+| `pageLength` | number | `20` | Results fetched per query. |
+| `debounce` / `minSearchLength` | number | `300` / `0` | Search tuning. |
+| `fallbackLabel` | string | `"Untitled record"` | Label for records whose `labelField` resolves empty. |
+| `onSearchChange` | `(query) => void` | — | Observe the live search input. |
+| `format` / `baseConfig` | object | — | Advanced passthroughs to the CRM search config. |
+| `label`, `name`, `placeholder`, `description`, `tooltip`, `required`, `readOnly`, `error`, `validationMessage`, `variant` | — | — | Standard field props forwarded to the native select; any other props are spread through too. |
+
+The pure decision logic (option merging, max enforcement, create-option rules, id↔record mapping) is exported from `recordPickerCore.js` — `mergePickerOptions`, `enforceSelectionMax`, `shouldShowCreateOption`, `makeCreateOption`, `splitCreateSelection`, `normalizeRecordSelection`, `mapIdsToRecords`, `getRecordId`, `upsertRecords`, `CREATE_OPTION_VALUE` — if you're building a custom picker UI on the same rules.
 
 ---
 

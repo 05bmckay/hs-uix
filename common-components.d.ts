@@ -329,6 +329,102 @@ export interface CrmLookupSelectProps {
   selectProps?: Record<string, unknown>;
 }
 
+/** Dotted property path ("properties.domain") or accessor function. */
+export type CrmRecordPickerFieldAccessor =
+  | string
+  | ((record: Record<string, unknown>) => unknown);
+
+export type CrmRecordPickerId = string | number;
+
+export type CrmRecordPickerRecord = Record<string, unknown>;
+
+/** A scalar or array of record ids and/or record objects. */
+export type CrmRecordPickerValue =
+  | CrmRecordPickerId
+  | CrmRecordPickerRecord
+  | Array<CrmRecordPickerId | CrmRecordPickerRecord>;
+
+export interface CrmRecordPickerOption {
+  label: ReactNode;
+  value: CrmRecordPickerId;
+  description?: string;
+}
+
+export interface CrmRecordPickerCreateConfig {
+  /** Static label or `(term) => label` formatter. Default `Create "<term>"`. */
+  label?: string | ((term: string) => string);
+  /** Create the record for the search term; return the new record or its id. */
+  onCreate: (
+    searchTerm: string
+  ) =>
+    | Promise<CrmRecordPickerRecord | CrmRecordPickerId>
+    | CrmRecordPickerRecord
+    | CrmRecordPickerId;
+}
+
+export interface CrmRecordPickerProps {
+  objectType: "contact" | "contacts" | "company" | "companies" | "deal" | "deals" | string;
+  properties?: string[];
+  labelField?: CrmRecordPickerFieldAccessor;
+  descriptionField?: CrmRecordPickerFieldAccessor;
+  value?: CrmRecordPickerValue;
+  defaultValue?: CrmRecordPickerValue;
+  /**
+   * Multi mode passes (ids, records) arrays; single mode passes a scalar id
+   * (or null) and the matching record (or null). Records never seen by the
+   * picker come back as `{ objectId: id }` stubs.
+   */
+  onChange?: (
+    ids: CrmRecordPickerId[] | CrmRecordPickerId | null,
+    records: CrmRecordPickerRecord[] | CrmRecordPickerRecord | null
+  ) => void;
+  multi?: boolean;
+  max?: number;
+  placeholder?: string;
+  label?: string;
+  name?: string;
+  required?: boolean;
+  readOnly?: boolean;
+  error?: boolean;
+  validationMessage?: string;
+  description?: string;
+  tooltip?: string;
+  variant?: "transparent" | "input";
+  pageLength?: number;
+  debounce?: number;
+  minSearchLength?: number;
+  filterMap?: (
+    filters: Record<string, unknown>,
+    params: Record<string, unknown>
+  ) => unknown;
+  allowCreate?: false | CrmRecordPickerCreateConfig;
+  fallbackLabel?: string;
+  format?: Record<string, unknown>;
+  baseConfig?: Record<string, unknown>;
+  onSearchChange?: (query: string) => void;
+  [key: string]: unknown;
+}
+
+export interface CrmRecordPickerCreateOptionRules {
+  allowCreate?: false | true | CrmRecordPickerCreateConfig;
+  searchTerm?: string;
+  options?: CrmRecordPickerOption[];
+  searching?: boolean;
+  createPending?: boolean;
+  atMax?: boolean;
+}
+
+export interface CrmRecordPickerOptionConfig {
+  labelField?: CrmRecordPickerFieldAccessor;
+  descriptionField?: CrmRecordPickerFieldAccessor;
+  fallbackLabel?: string;
+}
+
+export interface CrmRecordPickerSelection {
+  ids: CrmRecordPickerId[];
+  records: CrmRecordPickerRecord[];
+}
+
 export interface StyledTextFormat {
   fontWeight?: "bold" | "demibold" | "regular" | number;
   italic?: boolean;
@@ -579,6 +675,56 @@ export declare function SectionHeader(props: SectionHeaderProps): ReactNode;
 export declare function KeyValueList(props: KeyValueListProps): ReactNode;
 export declare function AvatarStack(props: AvatarStackProps): ReactNode;
 export declare function CrmLookupSelect(props: CrmLookupSelectProps): ReactNode;
+export declare function CrmRecordPicker(props: CrmRecordPickerProps): ReactNode;
+
+/** Sentinel option value for CrmRecordPicker's inline "Create" option. */
+export declare const CREATE_OPTION_VALUE: "__create__";
+/** True when the value looks like a record object (vs a scalar id). */
+export declare function isRecordLike(value: unknown): boolean;
+/** Extract a record's id (objectId | id | hs_object_id | properties.hs_object_id). */
+export declare function getRecordId(record: unknown): CrmRecordPickerId | undefined;
+/** Normalize a picker value (ids and/or records, scalar or array) to { ids, records }. */
+export declare function normalizeRecordSelection(
+  value: CrmRecordPickerValue | null | undefined
+): CrmRecordPickerSelection;
+/** Map a record to a { label, value, description? } option. */
+export declare function recordToPickerOption(
+  record: CrmRecordPickerRecord,
+  config?: CrmRecordPickerOptionConfig
+): CrmRecordPickerOption;
+/** Merge search-page options with selected options so selections stay visible. */
+export declare function mergePickerOptions(
+  options: CrmRecordPickerOption[],
+  selectedOptions?: CrmRecordPickerOption | CrmRecordPickerOption[] | null
+): CrmRecordPickerOption[];
+/** Trim a selection to its first `max` ids (rejects picks beyond the cap). */
+export declare function enforceSelectionMax(
+  ids: CrmRecordPickerId[] | CrmRecordPickerId | null | undefined,
+  max?: number
+): CrmRecordPickerId[];
+/** Injection rules for the inline create option. */
+export declare function shouldShowCreateOption(
+  rules?: CrmRecordPickerCreateOptionRules
+): boolean;
+/** Build the `Create "<term>"` option for a search term. */
+export declare function makeCreateOption(
+  term: string,
+  label?: string | ((term: string) => string)
+): CrmRecordPickerOption;
+/** Split an onChange payload into real ids + whether the create sentinel was chosen. */
+export declare function splitCreateSelection(
+  next: CrmRecordPickerId[] | CrmRecordPickerId | null | undefined
+): { ids: CrmRecordPickerId[]; create: boolean };
+/** Map ids back to records via a Map/object registry; unknown ids become { objectId } stubs. */
+export declare function mapIdsToRecords(
+  ids: CrmRecordPickerId[] | CrmRecordPickerId | null | undefined,
+  recordsById?: Map<CrmRecordPickerId, CrmRecordPickerRecord> | Record<string, CrmRecordPickerRecord>
+): CrmRecordPickerRecord[];
+/** Upsert records into a list deduped by record id (later wins). */
+export declare function upsertRecords(
+  records: CrmRecordPickerRecord[] | null | undefined,
+  additions: CrmRecordPickerRecord | CrmRecordPickerRecord[] | null | undefined
+): CrmRecordPickerRecord[];
 export declare function StyledText(props: StyledTextProps): ReactNode;
 export declare function Skeleton(props: SkeletonProps): ReactNode;
 export declare function SkeletonText(props: SkeletonTextProps): ReactNode;
