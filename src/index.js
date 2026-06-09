@@ -1,7 +1,15 @@
 export { DataTable } from "./datatable/index.js";
 export { FormBuilder, useFormPrefill } from "./form/index.js";
 export { Kanban, KanbanCardActions } from "./kanban/index.js";
-export { Feed } from "./feed/index.js";
+export {
+  Feed,
+  DEFAULT_FEED_TYPE_PRESETS,
+  applyTypePreset,
+  lookupTypePreset,
+  partitionNewItems,
+  flushBuffer,
+  toTimestampMs,
+} from "./feed/index.js";
 export { Calendar } from "./calendar/index.js";
 export {
   AutoTag,

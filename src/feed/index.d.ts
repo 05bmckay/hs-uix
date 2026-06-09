@@ -7,6 +7,7 @@ export type FeedFilterType = "select" | "multiselect" | "dateRange";
 export type FeedSortDirection = "asc" | "desc" | "ascending" | "descending";
 export type FeedStatusVariant = "default" | "info" | "success" | "warning" | "danger";
 export type FeedTagVariant = "default" | "info" | "success" | "warning" | "error";
+export type FeedNewItemsBehavior = "immediate" | "pill";
 
 export interface FeedOption<T = string | number | boolean> {
   label: string;
@@ -74,6 +75,8 @@ export interface FeedItem {
   avatarSize?: string | number;
   icon?: ReactNode | string;
   iconName?: string;
+  /** Icon color: native enum (`alert`/`warning`/`success`/`inherit`) or any CSS color (renders via the SVG fallback). */
+  iconColor?: string;
   href?: string | { url: string; external?: boolean };
   meta?: ReactNode | ReactNode[];
   metadata?: ReactNode | ReactNode[];
@@ -141,6 +144,10 @@ export interface FeedLabels {
   errorTitle?: string;
   errorMessage?: string;
   itemCount?: (shown: number, total: number, label: string) => string;
+  /** "Show N new items" pill label (string or count-aware function). */
+  newItems?: string | ((count: number) => string);
+  /** Text inside the info Tag marking recently arrived items. */
+  newItemTag?: string;
 }
 
 export interface FeedTabOption<T = string | number | boolean> {
@@ -192,6 +199,80 @@ export interface FeedRecordLabel {
   singular?: string;
   plural?: string;
 }
+
+export interface FeedTypePreset {
+  /** Native HubSpot icon name (verified against the native whitelist for the built-in presets). */
+  icon?: string;
+  /** Icon color: native enum (`alert`/`warning`/`success`/`inherit`) or any CSS color. */
+  color?: string;
+  /** Display label used as `typeLabel` when the item has none. */
+  label?: ReactNode;
+  /** StatusTag variant applied when the item has no status variant of its own. */
+  statusVariant?: FeedStatusVariant;
+}
+
+export type FeedTypePresets = Record<string, FeedTypePreset>;
+
+/**
+ * Built-in presets for HubSpot's standard activity types (`call`, `email`,
+ * `incoming_email`, `forwarded_email`, `meeting`, `note`, `task`, `sms`,
+ * `whatsapp`, `linkedin_message`, `postal_mail`, `conversation`).
+ */
+export declare const DEFAULT_FEED_TYPE_PRESETS: FeedTypePresets;
+
+/** Resolve the preset for a type value (exact, lowercase, then snake_case lookup). */
+export declare function lookupTypePreset(
+  type: unknown,
+  presets?: FeedTypePresets | null
+): FeedTypePreset | null;
+
+/** Merge a type preset UNDER an item (item-level values win). Returns the same reference when nothing changes. */
+export declare function applyTypePreset<Row = FeedItem>(
+  item: Row,
+  typePresets?: FeedTypePresets | null
+): Row;
+
+export interface FeedPartitionOptions<Row = FeedItem> {
+  /** Ids already rendered — updates to these never buffer. */
+  knownIds?: Set<string | number> | null;
+  /** Id accessor; defaults to `item.id ?? item.key ?? index`. */
+  getId?: (item: Row, index: number) => string | number | undefined;
+}
+
+export interface FeedPartitionResult<Row = FeedItem> {
+  visible: Row[];
+  buffered: Row[];
+  visibleIds: Array<string | number | undefined>;
+  bufferedIds: Array<string | number | undefined>;
+  /** New monotonic watermark over VISIBLE items only (epoch ms), or null. */
+  newestTs: number | null;
+}
+
+/** Pure live-buffer kernel: split items into visible vs newer-than-watermark buffered. */
+export declare function partitionNewItems<Row = FeedItem>(
+  prevNewestTs: number | null | undefined,
+  items: Row[] | null | undefined,
+  getTs: (item: Row) => unknown,
+  options?: FeedPartitionOptions<Row>
+): FeedPartitionResult<Row>;
+
+export interface FeedFlushResult<Row = FeedItem> {
+  /** Buffered items first, then the previously visible items. */
+  items: Row[];
+  flushed: Row[];
+  /** New watermark across ALL merged items (epoch ms), or null. */
+  newestTs: number | null;
+}
+
+/** Pure flush: merge the buffer into the visible list and compute the new watermark. */
+export declare function flushBuffer<Row = FeedItem>(
+  visible: Row[] | null | undefined,
+  buffered: Row[] | null | undefined,
+  getTs: (item: Row) => unknown
+): FeedFlushResult<Row>;
+
+/** Coerce Date | epoch number | parseable string | { year, month, date } to epoch ms (or null). */
+export declare function toTimestampMs(value: unknown): number | null;
 
 export interface FeedProps<Row = FeedItem> {
   items?: Row[];
@@ -274,6 +355,28 @@ export interface FeedProps<Row = FeedItem> {
   collapsedIds?: (string | number)[];
   onCollapsedIdsChange?: (next: (string | number)[]) => void;
   showCollapseToggle?: boolean;
+  /**
+   * Real-time append behavior for items that arrive NEWER than the
+   * previously-newest visible timestamp. "immediate" (default) renders them
+   * right away; "pill" holds them in a buffer behind a centered
+   * "Show N new items" Button until clicked. Updates to already-visible items
+   * (matched by key) are never buffered.
+   */
+  newItemsBehavior?: FeedNewItemsBehavior;
+  /** Called with the released items when the "Show N new items" pill is clicked. */
+  onNewItemsFlush?: (items: Row[]) => void;
+  /**
+   * Window in ms during which flushed/freshly-prepended items carry an info
+   * Tag "New" marker. `false` (default) disables the marker. The initial load
+   * is never marked.
+   */
+  highlightNew?: number | false;
+  /**
+   * Per-type display defaults merged UNDER item values (item wins):
+   * `{ [type]: { icon, color, label, statusVariant } }`. Pass `true` to use
+   * DEFAULT_FEED_TYPE_PRESETS. Lookup by `item.type` is case-insensitive.
+   */
+  typePresets?: FeedTypePresets | boolean | null;
 }
 
 export declare function Feed<Row = FeedItem>(props: FeedProps<Row>): ReactNode;
