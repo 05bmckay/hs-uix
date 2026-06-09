@@ -534,9 +534,10 @@ Behavior worth knowing:
 | Immutability | Returns a **new** document; untouched branches keep reference equality (structural sharing), so memoized renderers only re-render what changed. |
 | Permissive paths | Where RFC 6902 would error on a missing path prefix, `add`/`replace` create it — objects by default, arrays when the next segment is numeric or `-`. Built for patch streams where `/elements/x/props` can arrive before `/elements`. |
 | Root pointer | `path: ""` (or `"/"`) replaces the whole document. |
-| Array append | The standard `-` index appends (`{ op: "add", path: "/rows/-", value }`). |
+| Array `add` vs `replace` | Per RFC 6902, `add` at an existing index **inserts** (shifts the rest right); `replace` overwrites in place. The standard `-` index appends (`{ op: "add", path: "/rows/-", value }`). |
+| Array `remove` | An invalid or out-of-range index (`/rows/-`, `/rows/foo`, `/rows/99`) is a safe no-op — same spirit as removing a missing object key. |
 | Escaping | Standard RFC 6901 unescaping: `~1` → `/`, `~0` → `~`. |
-| `copy` | Deep-clones the source (JSON-safe values only — no `Date`/`Map`/`Set`). |
+| `copy` / `move` | `copy` deep-clones the source (JSON-safe values only — no `Date`/`Map`/`Set`). Pointers resolve own properties only, so `/constructor`-style segments read as missing instead of leaking functions into the document. |
 | Null doc | `applyPatches(null, patches)` starts from `{}`. Empty/missing `patches` returns the input as-is. |
 
 ---

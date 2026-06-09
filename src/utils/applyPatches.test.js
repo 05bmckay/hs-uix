@@ -63,12 +63,27 @@ describe("applyPatches", () => {
     expect(out).toEqual({ list: ["A", "b"] });
   });
 
+  it("add at an existing array index INSERTS (RFC 6902), replace overwrites", () => {
+    const doc = { l: ["a", "b", "c"] };
+    expect(applyPatches(doc, [{ op: "add", path: "/l/1", value: "X" }]))
+      .toEqual({ l: ["a", "X", "b", "c"] });
+    expect(applyPatches(doc, [{ op: "replace", path: "/l/1", value: "X" }]))
+      .toEqual({ l: ["a", "X", "c"] });
+  });
+
   it("moves values between paths", () => {
     const out = applyPatches(
       { draft: { title: "T" }, published: {} },
       [{ op: "move", from: "/draft/title", path: "/published/title" }]
     );
     expect(out).toEqual({ draft: {}, published: { title: "T" } });
+  });
+
+  it("moves within an array without losing elements", () => {
+    const out = applyPatches({ l: ["a", "b", "c"] }, [
+      { op: "move", from: "/l/0", path: "/l/1" },
+    ]);
+    expect(out).toEqual({ l: ["b", "a", "c"] });
   });
 
   it("copies values without sharing references", () => {
@@ -124,5 +139,21 @@ describe("applyPatches", () => {
     const doc = { a: { b: 1 } };
     const out = applyPatches(doc, [{ op: "remove", path: "/a/missing/deep" }]);
     expect(out).toEqual({ a: { b: 1 } });
+  });
+
+  it("removing an invalid or out-of-range array index is a safe no-op", () => {
+    const doc = { l: ["a", "b", "c"] };
+    expect(applyPatches(doc, [{ op: "remove", path: "/l/-" }])).toEqual(doc);
+    expect(applyPatches(doc, [{ op: "remove", path: "/l/foo" }])).toEqual(doc);
+    expect(applyPatches(doc, [{ op: "remove", path: "/l/99" }])).toEqual(doc);
+    expect(applyPatches(doc, [{ op: "remove", path: "/l/-1" }])).toEqual(doc);
+  });
+
+  it("does not resolve pointers through the prototype chain or crash on non-JSON values", () => {
+    const doc = { a: 1 };
+    const out = applyPatches(doc, [{ op: "copy", from: "/constructor", path: "/b" }]);
+    expect(out.b).toBeUndefined();
+    const moved = applyPatches(doc, [{ op: "move", from: "/toString", path: "/c" }]);
+    expect(moved.c).toBeUndefined();
   });
 });
