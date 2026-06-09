@@ -301,11 +301,10 @@ const EventDetail = ({ event, labels, reschedule, idSuffix = "" }) => {
     if (!end && !startHasTime) {
       when = formatDayTitle(start);
     } else if (sameDay) {
-      when = `${formatDayTitle(start)}${startHasTime ? `, ${formatTime(start)}` : ""}${
-        end && !isSameDay(start, end) === false && end.getTime() !== start.getTime()
+      when = `${formatDayTitle(start)}${startHasTime ? `, ${formatTime(start)}` : ""}${end && !isSameDay(start, end) === false && end.getTime() !== start.getTime()
           ? ` – ${formatTime(end)}`
           : ""
-      }`;
+        }`;
     } else {
       when = `${formatDayTitle(start)} – ${formatDayTitle(end)}`;
     }
@@ -1084,53 +1083,53 @@ const TimeGridView = ({ days, now, hours, dayStartHour, dayEndHour, eventsForDay
         {hours.map((hour) => {
           const isNow = todayInView && hour === nowHour;
           return (
-          <TableRow key={hour}>
-            <TableCell width="min">
-              <Flex direction="row" align="center" gap="xs">
-                {/* Leading spacer pins the row to HOUR_SLOT_HEIGHT. */}
-                <Image src={slotSpacer.src} width={slotSpacer.width} height={slotSpacer.height} alt="" />
-                {/* Current hour → the label wrapped in an info StatusTag (renders
+            <TableRow key={hour}>
+              <TableCell width="min">
+                <Flex direction="row" align="center" gap="xs">
+                  {/* Leading spacer pins the row to HOUR_SLOT_HEIGHT. */}
+                  <Image src={slotSpacer.src} width={slotSpacer.width} height={slotSpacer.height} alt="" />
+                  {/* Current hour → the label wrapped in an info StatusTag (renders
                     reliably; a ColorDot Image collapses as a leading min-cell child). */}
-                {isNow ? (
-                  // Trailing nbsp pads the chip's right edge so the final letter
-                  // ("M" in "11 AM") isn't clipped by the min-width TIME column.
-                  <StatusTag variant="info">{`${formatHourLabel(hour)} `}</StatusTag>
-                ) : (
-                  <Text variant="microcopy">{formatHourLabel(hour)}</Text>
-                )}
-              </Flex>
-            </TableCell>
-            {dayData.map(({ day, timed }) => {
-              const occupying = timed
-                .map((t) => {
-                  let visStart = Math.max(t.sHour, dayStartHour);
-                  let visEnd = Math.min(t.lastHour, dayEndHour);
-                  let edge = null;
-                  // Events fully outside the window are pinned to the nearest edge
-                  // row (with a "before/after" note) instead of vanishing.
-                  if (t.lastHour < dayStartHour) {
-                    visStart = visEnd = dayStartHour;
-                    edge = "earlier";
-                  } else if (t.sHour > dayEndHour) {
-                    visStart = visEnd = dayEndHour;
-                    edge = "later";
-                  }
-                  if (hour < visStart || hour > visEnd) return null;
-                  return { entry: t, isStart: hour === visStart, edge, clippedHead: !edge && t.sHour < dayStartHour };
-                })
-                .filter(Boolean);
-              return dayCell(
-                day.getTime(),
-                occupying.length ? (
-                  <Flex direction="column" gap="xs">
-                    {occupying.map((o) => eventToken(o, hour, day.getTime()))}
-                  </Flex>
-                ) : (
-                  emptyCell
-                )
-              );
-            })}
-          </TableRow>
+                  {isNow ? (
+                    // Trailing nbsp pads the chip's right edge so the final letter
+                    // ("M" in "11 AM") isn't clipped by the min-width TIME column.
+                    <StatusTag variant="info">{`${formatHourLabel(hour)} `}</StatusTag>
+                  ) : (
+                    <Text variant="microcopy">{formatHourLabel(hour)}</Text>
+                  )}
+                </Flex>
+              </TableCell>
+              {dayData.map(({ day, timed }) => {
+                const occupying = timed
+                  .map((t) => {
+                    let visStart = Math.max(t.sHour, dayStartHour);
+                    let visEnd = Math.min(t.lastHour, dayEndHour);
+                    let edge = null;
+                    // Events fully outside the window are pinned to the nearest edge
+                    // row (with a "before/after" note) instead of vanishing.
+                    if (t.lastHour < dayStartHour) {
+                      visStart = visEnd = dayStartHour;
+                      edge = "earlier";
+                    } else if (t.sHour > dayEndHour) {
+                      visStart = visEnd = dayEndHour;
+                      edge = "later";
+                    }
+                    if (hour < visStart || hour > visEnd) return null;
+                    return { entry: t, isStart: hour === visStart, edge, clippedHead: !edge && t.sHour < dayStartHour };
+                  })
+                  .filter(Boolean);
+                return dayCell(
+                  day.getTime(),
+                  occupying.length ? (
+                    <Flex direction="column" gap="xs">
+                      {occupying.map((o) => eventToken(o, hour, day.getTime()))}
+                    </Flex>
+                  ) : (
+                    emptyCell
+                  )
+                );
+              })}
+            </TableRow>
           );
         })}
       </TableBody>

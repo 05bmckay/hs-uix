@@ -1,11 +1,11 @@
-# Wizard (hs-uix/wizard)
+# Wizard (hs-uix/experimental)
 
 Orchestrated multi-step flows for HubSpot UI Extensions — plus the "getting started" checklist card. `Wizard` steps render **arbitrary content** (tables, CRM pickers, review summaries — anything), which makes it the right tool when FormBuilder's form-only multi-step mode isn't enough. The Wizard owns the orchestration: a shared values bag, validate-gated Next, linear step reachability with success markers, a side step-nav (vertical) or native StepIndicator (horizontal), and a Back/Next/Finish footer. `OnboardingChecklist` is the companion setup tracker: a ProgressBar headline over rows of done/pending tasks with inline action buttons.
 
 ## Quick Start
 
 ```jsx
-import { Wizard } from "hs-uix/wizard";
+import { Wizard } from "hs-uix/experimental";
 import { Input, Flex, Text } from "@hubspot/ui-extensions";
 
 <Wizard
@@ -43,7 +43,7 @@ import { Input, Flex, Text } from "@hubspot/ui-extensions";
 ```
 
 ```jsx
-import { OnboardingChecklist } from "hs-uix/wizard";
+import { OnboardingChecklist } from "hs-uix/experimental";
 
 <OnboardingChecklist
   title="Getting started"

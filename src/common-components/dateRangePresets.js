@@ -18,6 +18,23 @@
 /** Sentinel preset value meaning "the user picked dates by hand". */
 export const DATE_RANGE_CUSTOM_VALUE = "custom";
 
+export const DATE_FILTER_OPERATORS = [
+  { label: "is", value: "InRollingDateRange" },
+  { label: "is more than", value: "GreaterRolling" },
+  { label: "is between", value: "InRange" },
+];
+
+export const DATE_ROLLING_UNIT_OPTIONS = [
+  { label: "day ago", value: "day:backward" },
+  { label: "days from now", value: "day:forward" },
+  { label: "week ago", value: "week:backward" },
+  { label: "weeks from now", value: "week:forward" },
+  { label: "month ago", value: "month:backward" },
+  { label: "months from now", value: "month:forward" },
+  { label: "year ago", value: "year:backward" },
+  { label: "years from now", value: "year:forward" },
+];
+
 /**
  * Convert a JS Date to a HubSpot DateInput value object
  * ({ year, month, date }, month 0-indexed). Returns null for invalid input.

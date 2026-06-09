@@ -56,6 +56,7 @@ export const CollectionFilterControl = ({
       { key: name, direction: "row", align: "center", gap: "xs" },
       h(DateInput, {
         name: `${controlName}-from`,
+        label: filter.fromLabel ?? labels.dateFrom,
         placeholder: filter.fromLabel ?? labels.dateFrom,
         format: "medium",
         value: rangeValue.from ?? null,
@@ -64,6 +65,7 @@ export const CollectionFilterControl = ({
       h(Icon, { name: "right", size: "sm" }),
       h(DateInput, {
         name: `${controlName}-to`,
+        label: filter.toLabel ?? labels.dateTo,
         placeholder: filter.toLabel ?? labels.dateTo,
         format: "medium",
         value: rangeValue.to ?? null,

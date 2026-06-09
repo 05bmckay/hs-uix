@@ -177,7 +177,7 @@ const ValueEditor = ({ condition, propertyDef, path, namePrefix, labels, readOnl
       <>
         <Box flex={1}>
           <DateInput
-            label={labels.value}
+            label=""
             name={pathName(namePrefix, path, "value")}
             format="medium"
             value={condition.value ?? null}
@@ -190,7 +190,7 @@ const ValueEditor = ({ condition, propertyDef, path, namePrefix, labels, readOnl
             <Text variant="microcopy">{labels.between}</Text>
             <Box flex={1}>
               <DateInput
-                label={labels.values}
+                label=""
                 name={pathName(namePrefix, path, "high-value")}
                 format="medium"
                 value={condition.highValue ?? null}
@@ -220,9 +220,9 @@ const ValueEditor = ({ condition, propertyDef, path, namePrefix, labels, readOnl
 
 // Icon-only transparent Button — the affordance HubSpot's builder uses for
 // every row/group action. The label rides along as screen-reader text.
-const IconButton = ({ icon, label, onClick }) => (
+const IconButton = ({ icon, label, onClick, size }) => (
   <Button size="extra-small" variant="transparent" onClick={onClick}>
-    <Icon name={icon} screenReaderText={label} />
+    <Icon name={icon} screenReaderText={label} {...(size ? { size } : {})} />
   </Button>
 );
 
@@ -323,21 +323,24 @@ const GroupEditor = ({ group, path, depth, ctx }) => {
     if (isGroupNode(child)) groupNumber += 1;
     const row = isGroupNode(child) ? (
       <Tile compact={true}>
-        <Flex direction="column" gap="sm">
+        <Flex direction="column" gap="xs">
           <Flex direction="row" justify="between" align="center">
             <Text format={{ fontWeight: "demibold" }}>
-              {`${labels.group} ${groupNumber}`}
+              {/* non-breaking space — "Group" and its number must never wrap apart */}
+              {`${labels.group}\u00A0${groupNumber}`}
             </Text>
             {!readOnly && (
               <Flex direction="row" gap="xs" justify="end">
                 <IconButton
                   icon="copy"
                   label={labels.cloneGroup}
+                  size="sm"
                   onClick={() => handlers.onDuplicate(childPath)}
                 />
                 <IconButton
                   icon="delete"
                   label={labels.removeGroup}
+                  size="sm"
                   onClick={() => handlers.onRemove(childPath)}
                 />
               </Flex>
@@ -381,7 +384,9 @@ const GroupEditor = ({ group, path, depth, ctx }) => {
   });
 
   return (
-    <Flex direction="column" gap="sm">
+    // Nested groups pack tight (row / AND-OR / row reads as one unit, like
+    // HubSpot's builder); the root keeps more air between its sections.
+    <Flex direction="column" gap={isRoot ? "sm" : "xs"}>
       {isRoot && filters.length === 0 && (
         <Text variant="microcopy">{labels.empty}</Text>
       )}

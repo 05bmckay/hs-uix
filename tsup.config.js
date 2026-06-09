@@ -9,7 +9,7 @@ export default defineConfig({
     feed: "src/feed/index.js",
     calendar: "src/calendar/index.js",
     filter: "src/filter/index.js",
-    wizard: "src/wizard/index.js",
+    experimental: "src/experimental/index.js",
     "common-components": "src/common-components/index.js",
     utils: "src/utils/index.js",
     safe: "src/safe/index.js",

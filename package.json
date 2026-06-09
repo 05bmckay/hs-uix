@@ -42,10 +42,10 @@
       "import": "./dist/filter.mjs",
       "require": "./dist/filter.js"
     },
-    "./wizard": {
-      "types": "./wizard.d.ts",
-      "import": "./dist/wizard.mjs",
-      "require": "./dist/wizard.js"
+    "./experimental": {
+      "types": "./experimental.d.ts",
+      "import": "./dist/experimental.mjs",
+      "require": "./dist/experimental.js"
     },
     "./common-components": {
       "types": "./common-components.d.ts",
@@ -72,7 +72,7 @@
     "feed.d.ts",
     "calendar.d.ts",
     "filter.d.ts",
-    "wizard.d.ts",
+    "experimental.d.ts",
     "common-components.d.ts",
     "utils.d.ts",
     "safe.d.ts",

@@ -177,7 +177,7 @@ export declare function addFilter(
 export declare function updateFilter(
   tree: FilterGroupNode,
   path: FilterTreePath,
-  patch: Partial<FilterConditionNode & FilterGroupNode> | ((node: FilterNode) => FilterNode)
+  patch: Partial<FilterConditionNode> | Partial<FilterGroupNode> | ((node: FilterNode) => FilterNode)
 ): FilterGroupNode;
 
 export declare function removeFilter(
