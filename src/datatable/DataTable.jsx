@@ -222,6 +222,13 @@
  *     Value format: { date: { year, month, date }, time: { hours, minutes } }
  *     Pass time-specific props via editProps.timeProps (e.g. { interval: 15 })
  *
+ *   Edit input widths: editable date/time/datetime columns get fixed pixel
+ *   header widths from auto-width (date 160, time 130, datetime 300), so a
+ *   crowded table can't collapse an open input down to just its icon — the
+ *   classic failure is an empty DateInput/TimeInput in a many-column table.
+ *   Override per column with `width` (any accepted value, including a
+ *   different number).
+ *
  *   NOTE: selectable or editable columns require renderCell(value, row)
  *   on each column. renderRow is used only when neither feature is active.
  *
@@ -246,8 +253,11 @@
  *     "max"  — expand to fill available space
  *     "auto" — adjust based on available space (default)
  *
- *   `width` also accepts number for fixed pixels (e.g. 200).
- *   `cellWidth` does not support numeric values.
+ *   `width` also accepts number for fixed pixels (e.g. 200). HubSpot ignores
+ *   numeric widths on TableHeader/TableCell, so DataTable implements them by
+ *   rendering the header label inside an AutoGrid with that columnWidth —
+ *   the header then carries real content of that width, which sets the
+ *   column's minimum. `cellWidth` does not support numeric values.
  *
  *   Example: { field: "name", label: "Name", width: "min", cellWidth: "max" }
  *   Header stays tight around "Name", cells expand to show full values.
@@ -266,6 +276,7 @@
  *     - Small enums (≤5 unique, short strings) → header "min", cells "auto"
  *     - Text → "auto" (browser distributes space evenly)
  *     - Edit type hints: checkbox/toggle → "min", number/currency/select → "auto"
+ *     - Editable date/time/datetime → fixed pixel headers (160 / 130 / 300)
  *
  * ═══════════════════════════════════════════════════════════════════════════
  * PAGINATION OPTIONS:
@@ -307,6 +318,7 @@ import {
   withDetailRows,
 } from "./rowExpansion.js";
 import {
+  AutoGrid,
   Box,
   Button,
   Checkbox,
@@ -346,6 +358,13 @@ import {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const NARROW_EDIT_TYPES = new Set(["checkbox", "toggle"]);
+
+// Editable date/time columns get fixed pixel header widths. An empty
+// DateInput/TimeInput gives the table almost nothing to measure, so in a
+// crowded table the open input collapses to just its icon — a numeric header
+// width reserves a predictable amount of space instead. Manual `width`
+// overrides still win (checked in getHeaderWidth), and cells stay "auto".
+const EDIT_INPUT_WIDTHS = { date: 160, time: 130, datetime: 300 };
 
 const DATE_PATTERN = /^\d{4}[-/]\d{2}[-/]\d{2}/;
 const BOOL_VALUES = new Set(["true", "false", "yes", "no", "0", "1"]);
@@ -389,6 +408,12 @@ const computeAutoWidths = (columns, data) => {
   columns.forEach((col) => {
     // Skip columns with both explicit widths set
     if (col.width && col.cellWidth) return;
+
+    // Editable date/time columns: fixed pixel header width, content ignored
+    if (col.editable && EDIT_INPUT_WIDTHS[col.editType]) {
+      results[col.field] = { width: EDIT_INPUT_WIDTHS[col.editType], cellWidth: "auto" };
+      return;
+    }
 
     const values = sample.map((row) => row[col.field]).filter((v) => v != null);
     const strings = values.map((v) => {
@@ -1629,22 +1654,34 @@ export const DataTable = ({
               {showExpandColumn && <TableHeader width="min" />}
               {columns.map((col) => {
                 const headerAlign = (resolvedEditMode === "inline" && col.editable) ? undefined : col.align;
+                const headerWidth = getHeaderWidth(col);
+                // HubSpot silently ignores numeric TableHeader widths, so a
+                // pixel width is applied by rendering the label inside an
+                // AutoGrid with a fixed columnWidth: the header then contains
+                // real content of that width for the table to measure, which
+                // sets the minimum for the whole column.
+                const pixelWidth = typeof headerWidth === "number" ? headerWidth : null;
+                const headerContent = col.description ? (
+                  <>
+                    {col.label}{" "}
+                    <Link inline={true} variant="dark" overlay={<Tooltip>{col.description}</Tooltip>}>
+                      <Icon name="info" screenReaderText={typeof col.description === "string" ? col.description : undefined} />
+                    </Link>
+                  </>
+                ) : col.label;
                 return (
                   <TableHeader
                     key={col.field}
-                    width={getHeaderWidth(col)}
+                    width={pixelWidth ? "min" : headerWidth}
                     align={headerAlign}
                     sortDirection={col.sortable ? (sortState[col.field] || "none") : "never"}
                     onSortChange={col.sortable ? () => handleSortChange(col.field) : undefined}
                   >
-                    {col.description ? (
-                      <>
-                        {col.label}{" "}
-                        <Link inline={true} variant="dark" overlay={<Tooltip>{col.description}</Tooltip>}>
-                          <Icon name="info" screenReaderText={typeof col.description === "string" ? col.description : undefined} />
-                        </Link>
-                      </>
-                    ) : col.label}
+                    {pixelWidth ? (
+                      <AutoGrid columnWidth={pixelWidth} gap="flush">
+                        {headerContent}
+                      </AutoGrid>
+                    ) : headerContent}
                   </TableHeader>
                 );
               })}

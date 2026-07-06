@@ -507,6 +507,26 @@ In inline mode, all editable cells always show their input controls. This mode i
 
 Use `editProps` to pass additional props to the edit component (e.g., `{ currencyCode: "EUR" }` for `CurrencyInput` or `timeProps` for datetime time input options).
 
+#### Edit input widths
+
+HubSpot tables size columns by content, and an edit input — an empty `DateInput` or `TimeInput` especially — has almost no intrinsic content. In a table with many columns, that used to let the cell collapse until only the input's icon was visible the moment you clicked into edit mode.
+
+Auto-width now gives editable date/time columns a fixed pixel header width, which reserves a predictable amount of column space regardless of content:
+
+| editType | Header width |
+|---|---|
+| `date` | 160px |
+| `time` | 130px |
+| `datetime` | 300px |
+
+Override per column with a normal `width` value — a different number, or `"auto"` to restore the old behavior:
+
+```jsx
+{ field: "date", label: "Date", editable: true, editType: "date", width: 200 }
+```
+
+If the columns no longer fit, pair this with `scrollable={true}` so the table scrolls horizontally instead of squishing the other columns.
+
 ---
 
 ### Row grouping with aggregations
@@ -589,6 +609,7 @@ A few things to know:
 - Editable columns (except checkbox/toggle) never get `min` headers, since input components need room.
 - `align` is stripped from headers and cells when input controls are showing, because HubSpot inputs ignore parent text alignment.
 - In discrete edit mode, the active cell switches to `auto` width while the input is open.
+- Editable date/time/datetime columns get fixed pixel header widths — see [Edit input widths](#edit-input-widths).
 
 Manual overrides always take priority. You can set `width` (applies to header and cells) and `cellWidth` (cells only):
 
@@ -1017,7 +1038,7 @@ These come from HubSpot UI Extensions itself, not DataTable:
 | No column resizing | Users cannot drag to resize columns. Widths are fixed to `"min"`, `"max"`, or `"auto"`. |
 | No drag-and-drop | No row reordering or column reordering via drag-and-drop. |
 | No virtual scrolling | All visible rows are rendered to the DOM. For large datasets (500+ rows), use server-side mode with pagination. |
-| No pixel widths | `TableCell` `width` only accepts `"min"`, `"max"`, or `"auto"`. Numeric pixel values are silently ignored by HubSpot. |
+| Pixel widths | HubSpot's `TableHeader`/`TableCell` silently ignore numeric `width` values. DataTable works around this for column `width`: a numeric value renders the header label inside a fixed-width `AutoGrid`, which sets the column's minimum width. `cellWidth` does not support numeric values. |
 | Input alignment | HubSpot input components (Input, NumberInput, CurrencyInput, etc.) ignore parent `text-align` CSS. DataTable strips `align` when inputs are visible so headers and cells stay consistent. |
 | No multi-column sort | Only one column can be sorted at a time. |
 | No export | No built-in CSV/Excel export. You'd need to implement this in a serverless function. |
