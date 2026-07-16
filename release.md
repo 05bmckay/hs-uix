@@ -27,4 +27,4 @@ This is a documentation and tooling release with no runtime API changes.
 - [x] Version commit `cd366cd` pushed to `main`
 - [x] Tag `v2.3.1` pushed to GitHub
 - [x] GitHub Actions passed on Node 22 and Node 24
-- [ ] GitHub release created
+- [x] GitHub release created: https://github.com/05bmckay/hs-uix/releases/tag/v2.3.1
