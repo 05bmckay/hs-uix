@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.3.1 — 2026-07-16
 
 - **Documentation:** Reconciled the roadmap with current stable and experimental
   exports and documented graduation decisions for Wizard/OnboardingChecklist,
