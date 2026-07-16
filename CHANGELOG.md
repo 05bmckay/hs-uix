@@ -9,7 +9,8 @@
   behavior, exact name resolution, layout constraints, accessibility
   expectations, and supported Button/Link compositions.
 - **Tooling:** Added GitHub Actions CI for Node 22 and Node 24 with clean install,
-  tests, production build, and package dry-run checks.
+  tests, production build, and package dry-run checks. Added TypeScript as an
+  explicit development dependency so tsup builds succeed after a clean install.
 - **Release process:** Added guarded preflight, verification, and partial-failure
   recovery guidance.
 

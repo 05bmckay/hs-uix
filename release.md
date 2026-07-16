@@ -19,7 +19,7 @@ Recommended bump: `patch` — documentation and release-process improvements onl
 - **Release process:** Add guarded preflight, verification, and partial-failure guidance.
 
 ### Tooling
-- **CI:** Validate Node 22 and Node 24 with clean install, tests, production build, and package dry-run on pushes and pull requests.
+- **CI:** Validate Node 22 and Node 24 with clean install, tests, production build, and package dry-run on pushes and pull requests; declare TypeScript explicitly so clean tsup builds do not depend on a transitive install.
 ```
 
 The expanded `src/common-components/README.md` is included in the npm payload. `CHANGELOG.md`, `ROADMAP.md`, `release.md`, `RELEASING.md`, and files under `docs/` are repository documentation and are not packed.
