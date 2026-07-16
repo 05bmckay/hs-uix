@@ -7,66 +7,85 @@
 > separately published packages.
 
 ```js
-import { DataTable }   from "hs-uix/datatable";
-import { FormBuilder } from "hs-uix/form";
-import { Kanban }      from "hs-uix/kanban";
-import { Feed }        from "hs-uix/feed";
-import { Calendar }    from "hs-uix/calendar";
+import { DataTable }     from "hs-uix/datatable";
+import { FormBuilder }   from "hs-uix/form";
+import { Kanban }        from "hs-uix/kanban";
+import { Feed }          from "hs-uix/feed";
+import { Calendar }      from "hs-uix/calendar";
+import { FilterBuilder } from "hs-uix/filter";
 // shared building blocks
-import { Icon }        from "hs-uix/common-components";
+import { Icon }         from "hs-uix/common-components";
 import { CrmDataTable } from "hs-uix/utils";
+// APIs still under evaluation
+import { Wizard, Skeleton } from "hs-uix/experimental";
 ```
 
 ## Components
 
 | Component | Subpath | Status | Summary |
 |---|---|---|---|
-| DataTable | `hs-uix/datatable` | Shipped | Filterable, sortable, paginated tables; inline edit; row selection; client & server modes |
-| FormBuilder | `hs-uix/form` | Shipped | Declarative config-driven forms; validation; multi-step; repeaters; CRM helpers |
-| Kanban | `hs-uix/kanban` | Shipped | Drag-free board; stage transitions; metrics; filters; server-side mode |
-| Feed | `hs-uix/feed` | Shipped | Activity feed / timeline; grouping; search/filters; load-more |
-| Calendar | `hs-uix/calendar` | Shipped | Month / Week / Day / Agenda views (+ experimental Gantt); overlays; search/filters |
+| DataTable | `hs-uix/datatable` | Shipped stable | Filterable, sortable, paginated tables; inline edit; row selection; client & server modes |
+| FormBuilder | `hs-uix/form` | Shipped stable | Declarative config-driven forms; validation; multi-step; repeaters; CRM helpers |
+| Kanban | `hs-uix/kanban` | Shipped stable | Drag-free board; stage transitions; swimlanes; WIP limits; metrics; filters; server-side mode |
+| Feed | `hs-uix/feed` | Shipped stable | Activity feed / timeline; grouping; search/filters; load-more |
+| Calendar | `hs-uix/calendar` | Shipped stable | Month / Week / Day / Agenda views (+ experimental Gantt); overlays; search/filters |
+| FilterBuilder | `hs-uix/filter` | Shipped stable | Nested AND/OR filter groups, typed value editors, validation, and CRM filter conversion |
 
-Shared internals: `hs-uix/common-components` (Icon, AvatarStack, CollectionToolbar,
-StatusTag helpers, SVG/data-URI builders) and `hs-uix/utils` (CRM search adapters,
+Shared stable exports also ship through `hs-uix/common-components` (Icon,
+DateRangePicker, CrmRecordPicker, AvatarStack, CollectionToolbar, StatusTag
+helpers, SVG/data-URI builders) and `hs-uix/utils` (CRM search adapters,
 query/filter helpers, formatters, `CrmDataTable` / `CrmKanban`).
+
+### API maturity
+
+- **Stable:** FilterBuilder, DateRangePicker, CrmRecordPicker, and Kanban
+  swimlanes/WIP limits are available through their documented stable subpaths or
+  the root barrel.
+- **Experimental:** Wizard, OnboardingChecklist, and Skeleton loaders are
+  available only from `hs-uix/experimental`. DataTable row expansion is
+  implemented but remains an experimental DataTable API.
+- **Not graduated by availability alone:** experimental APIs can be tried now,
+  but their names, props, or export paths may still change before becoming
+  stable.
 
 ---
 
 ## Future ideas
 
-These are candidate enhancements, not commitments. Each lands as a minor bump to
+This section records completed enhancements alongside remaining candidates.
+Unchecked items are ideas, not commitments; each would land as a minor bump to
 the single `hs-uix` package.
 
 ### DataTable
+- [x] Row expansion (detail row) — shipped as an experimental DataTable API
 - [ ] Column resizing & reordering
 - [ ] Export to CSV
-- [ ] Row expansion (detail row)
 
 ### FormBuilder
+- [x] Schema generation from HubSpot property definitions — shipped stable as `fieldsFromHubSpotProperties`
 - [ ] Warn on dirty close (unsaved-changes confirmation)
 - [ ] Field-level loading spinners while fetching options
-- [ ] Schema generation from HubSpot property definitions
 
 ### Kanban
-- [ ] WIP limits per stage
-- [ ] Swimlanes (group rows by a second dimension)
+- [x] WIP limits per stage — shipped stable
+- [x] Swimlanes (group rows by a second dimension) — shipped stable
 
 ### Feed
-- [ ] Real-time append (prepend new items without full reload)
-- [ ] Per-type icon/color presets
+- [x] Real-time append — shipped stable with immediate or buffered-new-items behavior
+- [x] Per-type icon/color presets — shipped stable through `typePresets` and `DEFAULT_FEED_TYPE_PRESETS`
 
 ### Calendar
-- [ ] Resource/lane view (rows = owners/resources)
-- [ ] Drag-free reschedule via per-event action menu
+- [x] Resource/lane view (rows = owners/resources) — shipped stable
+- [x] Drag-free reschedule via per-event action menu — shipped stable
 - [ ] Promote Gantt out of experimental
 
 ---
 
 ## Net-new components & abstractions
 
-The five shipped components cover the big CRM surfaces (tables, forms, boards,
-timelines, calendars). This backlog is about the **next layer** — patterns the
+The six stable component surfaces cover the big CRM patterns (tables, forms,
+boards, timelines, calendars, and nested filters). This backlog is about the
+**next layer** — patterns the
 HubSpot product UI leans on that have no clean primitive or hs-uix equivalent,
 plus abstractions we already built and battle-tested inside
 [`hs-uix-studio`](../hs-uix-studio) that deserve to be public.
@@ -81,9 +100,9 @@ Two streams feed one backlog:
 
 Effort is rough order-of-magnitude (S = days, M = a week-ish, L = multi-week).
 
-### Phase 1 — Harvest the quick wins (next minor, `2.2`)
+### Phase 1 — Harvest the quick wins (shipped in `2.2`)
 
-Low-risk, mostly-built code that closes real gaps. Ship as one "harvest" release.
+Low-risk Studio harvests that shipped through stable subpaths.
 
 | Component | Subpath | Stream | Source | Effort |
 |---|---|---|---|---|
@@ -98,13 +117,14 @@ Low-risk, mostly-built code that closes real gaps. Ship as one "harvest" release
 
 ### Phase 2 — High-value net-new (`2.3`–`2.4`)
 
-The app patterns with the highest demand and zero current coverage.
+High-demand app patterns, including work that has already reached stable or
+experimental availability.
 
-| Component | Subpath | Stream | Notes | Effort |
+| Component | Current export | Status | Notes | Effort |
 |---|---|---|---|---|
-| **FilterBuilder** — the list/workflow segment builder: nested AND/OR groups, property → operator → value rows, per-type value editors. Biggest single gap; `CollectionFilterControl` is only the flat version. | `hs-uix/filter` | 🅐 | Composes from native Select/inputs + Box/Flex grouping — no host-known-component risk. Pairs with DataTable/Kanban server modes. | L |
-| **Dashboard / MetricCard** — the gap is *not* charting (native `BarChart`/`LineChart`/`ScoreCircle`/`Statistics` cover that). It's the **card chrome** ("metric + delta + comparison period + drill-in"), the **responsive report grid**, and the **missing chart types** (donut / funnel / gauge / sparkline). | `hs-uix/dashboard` | 🅐 | Wrap native charts in card+grid; only hand-roll the chart types the SDK lacks. | M |
-| **Wizard + Onboarding Checklist** — orchestrated multi-step flow (side step-nav, gating, review/summary) and the "getting started" progress card. `StepIndicator` is just the dots. | `hs-uix/wizard` | 🅐 | Distinct from FormBuilder multi-step (which is form-only). | M |
+| ✅ **FilterBuilder** — nested AND/OR groups, property → operator → value rows, and per-type value editors. | `hs-uix/filter` | Shipped stable | Composes from native Select/inputs + Box/Flex grouping and pairs with DataTable/Kanban server modes. | L |
+| **Dashboard / MetricCard** — the gap is *not* charting (native `BarChart`/`LineChart`/`ScoreCircle`/`Statistics` cover that). It's the **card chrome** ("metric + delta + comparison period + drill-in"), the **responsive report grid**, and the **missing chart types** (donut / funnel / gauge / sparkline). | `hs-uix/dashboard` (planned) | Backlog | Wrap native charts in card+grid; only hand-roll the chart types the SDK lacks. | M |
+| 🧪 **Wizard + Onboarding Checklist** — orchestrated multi-step flow and getting-started progress card. | `hs-uix/experimental` | Shipped experimental | Distinct from FormBuilder multi-step; remains experimental pending the graduation checks below. | M |
 
 ### Phase 3 — The flagship (`3.0`)
 
@@ -114,30 +134,46 @@ The app patterns with the highest demand and zero current coverage.
 
 ### Phase 4 — Structural, input & collaboration (later)
 
-Candidate, not committed — sequence by demand.
+Completed lifts are marked below; unchecked candidates are not committed and
+should be sequenced by demand.
 
 **Layout / navigation (🅐)**
 - [ ] **Tree / nested disclosure** — folders, nested associations, workflow hierarchy
 - [ ] **Split view / master-detail** — list pane + detail pane (inbox, conversations)
-- [ ] **Skeleton loaders** — content placeholders (only a spinner today)
+- [x] 🧪 **Skeleton loaders** — shipped through `hs-uix/experimental`; pending graduation
 - [ ] **Pagination** — promote the control trapped inside DataTable to a standalone export
 - [ ] **Breadcrumbs** — no native; used throughout HS nav
 
 **Inputs / selection (🅐)**
-- [ ] **Date range picker** — `DateInput` is single-date; range logic already exists in Calendar presets
-- [ ] **Multi-association / record picker** — search + create; `CrmLookupSelect` is single-select
+- [x] **DateRangePicker** — shipped stable through `hs-uix/common-components` and the root export
+- [x] **CrmRecordPicker** — multi-record CRM search/selection with optional inline create; shipped stable through `hs-uix/common-components` and the root export
 - [ ] **Tag / token free-entry input**
 
 **Collaboration (🅑)**
 - [ ] **CommentThread** — queued/completed accordion, per-item complete/delete/select, middle-truncation, show-more modal — from `components/CommentsPanel.jsx`. Ships with its composer (TextArea + send-gating + optional toolbar slot, from `components/Composer.jsx`) as a sub-part — not worth a standalone component, since native `TextArea` + `Button` is most of it.
 - [ ] **AnnotatableCanvas** — click any node to pin a comment dot — from `renderer/commentable.js` + `CommentTarget.jsx` (the niche half of the renderer split)
 
+### Experimental graduation readiness
+
+Wizard/OnboardingChecklist, Skeleton loaders, and DataTable row expansion are
+implemented, but they are **not graduation-ready yet**. Moving any of them to a
+stable export requires:
+
+1. an explicit public API review (names, props, controlled/uncontrolled behavior,
+   accessibility, and compatibility expectations);
+2. stable export paths, hand-maintained types, and public examples/reference docs;
+3. a documented migration/re-export policy for existing experimental imports; and
+4. HubSpot host-layout validation in the extension contexts the component is
+   intended to support.
+
+This documentation pass does not graduate or rename any API.
+
 ### Sequencing rationale
 
-1. **Phase 1 first** — it's mostly written, low-risk, and ships value in days while bigger items are scoped.
-2. **FilterBuilder leads Phase 2** — highest demand, zero coverage, composes only from safe primitives.
+1. **Phase 1 is complete** — `applyPatches` and the safe wrappers ship through stable subpaths.
+2. **FilterBuilder is stable; Wizard is experimental** — Phase 2's remaining net-new gap is Dashboard / MetricCard, while Wizard follows the graduation gate above.
 3. **Renderer is its own major** — real API decisions (public spec schema, engine/annotation split) warrant not rushing it into a minor.
-4. Several Phase-4 items are *lifts, not builds* — Pagination and date-range logic already live inside DataTable/Calendar; promoting them to standalone exports is cheap reuse.
+4. Remaining Phase-4 lifts should reuse shipped foundations where possible; for example, Pagination can be promoted from DataTable rather than rebuilt.
 
 ---
 
@@ -156,7 +192,11 @@ hs-uix/
     ├── kanban/
     ├── feed/
     ├── calendar/
+    ├── filter/             ← stable FilterBuilder + pure filter-tree helpers
+    ├── wizard/             ← Wizard / Onboarding source (experimental export)
+    ├── experimental/       ← explicit pre-stable public barrel
     ├── common-components/  ← shared Icon / Collection* / SVG primitives
+    ├── safe/               ← hardened wrappers around native and hs-uix components
     └── utils/              ← CRM adapters, query helpers, formatters
 ```
 

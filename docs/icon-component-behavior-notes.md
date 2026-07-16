@@ -25,7 +25,8 @@ In the Feed card header, a bare custom `Icon` fallback appeared in the DOM but w
 </span>
 ```
 
-The fix was to give the custom icon an explicit non-flexing wrapper:
+The historical Feed diagnosis used a non-flexing wrapper around an action-only
+`Link`:
 
 ```jsx
 <Box flex="none" alignSelf="center">
@@ -35,7 +36,11 @@ The fix was to give the custom icon an explicit non-flexing wrapper:
 </Box>
 ```
 
-Without `Box flex="none"`, HubSpot's layout could render the image node but not give it useful visual space.
+This reproduction established that `Box flex="none"` fixes the layout collapse,
+but an action-only `Link` is not the supported public composition because
+HubSpot's Link API expects an `href`. New action controls should use the Button
+composition documented below. Without the Box, HubSpot's layout could render the
+image node but not give it useful visual space.
 
 ### `Image` click handling works, but context matters
 
@@ -72,9 +77,11 @@ This allows callers to explicitly request a custom scraped icon with `Down` whil
 
 Wrapping the whole Feed title cluster (`chevron + type icon + title text`) in a `Link` made the title underlined and affected alignment/layout. The current Feed approach keeps only the chevron link-wrapped.
 
-## Current Feed pattern
+## Historical current Feed implementation
 
-The Feed card collapse control currently uses:
+The Feed card collapse control still contains the diagnostic action-only Link
+composition below. It records the host-layout finding; it is not the supported
+pattern for new callers:
 
 ```jsx
 <Flex direction="row" align="center" gap="xs" wrap="nowrap">
@@ -92,13 +99,42 @@ The Feed card collapse control currently uses:
 </Flex>
 ```
 
+## Supported action pattern
+
+For new action controls, keep the non-flexing layout wrapper and let Button own
+the action:
+
+```jsx
+<Flex direction="row" align="center" gap="xs" wrap="nowrap">
+  <Box flex="none" alignSelf="center">
+    <Button variant="transparent" size="small" onClick={onToggleExpanded}>
+      <Icon
+        name={expanded ? "Down" : "Right"}
+        size="md"
+        screenReaderText={expanded ? "Collapse" : "Expand"}
+      />
+    </Button>
+  </Box>
+  {typeIcon}
+  {titleText}
+</Flex>
+```
+
+Use Link only for navigation and always provide its `href`.
+
 ## Demo test bed
 
 A temporary/diagnostic demo exists in `../hs-uix-demos/src/app/pages/icon-demos.jsx` named **Icon clickable test bed**. It exercises custom icon rendering and click behavior across multiple HubSpot primitive contexts.
 
-## Follow-up ideas
+## Resolution
 
-- Add an exported `ClickableIcon` / `IconButton` helper that bakes in the safe wrapper pattern.
-- Add docs to `src/common-components/README.md` explaining native vs custom render paths and layout caveats.
-- Consider a wrapper option like `interactiveWrapper="link" | "none"` for advanced callers.
-- Consider normalizing intrinsic layout around custom `Image` icons inside the `Icon` component itself if HubSpot primitives allow a safe universal wrapper.
+The public [`common-components` Icon documentation](../src/common-components/README.md#icon)
+now defines the native/Icon vs custom/Image render paths, name-resolution rules,
+and supported `Flex` / `Link` / `Button` / `ButtonRow` compositions.
+
+For now, callers should compose `Box flex="none"` + `Button` for actions, or a
+`Link` with `href` for navigation, where layout requires it. We are not
+universally wrapping fallback Images because that would change existing remote-
+component trees inside Link, Button, and ButtonRow contexts. A separate
+`ClickableIcon` / `IconButton` helper would be additive, but its API and render
+tree remain deferred pending design work and HubSpot host integration coverage.

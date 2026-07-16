@@ -259,22 +259,114 @@ Returns `null` when `items` resolves to zero valid entries — callers can uncon
 
 ## Icon
 
-A drop-in superset of HubSpot's native `<Icon>`. The native component is great but boxed in three ways: a fixed `name` whitelist, only 4 colors (`inherit` / `alert` / `warning` / `success`), and only 3 sizes (`small` / `medium` / `large`). `Icon` lifts all three.
+A drop-in superset of HubSpot's native `<Icon>`. The native component is limited
+to a fixed name whitelist, four semantic colors (`inherit` / `alert` / `warning`
+/ `success`), and three sizes (`small` / `medium` / `large`). `Icon` adds custom
+glyphs, arbitrary colors, and additional sizes by choosing between native and
+fallback glyph paths:
 
-When a request is **fully native-expressible** (a whitelisted `name`, a semantic `color`, and an `sm`/`md`/`lg` `size`) it **delegates to the real `<Icon>`** — so you keep native auto-sizing, real `color="inherit"`, and proper screen-reader semantics. Otherwise it falls back to rendering a registered SVG glyph as a data-URI `<Image>`, which is what unlocks custom glyphs, arbitrary colors, and pixel sizes.
+| Request | Rendered primitive | What to expect |
+| ------- | ------------------ | -------------- |
+| Resolved native name + semantic/omitted color + omitted or native size (`sm`/`small`, `md`/`medium`, `lg`/`large`) | HubSpot `<Icon>` | Native sizing, `color="inherit"`, and native screen-reader behavior |
+| Registered custom glyph, or another request forced off the native path when that name also has a custom entry | HubSpot `<Image>` with an SVG data URI | Explicit image dimensions and custom drawing; layout and color inheritance differ from native Icon |
+| Native-only glyph + arbitrary color or non-native size | Nothing when no matching custom entry exists | Forcing a request off the native path requires a registered fallback glyph |
+
+Interaction adds a third render tree: a native request with `onClick` or `href`
+renders `Link > Icon`, while a fallback request remains a direct `Image`.
 
 ```jsx
 import { Icon } from "hs-uix/common-components";
 
-// Native-expressible → delegates to HubSpot's <Icon>
+// Exact native name → HubSpot Icon path
 <Icon name="email" size="md" color="inherit" />
 
-// Custom glyph + arbitrary color + pixel size → SVG fallback
-<Icon name="AdvancedFilters" color="#516f90" size={20} />
+// Exact custom registry name (case-sensitive) → Image fallback path
+<Icon name="Down" size="md" screenReaderText="Expand" />
 
-// Semantic color on a custom glyph
-<Icon name="trophy" color="success" size="lg" screenReaderText="Top performer" />
+// Exact native chevron name → HubSpot Icon path
+<Icon name="downCarat" size="md" screenReaderText="Expand" />
+
+// Custom glyph + arbitrary color + pixel size → Image fallback path
+<Icon name="AdvancedFilters" color="#516f90" size={20} />
 ```
+
+### Name resolution
+
+Exact names matter when choosing a render path. Resolution prefers an exact
+native name, then an exact custom-registry name, then a supported alias or
+case-insensitive native match. Custom registry keys retain their original
+casing: `Down` is a custom glyph, while `downCarat` and `email` are native names.
+Use `NATIVE_ICON_NAME_LIST` and `ICON_NAMES` when selecting names; an unknown,
+non-native name renders nothing.
+
+### Interaction and layout
+
+Let an interactive HubSpot primitive own the interaction. Although `Icon`
+accepts `onClick` and `href` for compatibility, native Icon and Image fallback
+nodes do not have identical interaction behavior. Use `Button` for actions and
+`Link` with an `href` for navigation rather than relying on a bare Icon/Image
+click target. Give icon-only controls a meaningful `screenReaderText`.
+
+A custom Image fallback can also visually collapse in a tight HubSpot `Flex`
+even when its DOM node and intrinsic dimensions are present. In that context,
+reserve its space with `Box flex="none"`. Keep the interactive wrapper around
+only the icon when wrapping a larger title cluster would introduce unwanted
+underlines or alignment changes.
+
+```jsx
+import {
+  Box,
+  Button,
+  ButtonRow,
+  Flex,
+  Link,
+  Text,
+} from "@hubspot/ui-extensions";
+import { Icon } from "hs-uix/common-components";
+
+// Tight Flex: Box reserves space; Button owns the action.
+<Flex direction="row" align="center" gap="xs" wrap="nowrap">
+  <Box flex="none" alignSelf="center">
+    <Button variant="transparent" size="small" onClick={onToggleExpanded}>
+      <Icon
+        name={expanded ? "Down" : "Right"}
+        size="md"
+        screenReaderText={expanded ? "Collapse" : "Expand"}
+      />
+    </Button>
+  </Box>
+  <Text>{title}</Text>
+</Flex>
+
+// Link owns navigation and always has an href.
+<Link variant="dark" href={{ url: recordUrl, external: true }}>
+  <Icon name="externalLink" size="md" screenReaderText="Open record" />
+</Link>
+
+// Button owns the action; Icon remains presentational inside it.
+<Button variant="transparent" onClick={onRefresh}>
+  <Icon name="refresh" size="md" screenReaderText="Refresh" />
+</Button>
+
+// ButtonRow owns action layout and overflow behavior.
+<ButtonRow
+  dropDownButtonOptions={{ text: "More", size: "small", variant: "transparent" }}
+>
+  <Button variant="transparent" onClick={onPrevious}>
+    <Icon name="left" size="md" screenReaderText="Previous" />
+  </Button>
+  <Button variant="transparent" onClick={onNext}>
+    <Icon name="Right" size="md" screenReaderText="Next" />
+  </Button>
+</ButtonRow>
+```
+
+The library intentionally does not universally wrap fallback Images because
+that would change existing render trees inside `Link`, `Button`, and `ButtonRow`
+compositions. A separate `ClickableIcon` / `IconButton` helper would be additive,
+but its API and remote-component tree still need design review and HubSpot host
+validation. The explicit compositions above are the supported pattern until
+that validation can support a reusable helper.
 
 ### Props
 
@@ -282,8 +374,9 @@ import { Icon } from "hs-uix/common-components";
 | ---- | ---- | ------- | ----------- |
 | `name` | string | — | A registered glyph name — native (see `NATIVE_ICON_NAME_LIST`) or custom (see `ICON_NAMES`). An unknown, non-native name renders nothing. |
 | `color` | string | `"inherit"` | A semantic token (`inherit` / `alert` / `warning` / `success`) or **any CSS color** (e.g. `#516f90`). Non-semantic colors force the SVG fallback. |
-| `size` | t-shirt token \| number | `"md"` | `xs`/`extra-small` (12), `sm`/`small` (14), `md`/`medium` (16), `lg`/`large` (20), `xl`/`extra-large` (24), or a raw pixel number. Only `sm`/`md`/`lg` stay on the native path. |
-| `screenReaderText` | string | `name` | Accessible label. On the fallback path it becomes the `<Image alt>`. |
+| `size` | t-shirt token \| number | `"md"` | `xs`/`extra-small` (12), `sm`/`small` (14), `md`/`medium` (16), `lg`/`large` (20), `xl`/`extra-large` (24), or a raw pixel number. Native names stay on the native path for omitted size or `sm`/`small`, `md`/`medium`, and `lg`/`large`; other sizes require a registered fallback glyph. |
+| `screenReaderText` | string | — | Accessible label. The native path has no wrapper-provided default; the fallback `<Image alt>` uses `name` when this is omitted. Provide a meaningful value for icon-only controls. |
+| `onClick` / `href` | function / HubSpot href | — | Supported for compatibility. Prefer a wrapping `Button` for actions or a `Link` with `href` for navigation so native and fallback paths behave consistently. |
 
 ### Custom glyphs & helpers
 

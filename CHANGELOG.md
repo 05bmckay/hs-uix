@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.3.0 — 2026-07-06
+
+- **DataTable numeric widths now work.** Numeric column `width` values are
+  enforced through a fixed-width header grid, so HubSpot's table primitives no
+  longer silently fall back to content sizing.
+- **Crowded editable date/time columns keep usable input space.** Auto-width
+  columns now reserve fixed header widths for `date`, `time`, and `datetime`
+  editors, preventing empty inputs from collapsing to icon-only width when edit
+  mode opens. An explicit column `width` still overrides the automatic value.
+
 ## 2.2.0 — 2026-06-09
 
 - **Calendar**: resource-view lane labels now shrink-wrap to their content
