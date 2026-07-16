@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- **Documentation:** Reconciled the roadmap with current stable and experimental
+  exports and documented graduation decisions for Wizard/OnboardingChecklist,
+  Skeleton, and DataTable row expansion.
+- **Icon documentation:** Clarified native Icon versus SVG/Image fallback
+  behavior, exact name resolution, layout constraints, accessibility
+  expectations, and supported Button/Link compositions.
+- **Tooling:** Added GitHub Actions CI for Node 22 and Node 24 with clean install,
+  tests, production build, and package dry-run checks.
+- **Release process:** Added guarded preflight, verification, and partial-failure
+  recovery guidance.
+
 ## 2.3.0 — 2026-07-06
 
 - **DataTable numeric widths now work.** Numeric column `width` values are

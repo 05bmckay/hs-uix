@@ -1,52 +1,43 @@
-# Release Draft
+# Release Draft — hs-uix@2.3.1 (blocked)
 
-Current version: `2.0.1`
+Current published/local version: `2.3.0`
 
-Recommended bump: `minor` — this release adds the new `Calendar` subpath/component and several new shared exports, while keeping existing APIs backward-compatible.
+Target version: `2.3.1`
 
-Suggested command:
+Recommended bump: `patch` — documentation and release-process improvements only; no runtime API changes.
 
-```bash
-npm run release:minor
-```
+## Blocker
 
-Suggested next version: `2.1.0`
+`npm whoami` currently returns `E401 Unauthorized`. Do **not** run `npm version`, create `v2.3.1`, or run a release script until npm authentication succeeds. The release scripts version and tag before publishing, so an authentication failure would leave a partial local release state.
 
-## GitHub Release Notes
+## Proposed release notes
 
 ```md
-### Features
-- **Calendar:** Add `hs-uix/calendar`, a presentational calendar with Month, Week, Day, and Agenda views; Today/previous/next/view toolbar; search and filter support; click-to-open event overlays; multi-day event rendering; overflow popovers; all-day/time-grid support; range-loading hooks; render override slots; labels; and `calendar.d.ts`.
-- **Calendar:** Add robust date coercion and timezone-aware rendering, including `timeZone`, `defaultTimeZone`, `onTimeZoneChange`, `showTimeZoneSelect`, `timeZoneOptions`, and date utility exports for zoned formatting.
-- **Common components:** Add the `Icon` wrapper plus icon registry helpers (`ICONS`, `ICON_NAMES`, `NATIVE_ICON_NAME_LIST`, `makeIconDataUri`, `svgToIconEntry`) and a `build:icons` pipeline.
-- **Common components:** Export shared collection toolbar primitives: `CollectionToolbar`, `CollectionFilterControl`, `ActiveFilterChips`, `CollectionSortSelect`, `CollectionCount`, and `formatCollectionCount`.
-- **Utils:** Export shared query helpers including `getEmptyFilterValues`, `resetFilterValues`, and `buildActiveFilterChips`; filter configs now support `emptyValue`.
+### Documentation
+- **Roadmap:** Reconcile shipped stable and experimental features and document graduation gates for Wizard/OnboardingChecklist, Skeleton, and DataTable row expansion.
+- **Icon:** Clarify native Icon versus SVG/Image fallback behavior, exact name resolution, layout constraints, accessibility expectations, and supported Button/Link compositions.
+- **Release process:** Add guarded preflight, verification, and partial-failure guidance.
 
-### Improvements
-- **DataTable:** Inline-edit `select` and `multiselect` cells now render their dropdowns directly in discrete edit mode instead of requiring an extra click.
-- **DataTable:** Record counts now sit beside the title when there are no search/filter toolbar controls, avoiding an unnecessary two-line header.
-- **DataTable / Kanban / Feed / Calendar:** Standardize toolbar, filter chips, clear-all behavior, count alignment, empty states, and loading states across collection-style components.
-- **Kanban:** Use Feed-style compact transparent sort select in the toolbar.
-- **Feed:** Add active filter chips, clear/reset behavior, `showFilterBadges`, `showClearFiltersButton`, and filter `chipLabel` support.
-- **FormBuilder:** Keep repeater reorder controls aligned by always rendering move buttons and disabling invalid directions; tighten repeater add-button spacing.
-- **CrmLookupSelect:** Preserve selected options as live search results change and improve debounce/loading/no-results states.
-
-### CRM fixes
-- **CRM search:** Add `hs_object_id` as a stable tiebreaker sort in `buildCrmSearchConfig`, fixing cursor pagination overlap/short-page behavior.
-- **CrmDataTable / CrmKanban:** Lazily fetch additional HubSpot CRM cursor pages as the user pages or loads more, while keeping client-side search/sort/filter over loaded batches by default.
-- **CrmKanban:** Add the board analog of `CrmDataTable` with optional stage derivation, client-side grouping/search/filter/sort, server-side opt-in, and partial-result messaging.
-
-### Internal / tooling
-- **Architecture:** Move component package sources under `src/`, remove deprecated workspace package manifests/configs, and build all subpaths from root `tsup` entries.
-- **Tests:** Add Vitest coverage for query helpers, CRM adapters, calendar date utilities, form value/validation/dependency helpers, and DataTable edit validation. Current suite: 94 passing tests.
+### Tooling
+- **CI:** Validate Node 22 and Node 24 with clean install, tests, production build, and package dry-run on pushes and pull requests.
 ```
 
-## Pre-Release Checklist
+The expanded `src/common-components/README.md` is included in the npm payload. `CHANGELOG.md`, `ROADMAP.md`, `release.md`, `RELEASING.md`, and files under `docs/` are repository documentation and are not packed.
 
-- [x] Update `CHANGELOG.md` with the 2.1.0 release notes
-- [x] Run `npm test`
-- [x] Run `npm run build`
-- [ ] Review `git diff` for unrelated workspace changes
-- [ ] Commit release-ready changes
-- [ ] Run `npm run release:minor`
-- [ ] Create/publish the GitHub release using the notes above
+## Pre-release checklist
+
+- [ ] `npm whoami` succeeds for an account authorized to publish `hs-uix`
+- [ ] `npm view hs-uix version` still reports `2.3.0`
+- [ ] `main` is clean, synchronized with `origin/main`, and includes all intended changes
+- [ ] `npm ci`
+- [ ] `npm test`
+- [ ] `npm run build`
+- [ ] `npm pack --dry-run` and inspect package contents
+- [ ] Convert the `CHANGELOG.md` `Unreleased` section to `2.3.1 — <actual publish date>`
+- [ ] Commit release-ready documentation
+- [ ] Run `npm run release:patch`
+- [ ] Verify npm reports `2.3.1` as `latest`
+- [ ] Verify the version commit and `v2.3.1` tag are on GitHub
+- [ ] Create the GitHub release from the reviewed notes above
+
+See [`RELEASING.md`](./RELEASING.md) for the guarded workflow and recovery guidance.

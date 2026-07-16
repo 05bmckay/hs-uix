@@ -166,7 +166,9 @@ stable export requires:
 4. HubSpot host-layout validation in the extension contexts the component is
    intended to support.
 
-This documentation pass does not graduate or rename any API.
+This documentation pass does not graduate or rename any API. See
+[`docs/experimental-graduation-audit.md`](./docs/experimental-graduation-audit.md)
+for per-feature blockers, decisions, and migration policies.
 
 ### Sequencing rationale
 

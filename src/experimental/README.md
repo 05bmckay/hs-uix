@@ -1,13 +1,17 @@
 # experimental (`hs-uix/experimental`)
 
 APIs that are shipping for real-world feedback but whose surface may still
-change in a minor release. Graduating components move to their stable subpath
-with a re-export left behind for one minor version.
+change in a minor release. Graduating components move to a stable subpath or
+barrel with compatibility re-exports left here for at least one minor version.
+See the [experimental graduation audit](../../docs/experimental-graduation-audit.md)
+for current decisions, blockers, and migration policies.
 
 Currently here:
 
-- **`Wizard` / `OnboardingChecklist`** — re-exported from `hs-uix/wizard`.
-- **`ExperimentalDataTable`** — DataTable with the in-progress row-expansion API.
+- **`Wizard` / `OnboardingChecklist`** — available only from this experimental
+  subpath; a future graduation would add `hs-uix/wizard`.
+- **`ExperimentalDataTable`** — an alias of DataTable with the in-progress
+  row-expansion API documented and typed experimentally.
 - **`Skeleton`** (+ `SkeletonText`, `SkeletonBox`, `SkeletonCircle`,
   `SkeletonTable`, `makeSkeletonDataUri`, `SKELETON_WIDTH_TOKENS`) — loading
   placeholders, documented below.

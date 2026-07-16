@@ -10,6 +10,9 @@ scripts/scraped-icons.json
 .claude/projects
 **/.claude/projects
 # Local agent instructions / scratchpads
+.pi-subagents/
+plan.md
+progress.md
 AGENTS.md
 **/AGENTS.md
 AGENT.md
