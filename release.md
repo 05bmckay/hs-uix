@@ -1,6 +1,6 @@
 # Release — hs-uix@2.3.2
 
-Target date: 2026-07-24
+Published: 2026-07-24
 
 Release type: `patch`
 
@@ -19,9 +19,9 @@ changes.
 
 ## Verification
 
-- [ ] npm published `hs-uix@2.3.2`
-- [ ] npm `latest` points to `2.3.2`
-- [ ] Version commit pushed to `main`
-- [ ] Tag `v2.3.2` pushed to GitHub
-- [ ] GitHub Actions passed on Node 22 and Node 24
-- [ ] GitHub release created
+- [x] npm published `hs-uix@2.3.2`
+- [x] npm `latest` points to `2.3.2`
+- [x] Version commit `2f8d649` pushed to `main`
+- [x] Tag `v2.3.2` pushed to GitHub
+- [x] GitHub Actions passed on Node 22 and Node 24
+- [x] GitHub release created: https://github.com/05bmckay/hs-uix/releases/tag/v2.3.2
