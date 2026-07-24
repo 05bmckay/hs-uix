@@ -4,9 +4,11 @@
 [![npm downloads](https://img.shields.io/npm/dm/hs-uix)](https://www.npmjs.com/package/hs-uix)
 [![license](https://img.shields.io/npm/l/hs-uix)](https://github.com/05bmckay/hs-uix/blob/main/LICENSE)
 
+[← All hs-uix components](../../README.md)
+
 A stage-based board view for HubSpot UI Extensions. Share DataTable's config vocabulary (`cardFields` ≈ `columns`, filters, sort, selection) so you can offer users a table-or-board toggle without rewriting the data layer. Drag-and-drop isn't available inside HubSpot UI Extensions, so stage changes happen through an inline `Select` (or menu) on each card.
 
-![Kanban — HubSpot Deals preset with metrics](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/kanban/assets/hubspot-deals-preset-with-metrics.png)
+![A searchable Kanban board with native stage controls and card actions](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/kanban/assets/showcase-kanban.jpg)
 
 ## Why Kanban?
 

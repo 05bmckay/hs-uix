@@ -1,4 +1,10 @@
-# utils
+# Utilities (`hs-uix/utils`)
+
+[![npm version](https://img.shields.io/npm/v/hs-uix)](https://www.npmjs.com/package/hs-uix)
+[![npm downloads](https://img.shields.io/npm/dm/hs-uix)](https://www.npmjs.com/package/hs-uix)
+[![license](https://img.shields.io/npm/l/hs-uix)](https://github.com/05bmckay/hs-uix/blob/main/LICENSE)
+
+[← All hs-uix components](../../README.md)
 
 Pure helper functions for formatting, mapping, guards, and lightweight data transformations.
 

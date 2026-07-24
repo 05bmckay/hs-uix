@@ -1,6 +1,14 @@
-# common-components
+# Common components (`hs-uix/common-components`)
+
+[![npm version](https://img.shields.io/npm/v/hs-uix)](https://www.npmjs.com/package/hs-uix)
+[![npm downloads](https://img.shields.io/npm/dm/hs-uix)](https://www.npmjs.com/package/hs-uix)
+[![license](https://img.shields.io/npm/l/hs-uix)](https://github.com/05bmckay/hs-uix/blob/main/LICENSE)
+
+[← All hs-uix components](../../README.md)
 
 Reusable UI wrappers built on top of HubSpot UI Extensions primitives.
+
+![A deal summary composed from SectionHeader, AutoStatusTag, AutoTag, AvatarStack, and KeyValueList](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/common-components/assets/showcase-overview.jpg)
 
 ## Current components
 

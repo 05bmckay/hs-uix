@@ -4,7 +4,11 @@
 [![npm downloads](https://img.shields.io/npm/dm/hs-uix)](https://www.npmjs.com/package/hs-uix)
 [![license](https://img.shields.io/npm/l/hs-uix)](https://github.com/05bmckay/hs-uix/blob/main/LICENSE)
 
+[← All hs-uix components](../../README.md)
+
 A presentational calendar surface for HubSpot UI Extensions. Hand it an array of records plus an `eventFields` map and it renders a **Month**, **Week**, **Day**, **Agenda**, or **Resource** view with a Today / ‹ › / view-switcher toolbar, optional search + filters, click-to-open event overlays (Popover, Modal, or Panel), and an optional drag-free **reschedule** affordance. Like Kanban and Feed, the calendar is data-driven and presentational — the caller owns fetching *and persisting*: even a reschedule only **emits** the new `{ start, end }`, it never mutates the events you passed in.
+
+![A month Calendar with searchable, stage-colored CRM events](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/calendar/assets/showcase-calendar.jpg)
 
 ```jsx
 import { Calendar } from "hs-uix/calendar";

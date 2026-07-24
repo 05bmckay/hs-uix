@@ -4,9 +4,11 @@
 [![npm downloads](https://img.shields.io/npm/dm/hs-uix)](https://www.npmjs.com/package/hs-uix)
 [![license](https://img.shields.io/npm/l/hs-uix)](https://github.com/05bmckay/hs-uix/blob/main/LICENSE)
 
+[← All hs-uix components](../../README.md)
+
 A drop-in table component for HubSpot UI Extensions. Define your columns, pass your data, and you get search, filtering, sorting, pagination, inline editing, row grouping, and auto-sized columns out of the box.
 
-![Full-Featured DataTable](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/datatable/assets/fully-featured-table.png)
+![A searchable, filterable DataTable with sorting, totals, and pagination](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/datatable/assets/showcase-table.jpg)
 
 ## Why DataTable?
 

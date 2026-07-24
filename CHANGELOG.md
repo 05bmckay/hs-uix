@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.3.2 — 2026-07-24
+
+- **Documentation landing page:** Rebuilt the GitHub and npm README around the
+  problems hs-uix removes—repeated search, filtering, pagination, validation,
+  loading-state, and edge-case work—instead of duplicating component API
+  references.
+- **Component gallery:** Added a curated HubSpot screenshot gallery covering
+  DataTable, FormBuilder, Kanban, Feed, Calendar, FilterBuilder, Wizard,
+  common components, and safe wrappers.
+- **Component guides:** Standardized badges, overview navigation, positioning,
+  and live component imagery across every component and CRM search README.
+- **Package presentation:** Improved the npm package description and added the
+  repository's missing MIT license file.
+
 ## 2.3.1 — 2026-07-16
 
 - **Documentation:** Reconciled the roadmap with current stable and experimental

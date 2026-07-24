@@ -1,8 +1,16 @@
 # FilterBuilder (hs-uix/filter)
 
+[![npm version](https://img.shields.io/npm/v/hs-uix)](https://www.npmjs.com/package/hs-uix)
+[![npm downloads](https://img.shields.io/npm/dm/hs-uix)](https://www.npmjs.com/package/hs-uix)
+[![license](https://img.shields.io/npm/l/hs-uix)](https://github.com/05bmckay/hs-uix/blob/main/LICENSE)
+
+[← All hs-uix components](../../README.md)
+
 The HubSpot list/workflow segment-builder pattern as one component: nested AND/OR groups of property → operator → value rows. If your extension needs "show me deals where amount > 10k AND (stage is X OR stage is Y)", this is the component — stop hand-rolling three Selects in a Flex row with an ad-hoc state shape. The tree it emits converts directly to HubSpot CRM search `filterGroups` via `toCrmSearchFilterGroups`.
 
 Renders entirely with native components: `Select` / `MultiSelect` / `Input` / `NumberInput` / `DateInput` rows inside `Flex`, nested groups in `Tile`. Every action is a `Button` carrying HubSpot's segment-builder iconography — add (`+`) for "Add filter" / "Add filter group", a remove (`x`) icon button on each condition row, and copy / trash icon buttons on each group header for clone / delete.
+
+![A FilterBuilder with a lifecycle condition and nested amount or renewal-date group](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/filter/assets/showcase-filter-builder.jpg)
 
 ## Quick Start
 

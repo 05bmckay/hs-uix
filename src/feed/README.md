@@ -1,8 +1,16 @@
 # Feed (hs-uix/feed)
 
+[![npm version](https://img.shields.io/npm/v/hs-uix)](https://www.npmjs.com/package/hs-uix)
+[![npm downloads](https://img.shields.io/npm/dm/hs-uix)](https://www.npmjs.com/package/hs-uix)
+[![license](https://img.shields.io/npm/l/hs-uix)](https://github.com/05bmckay/hs-uix/blob/main/LICENSE)
+
+[← All hs-uix components](../../README.md)
+
 Activity feed / timeline component for HubSpot UI Extensions. Feed is the default choice for chronological activity streams, audit logs, recent-events panels, interaction history, and lightweight timelines — the same way `DataTable` is the default for tabular list managers.
 
 Feed gives you search, filters, sort, grouping, count text, view-more pagination, loading/empty/error states, declarative item regions, and render escape hatches while staying fully renderable with HubSpot primitives: `Tile`, `Flex`, `Text`, `Icon`, `AvatarStack`, `Tag`, `StatusTag`, `DescriptionList`, `List`, `ButtonRow`, `SearchInput`, `Select`, `MultiSelect`, `EmptyState`, `Alert`, and `LoadingSpinner`.
+
+![A searchable CRM activity Feed with type tabs, grouping, and actions](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/feed/assets/showcase-feed.jpg)
 
 ## Quick Start
 

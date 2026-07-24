@@ -1,6 +1,14 @@
 # Wizard (hs-uix/experimental)
 
+[![npm version](https://img.shields.io/npm/v/hs-uix)](https://www.npmjs.com/package/hs-uix)
+[![npm downloads](https://img.shields.io/npm/dm/hs-uix)](https://www.npmjs.com/package/hs-uix)
+[![license](https://img.shields.io/npm/l/hs-uix)](https://github.com/05bmckay/hs-uix/blob/main/LICENSE)
+
+[← All hs-uix components](../../README.md)
+
 Orchestrated multi-step flows for HubSpot UI Extensions — plus the "getting started" checklist card. `Wizard` steps render **arbitrary content** (tables, CRM pickers, review summaries — anything), which makes it the right tool when FormBuilder's form-only multi-step mode isn't enough. The Wizard owns the orchestration: a shared values bag, validate-gated Next, linear step reachability with success markers, a side step-nav (vertical) or native StepIndicator (horizontal), and a Back/Next/Finish footer. `OnboardingChecklist` is the companion setup tracker: a ProgressBar headline over rows of done/pending tasks with inline action buttons.
+
+![A gated three-step Wizard paired with an onboarding checklist](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/wizard/assets/showcase-wizard-checklist.jpg)
 
 ## Quick Start
 

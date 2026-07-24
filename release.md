@@ -1,30 +1,27 @@
-# Release — hs-uix@2.3.1
+# Release — hs-uix@2.3.2
 
-Published: 2026-07-16
+Target date: 2026-07-24
 
 Release type: `patch`
 
-This is a documentation and tooling release with no runtime API changes.
+This is a documentation and package-presentation release with no runtime API
+changes.
 
 ## GitHub release notes
 
 ```md
 ### Documentation
-- **Roadmap:** Reconcile shipped stable and experimental features and document graduation gates for Wizard/OnboardingChecklist, Skeleton, and DataTable row expansion.
-- **Icon:** Clarify native Icon versus SVG/Image fallback behavior, exact name resolution, layout constraints, accessibility expectations, and supported Button/Link compositions.
-- **Experimental APIs:** Add a source-backed graduation audit with explicit defer decisions and migration policies.
-- **Release process:** Add guarded preflight, verification, and partial-failure recovery guidance.
-
-### Tooling
-- **CI:** Validate Node 22 and Node 24 with clean install, tests, production build, and package dry-run on pushes and pull requests.
-- **Build:** Declare TypeScript explicitly so clean tsup builds do not depend on a transitive installation.
+- **New product story:** Rebuild the GitHub and npm landing page around the product engineering hs-uix eliminates: search, filtering, pagination, validation, loading states, and edge-case handling.
+- **Component gallery:** Add curated in-HubSpot screenshots for DataTable, FormBuilder, Kanban, Feed, Calendar, FilterBuilder, Wizard, common components, and safe wrappers.
+- **Component guides:** Give every component and CRM search README consistent badges, navigation, positioning, and relevant live imagery.
+- **Package presentation:** Improve the npm package description and add the repository's missing MIT license file.
 ```
 
 ## Verification
 
-- [x] npm published `hs-uix@2.3.1`
-- [x] npm `latest` points to `2.3.1`
-- [x] Version commit `cd366cd` pushed to `main`
-- [x] Tag `v2.3.1` pushed to GitHub
-- [x] GitHub Actions passed on Node 22 and Node 24
-- [x] GitHub release created: https://github.com/05bmckay/hs-uix/releases/tag/v2.3.1
+- [ ] npm published `hs-uix@2.3.2`
+- [ ] npm `latest` points to `2.3.2`
+- [ ] Version commit pushed to `main`
+- [ ] Tag `v2.3.2` pushed to GitHub
+- [ ] GitHub Actions passed on Node 22 and Node 24
+- [ ] GitHub release created

@@ -1,5 +1,11 @@
 # Safe wrappers (`hs-uix/safe`)
 
+[![npm version](https://img.shields.io/npm/v/hs-uix)](https://www.npmjs.com/package/hs-uix)
+[![npm downloads](https://img.shields.io/npm/dm/hs-uix)](https://www.npmjs.com/package/hs-uix)
+[![license](https://img.shields.io/npm/l/hs-uix)](https://github.com/05bmckay/hs-uix/blob/main/LICENSE)
+
+[← All hs-uix components](../../README.md)
+
 Hardened drop-ins for the components that fail worst when given bad props.
 HubSpot's primitives have two ugly failure modes:
 
@@ -15,6 +21,8 @@ Every wrapper here keeps the native prop API and turns those failures into
 safe degrades plus a **one-time** `console.warn`. They were battle-tested in
 [hs-uix-studio](https://github.com/05bmckay/hs-uix-studio)'s renderer, where
 LLM-generated UIs hit every one of these traps constantly.
+
+![Safe wrappers repairing an invalid icon and falling back from an invalid EmptyState image](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/safe/assets/showcase-safe-wrappers.jpg)
 
 ## Quick Start
 

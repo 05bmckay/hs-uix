@@ -1,8 +1,14 @@
 # FormBuilder (hs-uix/form)
 
+[![npm version](https://img.shields.io/npm/v/hs-uix)](https://www.npmjs.com/package/hs-uix)
+[![npm downloads](https://img.shields.io/npm/dm/hs-uix)](https://www.npmjs.com/package/hs-uix)
+[![license](https://img.shields.io/npm/l/hs-uix)](https://github.com/05bmckay/hs-uix/blob/main/LICENSE)
+
+[← All hs-uix components](../../README.md)
+
 Declarative, config-driven FormBuilder for HubSpot UI Extensions. Define fields as data, get a complete form with validation, layout, multi-step wizards, and full HubSpot component integration.
 
-![Basic Form](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/form/assets/basic-form.png)
+![A read-only FormBuilder with one explicitly editable field](https://raw.githubusercontent.com/05bmckay/hs-uix/main/src/form/assets/showcase-form.jpg)
 
 ```bash
 npm install hs-uix
