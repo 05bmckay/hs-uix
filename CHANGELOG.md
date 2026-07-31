@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.3.3 — 2026-07-31
+
+- **Popover compatibility:** `SafePopover` and Calendar's default event/day
+  overlays continue to prefer the experimental Popover when the installed
+  HubSpot SDK exports it, and automatically fall back to a native Modal when it
+  does not (including `@hubspot/ui-extensions` 0.15.1).
+- **Feed polish:** Reduced the expand/collapse chevron size for a more compact
+  default feed-item control.
+
 ## 2.3.2 — 2026-07-24
 
 - **Documentation landing page:** Rebuilt the GitHub and npm README around the

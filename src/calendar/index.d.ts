@@ -283,7 +283,7 @@ export interface CalendarProps<Event = Record<string, unknown>> {
   onRangeChange?: (range: CalendarRange) => void;
 
   // Event interactivity
-  /** How an event opens. Default "popover" (experimental). */
+  /** How an event opens. Default "popover"; falls back to a Modal when Popover is unavailable. */
   overlayMode?: CalendarOverlayMode;
   /** Override the overlay body for an event. */
   renderEventDetail?: (event: CalendarNormalizedEvent<Event>) => ReactNode;

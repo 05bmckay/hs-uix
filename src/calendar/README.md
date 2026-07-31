@@ -322,7 +322,7 @@ How it works: each event instant is converted to a "wall-clock" `Date` in the ac
 | `loading` | `boolean` | `false` | Render the loading state. |
 | `error` | `string \| boolean` | `false` | Render the error state. |
 | `onRangeChange` | `({ start, end, view }) => void` | — | Fires on mount + range change — fetch here. |
-| `overlayMode` | `"popover" \| "modal" \| "panel" \| "none"` | `"popover"` | How an event opens. Popover is experimental. |
+| `overlayMode` | `"popover" \| "modal" \| "panel" \| "none"` | `"popover"` | How an event opens. Popover is preferred; when the installed HubSpot SDK does not provide it, Calendar automatically uses a Modal. |
 | `renderEventDetail` | `(event) => ReactNode` | — | Override the overlay body. |
 | `onEventClick` | `(raw, event) => void` | — | Always fires on event click. |
 | `renderToolbar` | `(api) => ReactNode` | — | Replace the toolbar. |
@@ -367,7 +367,7 @@ These come from HubSpot UI Extensions itself, not Calendar:
 | View switching is a `Select` | `Tabs` cache their body and don't re-render on data changes, so the switcher is a `Select`. |
 | Time grid can't span rows | No `rowspan` / height control, so a multi-hour block repeats with a "↑ cont. through …" note rather than one tall block. |
 | Equal day columns via numeric widths | Equal-width columns require a `Table` with equal **numeric** widths (content-sized `flex` columns come out uneven). |
-| Popover is experimental | `overlayMode="popover"` uses `@hubspot/ui-extensions/experimental`. Use `"modal"` / `"panel"` if you need a stable overlay. |
+| Popover is experimental | `overlayMode="popover"` uses it when the installed SDK provides it and automatically falls back to a native Modal otherwise. Use `"modal"` / `"panel"` to choose a stable overlay explicitly. |
 
 ---
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Icon, EmptyState, StatisticsTrend, Tile, Select } from "@hubspot/ui-extensions";
-import { Popover } from "@hubspot/ui-extensions/experimental";
+import * as Experimental from "@hubspot/ui-extensions/experimental";
 import { SafeIcon } from "./SafeIcon.js";
 import { SafeEmptyState } from "./SafeEmptyState.js";
 import { SafeStatisticsTrend } from "./SafeStatisticsTrend.js";
@@ -102,7 +102,7 @@ describe("SafeStatisticsTrend", () => {
 describe("SafePopover", () => {
   it("wraps children in a compact Tile inside the experimental Popover", () => {
     const el = SafePopover({ placement: "bottom", children: "content" });
-    expect(el.type).toBe(Popover);
+    expect(el.type).toBe(Experimental.Popover);
     expect(el.props.placement).toBe("bottom");
     const tile = el.props.children;
     expect(tile.type).toBe(Tile);

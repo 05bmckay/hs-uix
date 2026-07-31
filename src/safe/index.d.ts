@@ -88,8 +88,12 @@ export interface SafeStatisticsTrendProps {
 }
 
 export interface SafePopoverProps {
-  /** Wrapped in a compact <Tile> so content gets default padding. */
+  /** Wrapped in a compact <Tile> when the experimental Popover is available. */
   children?: ReactNode;
+  /** Title used by the native Modal fallback. Default "Details". */
+  fallbackTitle?: string;
+  /** Width used by the native Modal fallback. Default "small". */
+  fallbackWidth?: "small" | "sm" | "medium" | "md" | "large" | "lg";
   [prop: string]: unknown;
 }
 

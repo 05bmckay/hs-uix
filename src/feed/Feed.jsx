@@ -377,7 +377,7 @@ const DefaultFeedItem = ({
           <Link variant="dark" onClick={onToggleExpanded}>
             <Icon
               name={expanded ? "Down" : "Right"}
-              size="md"
+              size="sm"
               screenReaderText={expanded ? "Collapse" : "Expand"}
             />
           </Link>

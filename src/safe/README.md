@@ -31,7 +31,7 @@ import {
   SafeIcon,        // bad name → alias repair, else red xCircle placeholder
   SafeEmptyState,  // bad imageName → known alias or "components", not a throw
   SafeDataTable,   // data/columns/… undefined → [] (empty table, not a blank page)
-  SafePopover,     // children auto-padded in a compact Tile
+  SafePopover,     // experimental Popover when available, otherwise Modal
 } from "hs-uix/safe";
 
 <SafeIcon name="duplicate" />        {/* renders "copy", warns once */}
@@ -48,7 +48,7 @@ import {
 | `SafeIcon` | `name` | Valid → native pass-through. Known alias (`duplicate`→`copy`, `alert`→`warning`, `trash`→`delete`, …) → repaired with one-time warn. Unknown → alert-colored `xCircle` placeholder with `screenReaderText="Invalid icon: <name>"`. |
 | `SafeEmptyState` | `imageName` | `null`/valid → pass-through. Known alias (`new-project`→`components`, …) or unknown → falls back (default `"components"`) instead of throwing. |
 | `SafeStatisticsTrend` | `direction` | Valid / non-string → pass-through. Alias (`increasing`, `up`, `positive`, …) → repaired. Unknown string → `"increase"`. |
-| `SafePopover` | padding | Wraps children in `<Tile compact>` so popover content gets default padding (the experimental Popover renders children flush). Nesting your own Tile still works. |
+| `SafePopover` | padding, SDK compatibility | Uses the experimental Popover when available and wraps its children in `<Tile compact>`. If the installed HubSpot SDK does not export Popover, it renders the same content in a native Modal. Set `fallbackTitle` and `fallbackWidth` to customize that modal. |
 
 ### Array-coercing wrappers
 

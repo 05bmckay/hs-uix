@@ -27,11 +27,10 @@ import {
   StatusTag,
   Tag,
   Text,
-  Tile,
 } from "@hubspot/ui-extensions";
-import { Popover } from "@hubspot/ui-extensions/experimental";
 import { CollectionToolbar } from "../common-components/CollectionToolbar.js";
 import { Icon } from "../common-components/Icon.js";
+import { SafePopover } from "../safe/SafePopover.js";
 import {
   getEmptyFilterValues,
   resetFilterValues,
@@ -357,8 +356,9 @@ const EventDetail = ({ event, labels, reschedule, idSuffix = "" }) => {
   );
 };
 
-// Build the overlay node for a given mode. Popover children must NOT be wrapped
-// in a Tile — the renderer auto-wraps them in <Tile compact>.
+// Build the overlay node for a given mode. SafePopover adds the compact Tile
+// required by the experimental overlay and falls back to a native Modal when
+// the installed HubSpot SDK no longer exports Popover.
 // `reschedule` (when rescheduleOptions is set) flows into the default
 // EventDetail body; a custom renderEventDetail REPLACES the whole body,
 // reschedule section included.
@@ -384,15 +384,20 @@ const buildOverlay = (event, mode, renderEventDetail, labels, idSuffix = "", res
       </Panel>
     );
   }
-  // Default: experimental Popover. The "longform" variant is the widest one, so
+  // Default: popover-first SafePopover. The "longform" variant is the widest one, so
   // an event title (e.g. "Umbrella West – Expansion") gets enough room to sit on
   // one line instead of wrapping early in the narrow default variant. Despite the
   // SDK doc claiming the renderer auto-wraps children in a Tile, in practice the
-  // content renders badly without an explicit <Tile compact> around it.
+  // content renders badly without one. SafePopover supplies that wrapper.
   return (
-    <Popover id={id} placement="bottom" variant="longform">
-      <Tile compact>{body}</Tile>
-    </Popover>
+    <SafePopover
+      id={id}
+      placement="bottom"
+      variant="longform"
+      fallbackTitle={event.title || labels.open}
+    >
+      {body}
+    </SafePopover>
   );
 };
 
@@ -597,9 +602,9 @@ const Toolbar = ({
 // ---------------------------------------------------------------------------
 // DayChipStack — the event-chip stack for one day cell: up to `maxEventsPerDay`
 // MonthChips, each slot height-pinned to MONTH_SLOT_HEIGHT, then either a
-// "+N more" Link opening the day-overflow Popover or a trailing spacer.
+// "+N more" Link opening the day-overflow overlay or a trailing spacer.
 // Shared by MonthView and ResourceView so the chip/overflow machinery isn't
-// forked. `idScope` namespaces the overflow Popover id (and the chip/list
+// forked. `idScope` namespaces the overflow overlay id (and the chip/list
 // overlay ids) — in the resource view the SAME day renders once per lane, so an
 // unscoped `cal-day-<ms>` id would collide across rows.
 // ---------------------------------------------------------------------------
@@ -636,33 +641,36 @@ const DayChipStack = ({ day, events, maxEventsPerDay, chipProps, labels, idScope
     }
   }
   if (hasOverflow) {
-    // "+N more" as a real Link (it opens the day-overflow Popover). The old SVG
+    // "+N more" as a real Link (it opens the day-overflow overlay). The old SVG
     // <Image> here scaled down in narrow columns just like the chips did.
     slots.push(
       slotRow("more",
       <Link
         overlay={
-          <Popover id={`cal-day-${idScope}${day.getTime()}`} placement="top" variant="longform">
-            <Tile compact>
-              <Flex direction="column" gap="sm">
-                {/* Count header on ONE centered line. A Heading is block-width
-                    (it would force the label onto its own line), so the count is
-                    a bold Text sitting inline beside the label; justify="center"
-                    centers the pair. */}
-                <Flex direction="row" justify="center" align="center" gap="xs">
-                  <Text format={{ fontWeight: "bold" }}>{String(events.length)}</Text>
-                  <Text format={{ fontWeight: "demibold" }}>{labels.onThisDate}</Text>
-                </Flex>
-                <Divider />
-                {events.map((event, i) => (
-                  <React.Fragment key={event.key}>
-                    <DayListItem event={event} day={day} idScope={idScope} {...chipProps} />
-                    {i < events.length - 1 ? <Divider /> : null}
-                  </React.Fragment>
-                ))}
+          <SafePopover
+            id={`cal-day-${idScope}${day.getTime()}`}
+            placement="top"
+            variant="longform"
+            fallbackTitle={`${events.length} ${labels.onThisDate}`}
+          >
+            <Flex direction="column" gap="sm">
+              {/* Count header on ONE centered line. A Heading is block-width
+                  (it would force the label onto its own line), so the count is
+                  a bold Text sitting inline beside the label; justify="center"
+                  centers the pair. */}
+              <Flex direction="row" justify="center" align="center" gap="xs">
+                <Text format={{ fontWeight: "bold" }}>{String(events.length)}</Text>
+                <Text format={{ fontWeight: "demibold" }}>{labels.onThisDate}</Text>
               </Flex>
-            </Tile>
-          </Popover>
+              <Divider />
+              {events.map((event, i) => (
+                <React.Fragment key={event.key}>
+                  <DayListItem event={event} day={day} idScope={idScope} {...chipProps} />
+                  {i < events.length - 1 ? <Divider /> : null}
+                </React.Fragment>
+              ))}
+            </Flex>
+          </SafePopover>
         }
       >
         {labels.more(events.length - maxEventsPerDay)}
@@ -814,7 +822,7 @@ const AgendaView = ({ rangeStart, rangeEnd, eventsForDay, chipProps, labels, ren
 // ResourceView — rows = resources (owners / rooms / teams), columns = the days
 // of the focused week (same week math as the time grid). Each cell stacks the
 // lane's events for that day with the SAME MonthChip tokens and "+N more"
-// overflow Popover as the month grid (via DayChipStack — not a fork). Lane
+// overflow overlay as the month grid (via DayChipStack — not a fork). Lane
 // partitioning lives in resourceLanes.js: declared resources render in order
 // (even when empty), undeclared ids found in the data get appended derived
 // lanes, and id-less events land in a trailing "Unassigned" lane
